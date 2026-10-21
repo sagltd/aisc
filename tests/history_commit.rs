@@ -419,9 +419,16 @@ fn staged_state_is_preserved_and_index_mtime_kept() {
     fixture.write("a.txt", "a\nstaged\nunstaged\n");
     fixture.write("b.txt", "b\nchanged\n");
     fixture.write("c.txt", "c\nchanged\n");
-    let index_before = std::fs::metadata(fixture.path(".git/index"))
+    // Settle the index (plain git may refresh it), then pin its mtime to a fixed time in the past
+    // so the comparison never depends on wall-clock progression. Worktree files are newer than
+    // the index, i.e. racily dirty: exactly the case the mtime rule protects.
+    fixture.git(&["status", "--porcelain"]);
+    let index_before = std::time::UNIX_EPOCH + std::time::Duration::new(1_600_000_000, 123_456_789);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(fixture.path(".git/index"))
         .unwrap()
-        .modified()
+        .set_modified(index_before)
         .unwrap();
     let staged_before = fixture.git(&["show", ":a.txt"]);
     // Hard-link the installed index just after aisc installs it (before its own post-operation
