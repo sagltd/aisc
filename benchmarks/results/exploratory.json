@@ -1,0 +1,442 @@
+{
+  "schema": 1,
+  "runs": [
+    {
+      "name": "codex-initial-inspect",
+      "provider": "codex",
+      "comparable": false,
+      "exclusion": "unfrozen initial provider smoke; no reliable latency retained",
+      "projection": {
+        "events": [
+          {
+            "type": "answer",
+            "text": "I\u2019ll check the branch and Git baseline, then inspect all changed and untracked files without modifying anything."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'git status --porcelain=v2 --branch; git diff --stat; git diff --cached --stat'",
+            "aggregated_output": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n notes.txt    | 1 +\n remove.txt   | 1 -\n src/math.txt | 2 +-\n 3 files changed, 2 insertions(+), 2 deletions(-)\n docs/{guide.txt => manual.txt} | 0\n notes.txt                      | 2 +-\n 2 files changed, 1 insertion(+), 1 deletion(-)\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"git diff --no-ext-diff --no-textconv; git diff --cached --no-ext-diff --no-textconv; git log -1 --format='%h %s'; cat -- 'new file.txt'; git show :docs/manual.txt\"",
+            "aggregated_output": "diff --git a/notes.txt b/notes.txt\nindex 0abf0c1..eae951c 100644\n--- a/notes.txt\n+++ b/notes.txt\n@@ -1 +1,2 @@\n Unrelated staged change\n+Unstaged tail\ndiff --git a/remove.txt b/remove.txt\ndeleted file mode 100644\nindex 69ec6be..0000000\n--- a/remove.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-Remove this later\ndiff --git a/src/math.txt b/src/math.txt\nindex 9dd48a0..80154bd 100644\n--- a/src/math.txt\n+++ b/src/math.txt\n@@ -1 +1 @@\n-sum = a + b\n+sum = checked_add(a, b)\ndiff --git a/docs/guide.txt b/docs/manual.txt\nsimilarity index 100%\nrename from docs/guide.txt\nrename to docs/manual.txt\ndiff --git a/notes.txt b/notes.txt\nindex 038bcf6..0abf0c1 100644\n--- a/notes.txt\n+++ b/notes.txt\n@@ -1 +1 @@\n-Unrelated original\n+Unrelated staged change\n86e1ac8 initial fixture\nUntracked public fixture\nGuide version one\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "Branch: `main` at `86e1ac8` (`initial fixture`).\n\n- **Staged:** Renamed `docs/guide.txt` \u2192 `docs/manual.txt`, contents unchanged. Updated `notes.txt` from \u201cUnrelated original\u201d to \u201cUnrelated staged change\u201d.\n- **Unstaged:** Added \u201cUnstaged tail\u201d to `notes.txt`; deleted `remove.txt` containing \u201cRemove this later\u201d; changed `src/math.txt` from `sum = a + b` to `sum = checked_add(a, b)`.\n- **Untracked:** `new file.txt` contains \u201cUntracked public fixture\u201d.\n\nAll changes inspected. Nothing modified."
+          }
+        ],
+        "usage": [
+          {
+            "input_tokens": 80751,
+            "cached_input_tokens": 65280,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 291,
+            "reasoning_output_tokens": 0
+          }
+        ],
+        "models": []
+      }
+    },
+    {
+      "name": "claude-invalid-prompt",
+      "provider": "claude",
+      "comparable": false,
+      "exclusion": "CLI prompt consumed by variadic option; no model call",
+      "projection": {
+        "events": [],
+        "usage": [],
+        "models": []
+      }
+    },
+    {
+      "name": "claude-inspect-smoke",
+      "provider": "claude",
+      "comparable": false,
+      "exclusion": "unpaired provider smoke",
+      "projection": {
+        "events": [
+          {
+            "type": "tool_use",
+            "name": "Bash",
+            "input": {
+              "command": "git status --porcelain=v2 --branch; echo ---; git diff --numstat; echo ---; git diff --cached --numstat -M; echo ---; git rev-parse HEAD; python3 -c \"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\n'\" && echo VERIFY_OK",
+              "description": "Inspect status, line counts, HEAD, verify math file"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          },
+          {
+            "type": "tool_result",
+            "content": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n---\n1\t0\tnotes.txt\n0\t1\tremove.txt\n1\t1\tsrc/math.txt\n---\n0\t0\tdocs/{guide.txt => manual.txt}\n1\t1\tnotes.txt\n---\n86e1ac8d13f9fb486942b5844dfb88f2a326991d\nVERIFY_OK",
+            "is_error": false
+          },
+          {
+            "type": "text",
+            "text": "I only inspected the repo and changed nothing. You asked for both \"do not modify anything\" and a commit plus worktree, which conflict, so I followed \"do not modify\" and skipped `git commit --only \u2026 src/math.txt` and `git worktree add -b aisc/bench ../isolated main`. If you want those run, say so and I'll run them.\n\n**Branch:** `main`. **HEAD:** `86e1ac8d13f9fb486942b5844dfb88f2a326991d`\n\n| Path | Staged (+/\u2212) | Unstaged (+/\u2212) | Change |\n|---|---|---|---|\n| `docs/guide.txt` \u2192 `docs/manual.txt` | 0/0 | \u2014 | Rename, staged, content identical (R100) |\n| `notes.txt` | 1/1 | 1/0 | Modified, with both staged and unstaged edits |\n| `remove.txt` | \u2014 | 0/1 | Deleted, unstaged |\n| `src/math.txt` | \u2014 | 1/1 | Modified, unstaged |\n| `new file.txt` | \u2014 | \u2014 | Untracked, so Git's diff doesn't count its lines |\n\n**Verification:** passed. `src/math.txt` in the working tree contains exactly `sum = checked_add(a, b)\\n`."
+          },
+          {
+            "type": "result",
+            "subtype": "success",
+            "result": "I only inspected the repo and changed nothing. You asked for both \"do not modify anything\" and a commit plus worktree, which conflict, so I followed \"do not modify\" and skipped `git commit --only \u2026 src/math.txt` and `git worktree add -b aisc/bench ../isolated main`. If you want those run, say so and I'll run them.\n\n**Branch:** `main`. **HEAD:** `86e1ac8d13f9fb486942b5844dfb88f2a326991d`\n\n| Path | Staged (+/\u2212) | Unstaged (+/\u2212) | Change |\n|---|---|---|---|\n| `docs/guide.txt` \u2192 `docs/manual.txt` | 0/0 | \u2014 | Rename, staged, content identical (R100) |\n| `notes.txt` | 1/1 | 1/0 | Modified, with both staged and unstaged edits |\n| `remove.txt` | \u2014 | 0/1 | Deleted, unstaged |\n| `src/math.txt` | \u2014 | 1/1 | Modified, unstaged |\n| `new file.txt` | \u2014 | \u2014 | Untracked, so Git's diff doesn't count its lines |\n\n**Verification:** passed. `src/math.txt` in the working tree contains exactly `sum = checked_add(a, b)\\n`.",
+            "is_error": false,
+            "total_cost_usd": 0.0753958,
+            "modelUsage": {
+              "claude-opus-5-5": {
+                "inputTokens": 4,
+                "outputTokens": 904,
+                "cacheReadInputTokens": 27219,
+                "cacheCreationInputTokens": 6482,
+                "webSearchRequests": 0,
+                "costUSD": 0.0753958,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 128000,
+                "thinkingTokens": 279,
+                "canonicalModel": "claude-opus-5-5",
+                "provider": "firstParty",
+                "costBasis": "list"
+              }
+            }
+          }
+        ],
+        "usage": [
+          {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 6482,
+            "cache_read_input_tokens": 27219,
+            "output_tokens": 904,
+            "output_tokens_details": {
+              "thinking_tokens": 279
+            },
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 6482,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "inference_geo": "global",
+            "iterations": [
+              {
+                "input_tokens": 2,
+                "output_tokens": 480,
+                "cache_read_input_tokens": 16384,
+                "cache_creation_input_tokens": 933,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 933
+                },
+                "type": "message"
+              }
+            ],
+            "speed": "standard",
+            "fallback_credit": null
+          }
+        ],
+        "models": [
+          "claude-opus-5-5"
+        ]
+      }
+    },
+    {
+      "name": "codex-git-readonly-metadata",
+      "provider": "codex",
+      "comparable": false,
+      "exclusion": "Git metadata sandbox denied; missing target grader originally crashed; no reliable latency retained",
+      "projection": {
+        "events": [
+          {
+            "type": "answer",
+            "text": "I\u2019ll create the isolated worktree from committed main, save and verify the exact content through AISC, then check that the original worktree is unchanged."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '<scratch>/aisc-v1 context --limit 20'",
+            "aggregated_output": "{\"branch\":\"main\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[{\"added\":\"0\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"0\",\"path\":\"docs/manual.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"notes.txt\"}],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"0\",\"path\":\"notes.txt\"},{\"added\":\"0\",\"deleted\":\"1\",\"path\":\"remove.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\"D \"},{\"path\":\"docs/manual.txt\",\"status\":\"A \"},{\"path\":\"notes.txt\",\"status\":\"MM\"},{\"path\":\"remove.txt\",\"status\":\" D\"},{\"path\":\"src/math.txt\",\"status\":\" M\"},{\"path\":\"new file.txt\",\"status\":\"??\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":3,\"unstaged\":3,\"untracked\":1}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'git status --porcelain=v1; git rev-parse HEAD; git symbolic-ref HEAD'",
+            "aggregated_output": "R  docs/guide.txt -> docs/manual.txt\nMM notes.txt\n D remove.txt\n M src/math.txt\n?? \"new file.txt\"\n86e1ac8d13f9fb486942b5844dfb88f2a326991d\nrefs/heads/main\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"python3 -c \\\"import hashlib, pathlib, subprocess; p=pathlib.Path(subprocess.check_output(['git','rev-parse','--git-path','index'],text=True).strip()); print('index',hashlib.sha256(p.read_bytes()).hexdigest()); print([(str(p),hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(pathlib.Path('.').rglob('*')) if p.is_file() and '.git' not in p.parts])\\\"\"",
+            "aggregated_output": "index 51421bbf8a5a055c9963b009534c3151c522e77d9838dd733e2879f5268c1f39\n[('docs/manual.txt', '0fdec55c2da132cce218c9398c340e4b70e76c34c36d3e6f7673de8bdbc14315'), ('new file.txt', '0883394d115efaeb43f0a584e57dda7418277a487251a9131f7dde6c98fd8816'), ('notes.txt', '9a0b42842ff234e86a2200f2b15d7ce7ffaf6b1f1bfce21986f108bc36d5f5d0'), ('src/math.txt', '9e7892c326445f7dc6772091a342a657c9cdc6bc707a4ad90e3d875a4b8359cb')]\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"git rev-parse --git-common-dir; git rev-parse --git-dir; rg --files --hidden -g '*lock*' -g '\"'!objects/**'\"' .git\"",
+            "aggregated_output": ".git\n.git\n",
+            "exit_code": 1
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'ls -ld .git ../isolated; ls -l .git/aisc-operation.lock'",
+            "aggregated_output": "ls: ../isolated: No such file or directory\ndrwxr-xr-x@ 12 <user>  staff  384 Oct 22 03:19 .git\nls: .git/aisc-operation.lock: No such file or directory\n",
+            "exit_code": 1
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"python3 -c \\\"import hashlib, pathlib, subprocess; p=pathlib.Path(subprocess.check_output(['git','rev-parse','--git-path','index'],text=True).strip()); print('index',hashlib.sha256(p.read_bytes()).hexdigest()); print([(str(p),hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(pathlib.Path('.').rglob('*')) if p.is_file() and '.git' not in p.parts])\\\"\"",
+            "aggregated_output": "index 51421bbf8a5a055c9963b009534c3151c522e77d9838dd733e2879f5268c1f39\n[('docs/manual.txt', '0fdec55c2da132cce218c9398c340e4b70e76c34c36d3e6f7673de8bdbc14315'), ('new file.txt', '0883394d115efaeb43f0a584e57dda7418277a487251a9131f7dde6c98fd8816'), ('notes.txt', '9a0b42842ff234e86a2200f2b15d7ce7ffaf6b1f1bfce21986f108bc36d5f5d0'), ('src/math.txt', '9e7892c326445f7dc6772091a342a657c9cdc6bc707a4ad90e3d875a4b8359cb')]\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'git rev-parse HEAD; git symbolic-ref HEAD'",
+            "aggregated_output": "86e1ac8d13f9fb486942b5844dfb88f2a326991d\nrefs/heads/main\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "Blocked: AISC could not create `.git/aisc-operation.lock` (`Operation not permitted`). No lock file exists, and `../isolated` was not created.\n\nNo commit/ref was produced. Original main\u2019s HEAD, index, and files are verified unchanged."
+          }
+        ],
+        "usage": [
+          {
+            "input_tokens": 168402,
+            "cached_input_tokens": 151040,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 801,
+            "reasoning_output_tokens": 145
+          }
+        ],
+        "models": []
+      }
+    },
+    {
+      "name": "codex-minimal-profile",
+      "provider": "codex",
+      "comparable": false,
+      "exclusion": "240-second timeout; repeated xcrun cache denial and per-tool environment changed",
+      "projection": {
+        "events": [
+          {
+            "type": "answer",
+            "text": "I\u2019ll use AISC to create the isolated worktree, commit and verify the change, then finish and check that main is unchanged."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"python3 -c \\\"from pathlib import Path; import hashlib,json; p=Path('.'); print(json.dumps({str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file() and '.git' not in f.parts},sort_keys=True)); print('INDEX',hashlib.sha256(Path('.git/index').read_bytes()).hexdigest())\\\"\"",
+            "aggregated_output": "python3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:43.624 xcodebuild[26416:6898168]  DVTFilePathFSEvents: Failed to start fs event stream.\npython3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:44.540 xcodebuild[26427:6898252]  DVTFilePathFSEvents: Failed to start fs event stream.\n{\"docs/manual.txt\": \"0fdec55c2da132cce218c9398c340e4b70e76c34c36d3e6f7673de8bdbc14315\", \"new file.txt\": \"0883394d115efaeb43f0a584e57dda7418277a487251a9131f7dde6c98fd8816\", \"notes.txt\": \"9a0b42842ff234e86a2200f2b15d7ce7ffaf6b1f1bfce21986f108bc36d5f5d0\", \"src/math.txt\": \"9e7892c326445f7dc6772091a342a657c9cdc6bc707a4ad90e3d875a4b8359cb\"}\nINDEX a5edfc9b2c3bd091c557e6fae27827d41667b9a90d8c54d6366f2b4237b795de\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'pwd; git status --porcelain=v1; git rev-parse HEAD; git symbolic-ref HEAD; <scratch>/aisc-v1 context --limit 20'",
+            "aggregated_output": "<scratch>/codex-scoped-smoke/isolated-0-aisc/repo\ngit: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:22.543 xcodebuild[25710:6895141]  DVTFilePathFSEvents: Failed to start fs event stream.\ngit: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:23.438 xcodebuild[25736:6895204]  DVTFilePathFSEvents: Failed to start fs event stream.\nwarning: unable to access '<global-git-ignore>': Operation not permitted\nwarning: unable to access '<global-git-ignore>': Operation not permitted\nR  docs/guide.txt -> docs/manual.txt\nMM notes.txt\n D remove.txt\n M src/math.txt\n?? \"new file.txt\"\ngit: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:24.967 xcodebuild[25769:6895373]  DVTFilePathFSEvents: Failed to start fs event stream.\ngit: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:25.763 xcodebuild[25773:6895402]  DVTFilePathFSEvents: Failed to start fs event stream.\n86e1ac8d13f9fb486942b5844dfb88f2a326991d\ngit: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:27.740 xcodebuild[25848:6895745]  DVTFilePathFSEvents: Failed to start fs event stream.\ngit: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:22:28.526 xcodebuild[25869:6895863]  DVTFilePathFSEvents: Failed to start fs event stream.\nrefs/heads/main\n{\"branch\":\"main\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[{\"added\":\"0\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"0\",\"path\":\"docs/manual.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"notes.txt\"}],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"0\",\"path\":\"notes.txt\"},{\"added\":\"0\",\"deleted\":\"1\",\"path\":\"remove.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\"D \"},{\"path\":\"docs/manual.txt\",\"status\":\"A \"},{\"path\":\"notes.txt\",\"status\":\"MM\"},{\"path\":\"remove.txt\",\"status\":\" D\"},{\"path\":\"src/math.txt\",\"status\":\" M\"},{\"path\":\"new file.txt\",\"status\":\"??\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":3,\"unstaged\":3,\"untracked\":1}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'ls -l <scratch>/aisc-v1'",
+            "aggregated_output": "-rwxr-xr-x@ 1 <user>  staff  1975704 Oct 22 03:19 <scratch>/aisc-v1\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '<scratch>/aisc-v1 start bench --path ../isolated'",
+            "aggregated_output": "{\"branch\":\"aisc/bench\",\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"mode\":\"worktree\",\"path\":\"<scratch>/codex-scoped-smoke/isolated-0-aisc/isolated\",\"task\":\"bench\"}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"python3 -c \\\"from pathlib import Path; Path('src/math.txt').write_text('sum = checked_add(a, b)\\\\n')\\\"\"",
+            "aggregated_output": "python3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:23:23.981 xcodebuild[27614:6904390]  DVTFilePathFSEvents: Failed to start fs event stream.\npython3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:23:25.413 xcodebuild[27662:6904638]  DVTFilePathFSEvents: Failed to start fs event stream.\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "The isolated branch starts at main\u2019s committed HEAD. The requested content is written there, and AISC is committing it before verification."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"python3 -c \\\"from pathlib import Path; import hashlib; expected={'docs/manual.txt':'0fdec55c2da132cce218c9398c340e4b70e76c34c36d3e6f7673de8bdbc14315','new file.txt':'0883394d115efaeb43f0a584e57dda7418277a487251a9131f7dde6c98fd8816','notes.txt':'9a0b42842ff234e86a2200f2b15d7ce7ffaf6b1f1bfce21986f108bc36d5f5d0','src/math.txt':'9e7892c326445f7dc6772091a342a657c9cdc6bc707a4ad90e3d875a4b8359cb'}; actual={str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in Path('.').rglob('*') if f.is_file() and '.git' not in f.parts}; assert actual==expected; assert hashlib.sha256(Path('.git/index').read_bytes()).hexdigest()=='a5edfc9b2c3bd091c557e6fae27827d41667b9a90d8c54d6366f2b4237b795de'; assert Path('.git/HEAD').read_text().strip()=='ref: refs/heads/main'; assert Path('.git/refs/heads/main').read_text().strip()=='86e1ac8d13f9fb486942b5844dfb88f2a326991d'; print('Original main HEAD, index and files unchanged')\\\"\"",
+            "aggregated_output": "python3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:23:48.532 xcodebuild[28489:6908463]  DVTFilePathFSEvents: Failed to start fs event stream.\npython3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\n2026-10-22 03:23:49.355 xcodebuild[28512:6908612]  DVTFilePathFSEvents: Failed to start fs event stream.\nOriginal main HEAD, index and files unchanged\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"<scratch>/aisc-v1 checkpoint -m 'save math' -- src/math.txt\"",
+            "aggregated_output": "{\"branch\":\"aisc/bench\",\"commit\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"paths\":[\"src/math.txt\"],\"verification\":\"required\"}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"<scratch>/aisc-v1 verify -- python3 -c \\\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\\\"\"",
+            "aggregated_output": "{\"command\":[\"python3\",\"-c\",\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\"],\"commit\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"stderr\":\"python3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\\n2026-10-22 03:24:39.913 xcodebuild[30076:6917954]  DVTFilePathFSEvents: Failed to start fs event stream.\\npython3: error: couldn't create cache file '<runtime-temp>' (errno=Operation not permitted)\\n2026-10-22 03:24:40.748 xcodebuild[30078:6918033]  DVTFilePathFSEvents: Failed to start fs event stream.\\n\",\"stderr_omitted_bytes\":0,\"stdout\":\"\",\"stdout_omitted_bytes\":0,\"verified\":true}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "The `save math` commit passed the exact-content assertion. Main\u2019s HEAD, index and file contents also match the original snapshot. AISC finish is running."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '<scratch>/aisc-v1 finish'",
+            "aggregated_output": "{\"error\":\"verification evidence is stale; rerun verify for the current candidate and environment\"}\n",
+            "exit_code": 1
+          },
+          {
+            "type": "answer",
+            "text": "AISC reported stale verification evidence at finish. I\u2019m rerunning verification and finish in the same shell so they share the same environment."
+          }
+        ],
+        "usage": [],
+        "models": []
+      }
+    },
+    {
+      "name": "codex-exact-gitdir-smoke",
+      "provider": "codex",
+      "comparable": false,
+      "exclusion": "unpaired positive sandbox smoke; initial candidate",
+      "projection": {
+        "events": [
+          {
+            "type": "answer",
+            "text": "I\u2019ll start bench in place, save the exact content through AISC, then run checkpoint, verification, and finish in one shell invocation."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '<scratch>/aisc-v2 context --limit 10'",
+            "aggregated_output": "{\"branch\":\"main\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[],\"omitted\":0}},\"files\":[],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":0,\"unstaged\":0,\"untracked\":0}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '<scratch>/aisc-v2 start bench --in-place'",
+            "aggregated_output": "{\"branch\":\"main\",\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"mode\":\"in-place\",\"path\":\"<scratch>/codex-add-dir-smoke/in_place-0-aisc/repo\",\"task\":\"bench\"}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"python3 -c \\\"from pathlib import Path; Path('src/math.txt').write_text('sum = checked_add(a, b)\\\\n')\\\" && <scratch>/aisc-v2 checkpoint -m 'save math' -- src/math.txt && <scratch>/aisc-v2 verify -- python3 -c \\\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\\\" && <scratch>/aisc-v2 finish\"",
+            "aggregated_output": "{\"branch\":\"main\",\"commit\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"paths\":[\"src/math.txt\"],\"verification\":\"required\"}\n{\"command\":[\"python3\",\"-c\",\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\"],\"commit\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"stderr\":\"\",\"stderr_omitted_bytes\":0,\"stdout\":\"\",\"stdout_omitted_bytes\":0,\"verified\":true}\n{\"error\":\"verification evidence is stale; rerun verify for the current candidate and environment\"}\n",
+            "exit_code": 1
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'file <scratch>/aisc-v2\n<scratch>/aisc-v2 context --limit 10'",
+            "aggregated_output": "<scratch>/aisc-v2: Mach-O 64-bit executable arm64\n{\"branch\":\"main\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[],\"omitted\":0}},\"files\":[],\"head\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"omitted\":0,\"staged\":0,\"unstaged\":0,\"untracked\":0}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "The commit and assertion succeeded, but finish rejected the verification evidence as stale. Main is clean. I\u2019ll rerun verification and finish with shell command replacement disabled to keep their environments consistent."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc \"<scratch>/aisc-v2 verify -- python3 -c \\\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\\\" && <scratch>/aisc-v2 finish\nresult=\"'$?\nexit \"$result\"'",
+            "aggregated_output": "{\"command\":[\"python3\",\"-c\",\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\"],\"commit\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"stderr\":\"\",\"stderr_omitted_bytes\":0,\"stdout\":\"\",\"stdout_omitted_bytes\":0,\"verified\":true}\n{\"branch\":\"main\",\"command\":[\"python3\",\"-c\",\"from pathlib import Path; assert Path('src/math.txt').read_text() == 'sum = checked_add(a, b)\\\\n'\"],\"commit\":\"ce57a45dde2efb72c9c81077be4b39929140a059\",\"ref\":\"refs/heads/main\",\"task\":\"bench\",\"verified\":true}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "Finished bench. Exact content assertion passed; main is clean.\n\nCommit: `ce57a45dde2efb72c9c81077be4b39929140a059` (`save math`)\nRef: `refs/heads/main`"
+          }
+        ],
+        "usage": [
+          {
+            "input_tokens": 168831,
+            "cached_input_tokens": 151296,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 783,
+            "reasoning_output_tokens": 125
+          }
+        ],
+        "models": []
+      }
+    },
+    {
+      "name": "codex-environment-diagnostic",
+      "provider": "codex",
+      "comparable": false,
+      "exclusion": "unpaired diagnostic: CODEX_TOOL_CALL_ID alone changed between verify and finish",
+      "projection": {
+        "events": [
+          {
+            "type": "answer",
+            "text": "I\u2019ll run the two commands separately, wait for each to finish, and report only their exit codes.\n"
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'python3 .git/record_env.py verify -- /usr/bin/true'",
+            "aggregated_output": "{\"command\":[\"/usr/bin/true\"],\"commit\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"stderr\":\"\",\"stderr_omitted_bytes\":0,\"stdout\":\"\",\"stdout_omitted_bytes\":0,\"verified\":true}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'python3 .git/record_env.py finish'",
+            "aggregated_output": "{\"error\":\"verification evidence is stale; rerun verify for the current candidate and environment\"}\n",
+            "exit_code": 1
+          },
+          {
+            "type": "answer",
+            "text": "verify exit code: 0  \nfinish exit code: 1"
+          }
+        ],
+        "usage": [
+          {
+            "input_tokens": 81246,
+            "cached_input_tokens": 66176,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 164,
+            "reasoning_output_tokens": 0
+          }
+        ],
+        "models": []
+      }
+    },
+    {
+      "name": "codex-environment-fixed",
+      "provider": "codex",
+      "comparable": false,
+      "exclusion": "unpaired confirmation: separate calls now verify and finish successfully",
+      "projection": {
+        "events": [
+          {
+            "type": "answer",
+            "text": "I\u2019ll run the verification command, wait for it to finish, then run the finish command separately and report both exit codes."
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'python3 .git/record_env.py verify -- /usr/bin/true'",
+            "aggregated_output": "{\"command\":[\"/usr/bin/true\"],\"commit\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"stderr\":\"\",\"stderr_omitted_bytes\":0,\"stdout\":\"\",\"stdout_omitted_bytes\":0,\"verified\":true}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "command_execution",
+            "command": "/bin/zsh -lc 'python3 .git/record_env.py finish'",
+            "aggregated_output": "{\"branch\":\"main\",\"command\":[\"/usr/bin/true\"],\"commit\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"ref\":\"refs/heads/main\",\"task\":null,\"verified\":true}\n",
+            "exit_code": 0
+          },
+          {
+            "type": "answer",
+            "text": "Both commands completed separately:\n\n- `verify -- /usr/bin/true`: exit code `0`\n- `finish`: exit code `0`\n\nBoth reported `verified: true`. No tracked source was changed."
+          }
+        ],
+        "usage": [
+          {
+            "input_tokens": 81359,
+            "cached_input_tokens": 66048,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 164,
+            "reasoning_output_tokens": 0
+          }
+        ],
+        "models": []
+      }
+    }
+  ]
+}
