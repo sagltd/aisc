@@ -10,7 +10,7 @@ for isolation.
 | Status | Claim | Evidence |
 | --- | --- | --- |
 | Measured baseline | A Git-only inspection run took a median 39.08 ms over five runs. Its transcript was 926 bytes and 409 `o200k_base` tokens. | [Method and results](docs/benchmarks.md) |
-| Dependency audit | `cargo-audit` 0.22.2 reported zero vulnerabilities and warnings across 34 dependencies. This applies only to the audited lockfile snapshot, not to overall security. | `Cargo.lock` SHA-256 `18ef0d289ea4c5f7cb2527f007bcc45ef3214e6b5dc2315e3fd0f354a552ecea`; advisory database `4b587f00996ebe5c05a73eaef105ef241e876414` (2026-10-21). Rerun after lockfile changes. |
+| Dependency audit | `cargo-audit` 0.22.2 reported zero vulnerabilities and warnings across 49 dependencies. This applies only to the audited lockfile snapshot, not to overall security. | `Cargo.lock` SHA-256 `4f810ab783b022fa613ddce254233d45526d38c12e140a1ac15fe5594967daf7`; advisory database `4b587f00996ebe5c05a73eaef105ef241e876414` (2026-10-21). Rerun after lockfile changes. |
 | Goal | Reduce model context and time spent on routine source-control work. | AISC and Git will be compared on matched tasks in the [benchmark](docs/benchmarks.md). |
 | Not established | No AISC speed or token savings, or production-readiness claim, is established by the baseline. | A paired AISC comparison and safety review are still required. |
 
@@ -56,20 +56,36 @@ aisc start parser-fix --path .worktrees/parser-fix
 cd .worktrees/parser-fix
 ```
 
-`context` returns bounded JSON about the branch, commit, index, worktree, and
-conflicts. `diff` accepts literal paths and limits output size. `checkpoint`
-commits only the named paths while preserving unrelated staged changes. `verify`
-runs the given program directly; use an explicit shell command such as
-`sh -c` only when shell behavior is needed. `finish` succeeds only when the
-same clean candidate commit and environment have a successful verification
-record. It reports the resulting commit and reference; it never pushes, merges,
-or deletes a worktree.
+In a terminal, AISC prints readable human output; when redirected, it emits
+stable JSON by default. Use `--json` to request machine output explicitly, or
+`--human --color always` to keep formatted text in a pipe. `NO_COLOR` disables
+ANSI color. For example:
+
+```sh
+aisc --json context
+aisc --human --color never diff -- src/parser.rs
+```
+
+`context` reports bounded branch, commit, index, worktree, and conflict data.
+`diff` accepts literal paths and limits output size. `checkpoint` commits only
+the named paths while preserving unrelated staged changes. `verify` runs the
+given program directly; use an explicit shell command such as `sh -c` only when
+shell behavior is needed. `finish` succeeds only when the same clean candidate
+commit and environment have a successful verification record. It reports the
+resulting commit and reference; it never pushes, merges, or deletes a worktree.
 
 `aisc github` is an explicit, read-only GitHub summary using the authenticated
 GitHub CLI (`gh pr status`). It summarizes the current branch and related pull
 requests, review decision, and checks. It needs network access; the Git context
 commands above work offline. GitHub's own results can be partial, and AISC does
 not claim fewer API requests than an optimized `gh` query.
+
+`aisc gitlab` is an explicit, read-only summary of open merge requests whose
+source branch exactly matches the current branch. It uses the authenticated
+GitLab CLI (`glab`), requires network access, and may receive incomplete
+pipeline or mergeability fields from GitLab. It does not include a review inbox
+or every project merge request. Both hosting commands are optional; local Git
+operations do not require `gh` or `glab`.
 
 Verification is supported on macOS and Linux. It requires an existing `HEAD`
 and a clean committed checkout. AISC binds the candidate to tracked files, the

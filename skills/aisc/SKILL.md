@@ -40,6 +40,22 @@ Use AISC for Git-backed checkpoints and repository operations during agent work.
 - Keep local context, diff, checkpoint, verification, and finish operations
   independent of GitHub availability.
 
+## Optional GitLab context
+
+- Use `aisc gitlab [--limit N]` only when merge-request status is relevant and
+  network access is available. It is read-only and requires the authenticated
+  GitLab CLI (`glab`). Its scope is open merge requests with the exact current
+  source branch; pipeline and mergeability fields may be absent, and it does
+  not include a review inbox or all project merge requests.
+- Do not infer that a missing pipeline is passing. Keep local AISC operations
+  independent of GitLab availability.
+
+## Output mode
+
+- AISC uses readable output in a terminal and JSON by default when redirected.
+  Use `--json` for explicit machine output or `--human` to request text in a
+  pipe. ANSI color is configurable with `--color`; `NO_COLOR` disables it.
+
 ## Keep claims measurable
 
 When comparing AISC with a Git workflow, use the same task, repository state, agent, model, and tool settings for each run. Record provider-reported token usage separately from token counts estimated from saved transcript text. Describe time savings and reliability only when the corresponding measurements or checks are available.
