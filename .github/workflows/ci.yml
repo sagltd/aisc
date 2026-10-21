@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   rust:
@@ -29,7 +29,7 @@ jobs:
         run: python3 -m unittest discover -s benchmarks -v
 
       - name: Install Rust 1.91.1
-        uses: dtolnay/rust-toolchain@0f44b27771c32bda9f458f75a1e241b09791b331 # 1.91.1
+        uses: dtolnay/rust-toolchain@8632757d5a758c452f724e9d837848c694a7bb48 # 1.91.1
         with:
           toolchain: 1.91.1
           components: clippy, rustfmt
