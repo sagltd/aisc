@@ -143,9 +143,30 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
         .files
         .keys()
         .map(|index| &changes.files[*index])
-        .filter(|file| file.kind == Kind::Modified)
+        .filter(|file| {
+            !matches!(file.kind, Kind::Untracked | Kind::Deleted) && file.new_oid.is_some()
+        })
         .map(|file| file.path.clone())
         .collect();
+    // Untracked files have no object id: compare the digest taken when they were listed.
+    for index in selection.files.keys() {
+        let file = &changes.files[*index];
+        if file.kind == Kind::Untracked && !file.digest.starts_with("size-") {
+            let digest = worktree_bytes(&git, &file.path).map(|bytes| {
+                use sha2::{Digest, Sha256};
+                Sha256::digest(&bytes)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>()
+            });
+            if digest.as_deref() != Some(file.digest.as_str()) {
+                return Err(stale(&format!(
+                    "{} changed while aisc was working",
+                    file.path
+                )));
+            }
+        }
+    }
     let hashes = git.hash_worktree(&modified)?;
     for (path, oid) in modified.iter().zip(&hashes) {
         let file = &changes.files[changes.index_of(path).expect("path from the change set")];
@@ -194,6 +215,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
                 plan.index.extend(change);
             }
             _ => {
+                let before_mode = current.is_some().then(|| worktree_mode(&git, &file.path));
                 let (after, mode) = match head {
                     Some((mode, oid)) => (Some(blobs[oid].clone()), mode.clone()),
                     None => (None, worktree_mode(&git, &file.path)),
@@ -203,6 +225,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
                     before: current,
                     after,
                     mode,
+                    before_mode,
                 });
                 let present = index.get(&file.path);
                 if present != head {
@@ -279,6 +302,7 @@ fn partial(
         before: Some(current),
         after: Some(bytes.clone()),
         mode: file.new_mode.clone().unwrap_or_else(|| "100644".to_owned()),
+        before_mode: Some(file.new_mode.clone().unwrap_or_else(|| "100644".to_owned())),
     };
     let change = match index {
         Some((mode, oid)) if file.new_oid.as_deref() == Some(oid.as_str()) => {

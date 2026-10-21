@@ -549,3 +549,35 @@ fn a_moved_branch_between_read_and_apply_is_a_stale_error() {
         "no operation was recorded"
     );
 }
+
+const LOOKALIKE_HEAD: &str = "// head\n";
+const ALPHA: &str = "\nfn alpha() {\n    let total = 1;\n    println!(\"{}\", total);\n}\n";
+const BETA: &str = "\nfn beta() {\n    let total = 1;\n    println!(\"{}\", total);\n}\n";
+const BETA_LOGGED: &str =
+    "\nfn beta() {\n    let total = 1;\n    log(total);\n    println!(\"{}\", total);\n}\n";
+
+#[test]
+fn a_hunk_in_a_look_alike_function_is_not_placed_in_the_older_one() {
+    let fixture = Fixture::with_files(&[("f.rs", LOOKALIKE_HEAD)]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.rs", &format!("{LOOKALIKE_HEAD}{ALPHA}"));
+    fixture.commit_all("add alpha");
+    fixture.write("f.rs", &format!("{LOOKALIKE_HEAD}{ALPHA}{BETA}"));
+    fixture.commit_all("add beta");
+    fixture.write("f.rs", &format!("{LOOKALIKE_HEAD}{ALPHA}{BETA_LOGGED}"));
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["amend", "--into", "add alpha", "f.rs"]);
+    assert_eq!(run.code, 1, "{}", run.stdout);
+    assert!(run.stderr.contains("add beta"), "{}", run.stderr);
+    assert_eq!(before, fixture.snapshot());
+    // Into the commit that has the lines it works.
+    fixture.aisc(&["amend", "--into", "add beta", "f.rs"]).ok();
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.rs").unwrap(),
+        format!("{LOOKALIKE_HEAD}{ALPHA}{BETA_LOGGED}")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.rs").unwrap(),
+        format!("{LOOKALIKE_HEAD}{ALPHA}")
+    );
+}

@@ -229,6 +229,37 @@ fn untracked_deleted_and_mode_changes_are_reverted_by_path() {
 }
 
 #[test]
+fn undo_restores_the_executable_bit_of_a_mode_only_discard() {
+    let fixture = Fixture::with_files(&[("run.sh", "echo\n")]);
+    std::fs::set_permissions(
+        fixture.path("run.sh"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    fixture.aisc(&["discard", "run.sh"]).ok();
+    let mode = |f: &Fixture| {
+        std::fs::metadata(f.path("run.sh"))
+            .unwrap()
+            .permissions()
+            .mode()
+    };
+    assert_eq!(mode(&fixture) & 0o111, 0);
+    fixture.aisc(&["undo"]).ok();
+    assert_ne!(mode(&fixture) & 0o111, 0, "exec bit is back");
+}
+
+#[test]
+fn an_untracked_file_changed_between_read_and_discard_is_a_stale_error() {
+    let fixture = pilot9();
+    fixture.write("scratch.txt", "scratch\n");
+    let env = fixture.fake_git("ls-tree", "printf 'sneaky\\n' >> scratch.txt");
+    let run = fixture.aisc_env(&["discard", "scratch.txt"], &support::env_refs(&env));
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.read("scratch.txt"), "scratch\nsneaky\n");
+    assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
+}
+
+#[test]
 fn failures_change_nothing() {
     let fixture = pilot9();
     fixture.git(&["add", "src/catalog.ts"]);

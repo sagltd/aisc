@@ -233,7 +233,7 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
             format!("commit {} has no changes to split", short_of(target)),
         ));
     }
-    let meta = git.read_commit_meta(&target.oid)?;
+    let meta = git.read_commit_meta(&target.oid)?.with_current_committer();
 
     // Parts: (message, selection), and what happens to the rest.
     let mut parts: Vec<(Vec<u8>, Selection)> = Vec::new();

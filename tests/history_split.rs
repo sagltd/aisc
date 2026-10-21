@@ -480,6 +480,34 @@ fn dependent_branches_follow_a_split() {
     );
 }
 
+#[test]
+fn uncommit_removes_the_rest_where_it_was_made_not_from_a_look_alike() {
+    let alpha = "fn alpha() {\n    let total = 1;\n    println!(\"{}\", total);\n}\n";
+    let alpha_logged =
+        "fn alpha() {\n    let total = 1;\n    log(total);\n    println!(\"{}\", total);\n}\n";
+    let beta_logged =
+        "\nfn beta() {\n    let total = 1;\n    log(total);\n    println!(\"{}\", total);\n}\n";
+    let fixture = Fixture::with_files(&[("f.rs", alpha)]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.rs", alpha_logged);
+    fixture.commit_all("log in alpha");
+    fixture.write("f.rs", &format!("{alpha_logged}{beta_logged}"));
+    fixture.commit_all("add beta");
+    let run = fixture.aisc(&["uncommit", "log in alpha", "f.rs"]);
+    run.ok();
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.rs").unwrap(),
+        format!("{alpha}{beta_logged}"),
+        "beta keeps its line; alpha loses its own"
+    );
+    assert!(
+        fixture
+            .git(&["diff", "HEAD", "-U0"])
+            .contains("@@ -2,0 +3 @@")
+    );
+    assert_eq!(fixture.read("f.rs"), format!("{alpha_logged}{beta_logged}"));
+}
+
 // ---- pilot 10 -------------------------------------------------------------------------------
 
 const DRAFT: &str = "Draft: do not publish.\nKeep this line verbatim.\n";

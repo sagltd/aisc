@@ -102,7 +102,7 @@ pub(super) fn rebuild(
         let new = if parent.as_ref() == commit.parents.first() && *tree == commit.tree {
             commit.oid.clone()
         } else {
-            let meta = git.read_commit_meta(&commit.oid)?;
+            let meta = git.read_commit_meta(&commit.oid)?.with_current_committer();
             git.commit_tree(tree, parent.as_slice(), &meta.message, Some(&meta))?
         };
         if new != commit.oid {
@@ -363,6 +363,10 @@ pub(super) fn verify_amend(
             }
             let ok = match lines.get(path) {
                 None => original.get(path) == rewritten.get(path),
+                // A file this commit creates has no line-level diff to compare.
+                Some(_) if matches!(original.get(path), Some(Sig::Whole(_))) => {
+                    original.get(path) == rewritten.get(path)
+                }
                 Some(extra) => {
                     net(original.get(path), Some(extra)) == net(rewritten.get(path), None)
                 }
