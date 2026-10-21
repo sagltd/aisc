@@ -1,6 +1,6 @@
 ---
 name: aisc
-description: Use AISC when an agent needs to save, inspect, or restore code work through Git while preserving the user's existing changes and repository state.
+description: Use AISC when an agent needs to inspect or checkpoint code work through Git while preserving the user's existing changes and repository state.
 license: MIT
 compatibility: Requires Git and the AISC command-line tool. Install AISC from the sagltd/aisc repository using the installation instructions in its README.
 ---
@@ -16,7 +16,7 @@ Use AISC for Git-backed checkpoints and repository operations during agent work.
 3. Read `aisc --help` and the relevant subcommand help. Follow the syntax and behavior documented by the installed version.
 4. Preserve staged and unstaged user changes. Never reset, clean, overwrite, or publish work unless the user asked for that action.
 
-## Save and restore work
+## Save and verify work
 
 - Choose `aisc start NAME --in-place` only when staying on the current branch and
   working directory is intentional and the starting tree is clean. In-place
@@ -24,8 +24,8 @@ Use AISC for Git-backed checkpoints and repository operations during agent work.
 - For independent work, choose `aisc start NAME --path PATH` with a complete,
   ignored destination path that does not already exist. Inspect that path first.
 - Save only the files and state that belong to the requested task.
-- Before restoring or applying a saved change, inspect its base and affected paths; stop if it would overwrite unrelated work.
-- After an operation, inspect the resulting status and diff. Report what AISC saved or restored and any conflicts or skipped paths.
+- Do not describe or attempt restore or rollback commands unless the installed AISC version documents them.
+- After an operation, inspect the resulting status and diff. Report what AISC saved or verified, plus any conflicts or skipped paths.
 - Treat local repository data as private. Do not upload session transcripts, credentials, or machine-specific files.
 
 ## Keep claims measurable

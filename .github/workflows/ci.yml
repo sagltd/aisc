@@ -24,6 +24,7 @@ jobs:
       - name: Install Rust 1.91.1
         uses: dtolnay/rust-toolchain@0f44b27771c32bda9f458f75a1e241b09791b331 # 1.91.1
         with:
+          toolchain: 1.91.1
           components: clippy, rustfmt
 
       - name: Check formatting

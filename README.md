@@ -1,8 +1,9 @@
 # AISC
 
-**Less source-control work for coding agents.** AISC gives an agent a separate
-worktree, bounded context and diff output, explicit commits, and verification
-tied to the exact clean commit that was checked.
+**Less source-control work for coding agents.** AISC gives an agent bounded
+context and diff output, explicit commits, and verification tied to the exact
+clean commit that was checked. Work in place or create a separate Git worktree
+for isolation.
 
 ### Current evidence
 
