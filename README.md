@@ -28,17 +28,25 @@ cargo install --git https://github.com/sagltd/aisc --locked
 
 ## Try it
 
-Start an isolated worktree from the current `HEAD`, then work inside it:
+For a small task, start in the current directory and branch. In-place mode
+requires a clean starting state and does not isolate filesystem changes:
 
 ```sh
-aisc start parser-fix --path .worktrees/parser-fix
-cd .worktrees/parser-fix
-
+aisc start parser-fix --in-place
 aisc context
 aisc diff -- src/parser.rs
 aisc checkpoint -m "Fix parser edge case" -- src/parser.rs
 aisc verify -- cargo test
 aisc finish
+```
+
+For parallel work that needs its own branch and working directory, create a
+worktree at a complete destination path that does not already exist, then run
+the same lifecycle commands there:
+
+```sh
+aisc start parser-fix --path .worktrees/parser-fix
+cd .worktrees/parser-fix
 ```
 
 `context` returns bounded JSON about the branch, commit, index, worktree, and

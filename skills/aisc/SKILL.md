@@ -18,6 +18,11 @@ Use AISC for Git-backed checkpoints and repository operations during agent work.
 
 ## Save and restore work
 
+- Choose `aisc start NAME --in-place` only when staying on the current branch and
+  working directory is intentional and the starting tree is clean. In-place
+  mode does not isolate filesystem changes.
+- For independent work, choose `aisc start NAME --path PATH` with a complete,
+  ignored destination path that does not already exist. Inspect that path first.
 - Save only the files and state that belong to the requested task.
 - Before restoring or applying a saved change, inspect its base and affected paths; stop if it would overwrite unrelated work.
 - After an operation, inspect the resulting status and diff. Report what AISC saved or restored and any conflicts or skipped paths.
