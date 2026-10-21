@@ -1,0 +1,19 @@
+# Rust build output
+/target/
+**/target/
+
+# Local worktrees and agent handoff state
+/.worktrees/
+/.lead/
+/.co-op/
+
+# Local credentials and machine-specific settings
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+.codex/
+
+# Local benchmark scratch data; checked-in benchmark reports remain visible
+/benchmarks/.scratch/
+/benchmarks/.cache/
