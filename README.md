@@ -10,14 +10,15 @@ for isolation.
 | Status | Claim | Evidence |
 | --- | --- | --- |
 | Measured baseline | A Git-only inspection run took a median 39.08 ms over five runs. Its transcript was 926 bytes and 409 `o200k_base` tokens. | [Method and results](docs/benchmarks.md) |
+| Measured command comparison | On one compact inspection, AISC context took 192.99 ms median and emitted 143 transcript-proxy tokens; GitButler status plus Git numstat took 38.60 ms and 106 tokens. | [Raw command comparison and limits](benchmarks/results/commands-v1.json) |
 | Dependency audit | `cargo-audit` 0.22.2 reported zero vulnerabilities and warnings across 49 dependencies. This applies only to the audited lockfile snapshot, not to overall security. | `Cargo.lock` SHA-256 `4f810ab783b022fa613ddce254233d45526d38c12e140a1ac15fe5594967daf7`; advisory database `4b587f00996ebe5c05a73eaef105ef241e876414` (2026-10-21). Rerun after lockfile changes. |
 | Goal | Reduce model context and time spent on routine source-control work. | AISC and Git will be compared on matched tasks in the [benchmark](docs/benchmarks.md). |
-| Not established | No AISC speed or token savings, or production-readiness claim, is established by the baseline. | A paired AISC comparison and safety review are still required. |
+| Not established | The measured command comparison was slower and used more text-proxy tokens than GitButler for that inspection. It does not establish whole-workflow or provider-usage savings, or production readiness. | The benchmark describes the task, candidate, and measurement limits; broader provider comparisons remain separate. |
 
-The 409-token figure is a text-size proxy, not provider-reported inference
-usage. The [benchmark methodology and results](docs/benchmarks.md) keep provider
-usage, transcript estimates, Git-only tasks, and the full agent workflow
-separate.
+These token figures are text-size proxies, not provider-reported inference
+usage. The [benchmark methodology and results](docs/benchmarks.md) distinguish
+provider usage, transcript estimates, Git-only tasks, and the full agent
+workflow.
 
 CI targets Ubuntu 24.04 and macOS 15. Windows is not in the current matrix, so
 these checks cannot establish Windows support.
@@ -48,7 +49,7 @@ aisc finish
 For parallel work that needs its own branch and working directory, create an
 ignored parent directory first, then create a worktree at a complete destination
 path that does not already exist. The parent must already exist; AISC will not
-create directories or change `.gitignore` for you:
+create parent directories or change `.gitignore` for you:
 
 ```sh
 mkdir -p .worktrees
