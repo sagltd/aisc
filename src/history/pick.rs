@@ -235,11 +235,13 @@ fn carry(git: &Git, view: &View, old: &str, new: &str, plan: &mut Plan) -> Resul
             .or(before.as_ref())
             .map(|entry| entry.0.clone())
             .unwrap_or_default();
+        let before_mode = before.as_ref().map(|entry| entry.0.clone());
         plan.worktree.push(WorktreeWrite {
             path,
             before: before.map(|entry| by_oid[&entry.1].clone()),
             after: after.map(|entry| by_oid[&entry.1].clone()),
             mode,
+            before_mode,
         });
     }
     Ok(())

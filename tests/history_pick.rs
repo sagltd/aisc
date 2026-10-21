@@ -375,18 +375,17 @@ fn clean_directory_replaced_by_a_file_is_refused_clearly() {
 }
 
 #[test]
-fn clean_file_replaced_by_a_directory_is_picked() {
+fn clean_file_replaced_by_a_directory_is_refused_atomically() {
     let fixture = Fixture::with_files(&[("a", "tracked file\n")]);
     fixture.git(&["switch", "-c", "feature"]);
     fixture.git(&["rm", "-q", "a"]);
     fixture.write("a/b.txt", "now a dir\n");
     fixture.commit_all("add path");
     fixture.git(&["switch", "main"]);
-    fixture
-        .aisc(&["pick", "--from", "feature", "add path"])
-        .ok();
-    assert_eq!(fixture.read("a/b.txt"), "now a dir\n");
-    assert_eq!(fixture.git(&["status", "--porcelain"]), "");
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["pick", "--from", "feature", "add path"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(fixture.snapshot(), before);
 }
 
 #[test]

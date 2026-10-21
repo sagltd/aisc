@@ -140,7 +140,7 @@ pub(crate) fn run(args: &cli::Squash) -> Result<Outcome> {
                 &newest.tree,
                 parent.as_slice(),
                 message.as_bytes(),
-                Some(&metas[0]),
+                Some(&metas[0].clone().with_current_committer()),
             )?;
             for member in members {
                 rewritten.push((member.oid.clone(), commit.clone()));
@@ -159,8 +159,12 @@ pub(crate) fn run(args: &cli::Squash) -> Result<Outcome> {
                 parent = Some(commit.oid.clone());
             } else {
                 let meta = git.read_commit_meta(&commit.oid)?;
-                let replacement =
-                    git.commit_tree(&commit.tree, parent.as_slice(), &meta.message, Some(&meta))?;
+                let replacement = git.commit_tree(
+                    &commit.tree,
+                    parent.as_slice(),
+                    &meta.message,
+                    Some(&meta.clone().with_current_committer()),
+                )?;
                 rewritten.push((commit.oid.clone(), replacement.clone()));
                 parent = Some(replacement);
             }

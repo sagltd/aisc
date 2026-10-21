@@ -109,7 +109,12 @@ pub(crate) fn recommit(
 ) -> Result<String> {
     let meta = git.read_commit_meta(&src.oid)?;
     let parents: Vec<String> = parent.cloned().into_iter().collect();
-    git.commit_tree(tree, &parents, &meta.message, Some(&meta))
+    git.commit_tree(
+        tree,
+        &parents,
+        &meta.message,
+        Some(&meta.clone().with_current_committer()),
+    )
 }
 
 pub(crate) fn short_ids(git: &Git, oids: &[String]) -> Result<Vec<String>> {
