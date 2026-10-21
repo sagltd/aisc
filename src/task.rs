@@ -149,6 +149,7 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     let executable = executable_digest(&resolved)?;
     let mut child = Command::new(&resolved);
     child.args(&command[1..]).current_dir(&repo.root);
+    process::exact_executable(&mut child, &command[0])?;
     let output = process::execute(&mut child, Duration::from_secs(timeout as u64), 16_384)?;
     let clean = repo.require_clean();
     let after = fingerprint(repo)?;
@@ -244,6 +245,10 @@ fn fingerprint(repo: &Repo) -> Result<String> {
     let mut environment = std::env::vars_os().collect::<Vec<_>>();
     environment.sort();
     for (name, value) in environment {
+        // Codex changes this orchestration identifier on every shell tool call.
+        if name == "CODEX_TOOL_CALL_ID" {
+            continue;
+        }
         feed(&mut hash, os_bytes(&name));
         feed(&mut hash, os_bytes(&value));
     }

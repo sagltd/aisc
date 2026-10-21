@@ -569,3 +569,99 @@ fn context_preserves_rename_identity_and_zero_line_change_stats() {
         "first.txt"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn executable_without_shebang_never_uses_execvp_shell_fallback() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    fs::write(fixture.root.join("probe"), "touch shell-fallback-ran\n").unwrap();
+    fs::set_permissions(
+        fixture.root.join("probe"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    git(&fixture.root, &["add", "probe"]);
+    git(&fixture.root, &["commit", "-m", "bare executable"]);
+    assert!(
+        !run(&fixture.root, &["verify", "--", "./probe"])
+            .status
+            .success()
+    );
+    assert!(!fixture.root.join("shell-fallback-ran").exists());
+}
+
+#[test]
+fn cargo_rustup_proxy_preserves_requested_argument_zero() {
+    let fixture = Fixture::new();
+    fs::write(fixture.root.join("Cargo.toml"), "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[lib]\npath = \"lib.rs\"\n").unwrap();
+    fs::write(
+        fixture.root.join("lib.rs"),
+        "#[test]\nfn succeeds() { assert_eq!(2 + 2, 4); }\n",
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    git(
+        &fixture.root,
+        &["add", "Cargo.toml", "Cargo.lock", "lib.rs"],
+    );
+    git(&fixture.root, &["commit", "-m", "rust fixture"]);
+    let target = fixture.directory.path().join("target");
+    let invoke = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_aisc"))
+            .args(args)
+            .current_dir(&fixture.root)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("RUSTC_WRAPPER", "")
+            .env("CARGO_TARGET_DIR", &target)
+            .output()
+            .unwrap()
+    };
+    let result = invoke(&[
+        "verify",
+        "--",
+        "cargo",
+        "+1.91.1",
+        "test",
+        "--offline",
+        "--locked",
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(invoke(&["finish"]).status.success());
+}
+
+#[test]
+fn codex_tool_call_metadata_does_not_invalidate_separate_invocations() {
+    let fixture = Fixture::new();
+    let invoke = |args: &[&str], call_id: &str| {
+        Command::new(env!("CARGO_BIN_EXE_aisc"))
+            .args(args)
+            .current_dir(&fixture.root)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("CODEX_TOOL_CALL_ID", call_id)
+            .output()
+            .unwrap()
+    };
+    let verified = invoke(&["verify", "--", "true"], "first-call");
+    assert!(
+        verified.status.success(),
+        "{}",
+        String::from_utf8_lossy(&verified.stderr)
+    );
+    let finished = invoke(&["finish"], "second-call");
+    assert!(
+        finished.status.success(),
+        "{}",
+        String::from_utf8_lossy(&finished.stderr)
+    );
+}

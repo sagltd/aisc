@@ -1,4 +1,6 @@
 use anyhow::{Context, Result, bail};
+use std::collections::BTreeMap;
+use std::ffi::CString;
 use std::io::{ErrorKind, Read};
 use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
@@ -28,6 +30,54 @@ impl Drop for ChildGuard {
         terminate_group(self.0.id());
         let _ = self.0.wait();
     }
+}
+
+pub(crate) fn exact_executable(command: &mut Command, argument_zero: &str) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    const MAXIMUM: usize = 4_096;
+    let program = CString::new(command.get_program().as_bytes())?;
+    let arguments = std::iter::once(std::ffi::OsStr::new(argument_zero))
+        .chain(command.get_args())
+        .map(|value| CString::new(value.as_bytes()))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let mut environment = std::env::vars_os().collect::<BTreeMap<_, _>>();
+    for (key, value) in command.get_envs() {
+        if let Some(value) = value {
+            environment.insert(key.to_owned(), value.to_owned());
+        } else {
+            environment.remove(key);
+        }
+    }
+    let environment = environment
+        .into_iter()
+        .map(|(key, value)| {
+            let mut pair = key.as_bytes().to_vec();
+            pair.push(b'=');
+            pair.extend_from_slice(value.as_bytes());
+            CString::new(pair)
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if arguments.len() >= MAXIMUM || environment.len() >= MAXIMUM {
+        bail!("verification supports fewer than 4096 arguments and environment entries");
+    }
+    // SAFETY: pre_exec only fills stack pointer arrays and calls async-signal-safe execve.
+    // All referenced CStrings are owned by this closure and survive through the call.
+    unsafe {
+        command.pre_exec(move || {
+            let mut argv = [std::ptr::null(); MAXIMUM];
+            let mut envp = [std::ptr::null(); MAXIMUM];
+            for (index, value) in arguments.iter().enumerate() {
+                argv[index] = value.as_ptr();
+            }
+            for (index, value) in environment.iter().enumerate() {
+                envp[index] = value.as_ptr();
+            }
+            libc::execve(program.as_ptr(), argv.as_ptr(), envp.as_ptr());
+            // Returning an error prevents execvp's implicit shell fallback on ENOEXEC.
+            Err(std::io::Error::last_os_error())
+        });
+    }
+    Ok(())
 }
 
 // Nonblocking pipes avoid waiting forever for descendants that inherit stdout.
