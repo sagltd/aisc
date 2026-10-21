@@ -195,6 +195,7 @@ impl Session {
     pub fn apply(mut self, plan: &Plan) -> Result<Applied> {
         self.ensure_unchanged()?;
         let git = self.git.clone();
+        preflight_worktree(&git.root, &plan.worktree)?;
         let index_bytes = self.prepare_index(&plan.index)?;
         let record = OpRecord::from_plan(plan);
         let (op_oid, previous) = oplog::build(&git, &record)?;
@@ -347,4 +348,183 @@ pub(crate) fn dependent_moves(
                 })
         })
         .collect()
+}
+
+fn dirty(path: &str, why: &str) -> anyhow::Error {
+    fail_hint(
+        Code::Dirty,
+        format!("{path}: {why}"),
+        "move or remove the conflicting file or directory, then retry",
+    )
+}
+
+/// Validates every planned worktree write or delete before any reference moves, so a write that
+/// cannot succeed refuses the whole operation with nothing changed (code `dirty`).
+pub(crate) fn preflight_worktree(root: &Path, writes: &[WorktreeWrite]) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    for write in writes {
+        let components: Vec<_> = Path::new(&write.path).components().collect();
+        let mut current = root.to_path_buf();
+        let mut missing_from = None;
+        for (position, component) in components.iter().enumerate() {
+            current.push(component);
+            let last = position + 1 == components.len();
+            match fs::symlink_metadata(&current) {
+                Ok(metadata) if !last => {
+                    if metadata.file_type().is_symlink() {
+                        return Err(dirty(&write.path, "a parent directory is a symlink"));
+                    }
+                    if !metadata.is_dir() {
+                        return Err(dirty(
+                            &write.path,
+                            "a file (untracked or ignored) is where a directory is needed",
+                        ));
+                    }
+                }
+                Ok(metadata) => {
+                    if metadata.is_dir() {
+                        return Err(dirty(&write.path, "a directory is where a file is needed"));
+                    }
+                    if write.after.is_some() && write.before.is_none() {
+                        return Err(dirty(
+                            &write.path,
+                            "an untracked or ignored file is in the way",
+                        ));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    missing_from.get_or_insert(position);
+                    break;
+                }
+                Err(error) => return Err(dirty(&write.path, &error.to_string())),
+            }
+        }
+        if write.after.is_none() {
+            continue;
+        }
+        // The nearest existing directory must allow creating entries.
+        let existing = match missing_from {
+            Some(position) => components[..position]
+                .iter()
+                .fold(root.to_path_buf(), |path, component| path.join(component)),
+            None => current.parent().unwrap_or(root).to_path_buf(),
+        };
+        let c_path = std::ffi::CString::new(existing.as_os_str().as_bytes())
+            .map_err(|_| dirty(&write.path, "unusable path"))?;
+        // SAFETY: access() only reads the NUL-terminated path.
+        if unsafe { libc::access(c_path.as_ptr(), libc::W_OK | libc::X_OK) } != 0 {
+            return Err(dirty(&write.path, "the parent directory is not writable"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::history::HistoryError;
+
+    fn write(path: &str, before: Option<&[u8]>, after: Option<&[u8]>) -> WorktreeWrite {
+        WorktreeWrite {
+            path: path.to_owned(),
+            before: before.map(<[u8]>::to_vec),
+            after: after.map(<[u8]>::to_vec),
+            mode: "100644".to_owned(),
+        }
+    }
+
+    fn refused(root: &Path, writes: &[WorktreeWrite]) -> bool {
+        preflight_worktree(root, writes)
+            .unwrap_err()
+            .downcast_ref::<HistoryError>()
+            .is_some_and(|error| error.code == Code::Dirty)
+    }
+
+    #[test]
+    fn preflight_rejects_collisions_symlinks_and_unwritable_parents() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(directory.path()).unwrap();
+        fs::write(root.join("a"), "untracked").unwrap();
+        fs::create_dir(root.join("dir")).unwrap();
+        fs::create_dir(root.join("real")).unwrap();
+        std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
+        fs::write(root.join("present"), "x").unwrap();
+        assert!(refused(&root, &[write("a/b", None, Some(b"x"))]));
+        assert!(refused(&root, &[write("dir", None, Some(b"x"))]));
+        assert!(refused(&root, &[write("dir", Some(b"x"), None)]));
+        assert!(refused(&root, &[write("link/f", None, Some(b"x"))]));
+        assert!(refused(&root, &[write("present", None, Some(b"x"))]));
+        fs::set_permissions(root.join("real"), fs::Permissions::from_mode(0o500)).unwrap();
+        let unwritable = preflight_worktree(&root, &[write("real/new/f", None, Some(b"x"))]);
+        // SAFETY: geteuid has no preconditions. Root can write anywhere.
+        if unsafe { libc::geteuid() } != 0 {
+            assert!(unwritable.is_err());
+        }
+        fs::set_permissions(root.join("real"), fs::Permissions::from_mode(0o700)).unwrap();
+        let fine = [
+            write("present", Some(b"x"), Some(b"y")),
+            write("present", Some(b"x"), None),
+            write("missing", Some(b"x"), None),
+            write("new/deep/file", None, Some(b"x")),
+        ];
+        preflight_worktree(&root, &fine).unwrap();
+    }
+
+    #[test]
+    fn failed_preflight_leaves_refs_oplog_and_files_untouched() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(directory.path()).unwrap();
+        let run = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{args:?}");
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.name", "T"]);
+        run(&["config", "user.email", "t@example.invalid"]);
+        fs::write(root.join("x.txt"), "x\n").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "-qm", "base"]);
+        fs::write(root.join("a"), "untracked\n").unwrap();
+        let repo = Repo {
+            root: root.clone(),
+            directory: root.join(".git"),
+        };
+        let git = Git::from_repo(&repo);
+        let head = git.head_state().unwrap();
+        let tree = git.commit_tree_of(&head.oid).unwrap();
+        let next = git
+            .commit_tree(&tree, std::slice::from_ref(&head.oid), b"next", None)
+            .unwrap();
+        let before_refs = run(&["for-each-ref"]);
+        let session = Session::open(&repo, &git, true, false).unwrap();
+        let plan = Plan {
+            verb: "test".to_owned(),
+            summary: "collide".to_owned(),
+            refs: vec![RefMove {
+                name: "refs/heads/main".to_owned(),
+                old: Some(head.oid.clone()),
+                new: Some(next),
+            }],
+            worktree: vec![write("a/b", None, Some(b"new"))],
+            ..Plan::default()
+        };
+        let error = session.apply(&plan).unwrap_err();
+        let error = error.downcast_ref::<HistoryError>().unwrap();
+        assert_eq!(error.code, Code::Dirty);
+        assert_eq!(
+            before_refs,
+            run(&["for-each-ref"]),
+            "no ref or oplog change"
+        );
+        assert_eq!(fs::read_to_string(root.join("a")).unwrap(), "untracked\n");
+        assert!(!root.join(".git/index.lock").exists());
+        assert!(!root.join(".git/aisc-operation.lock").exists());
+    }
 }
