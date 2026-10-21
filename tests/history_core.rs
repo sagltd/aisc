@@ -373,14 +373,11 @@ fn recorded_objects_survive_aggressive_gc() {
 fn stub_verbs_are_wired_and_report_not_implemented() {
     let fixture = dirty();
     let before = fixture.snapshot();
-    let verbs: [&[&str]; 8] = [
+    let verbs: [&[&str]; 5] = [
         &["amend", "--into", "base", "f.txt"],
         &["discard", "f.txt"],
         &["split", "base", "--into", "m", "f.txt"],
         &["uncommit", "base", "f.txt"],
-        &["sync"],
-        &["land", "topic"],
-        &["switch", "topic"],
         &["gc"],
     ];
     for args in verbs {
