@@ -6,6 +6,12 @@ rust-version = "1.91.1"
 description = "Bounded, task-oriented source control for agents, backed by Git"
 license = "MIT"
 repository = "https://github.com/sagltd/aisc"
+homepage = "https://github.com/sagltd/aisc"
+documentation = "https://github.com/sagltd/aisc#readme"
+readme = "README.md"
+keywords = ["git", "agents", "cli", "source-control", "ai"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [".github/", "benchmarks/", "docs/", "skills/", "CLAUDE.md", "AGENTS.md", ".lead/", ".worktrees/", ".co-op/"]
 
 [dependencies]
 anyhow = "1.0"
@@ -17,3 +23,8 @@ sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3.23"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
