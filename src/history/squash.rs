@@ -95,6 +95,22 @@ pub(crate) fn run(args: &cli::Squash) -> Result<Outcome> {
     let view = view::read(&git, branch_option, LIMIT, false)?;
     let range = linear_range(&view);
     let groups = parse_groups(&git, &view, &range, raw)?;
+    for group in &groups {
+        for member in &range[group.start..group.end] {
+            if let Some(branch) = view.locals.iter().find(|branch| branch.oid == member.oid) {
+                return Err(fail_hint(
+                    Code::State,
+                    format!(
+                        "branch '{}' points at {} \"{}\", inside a squash group; it would gain the later members' changes",
+                        branch.name,
+                        member.short,
+                        escape_line(&member.subject)
+                    ),
+                    "move or delete the branch first",
+                ));
+            }
+        }
+    }
     let first = groups[0].start;
     require_linear(&range, first)?;
 

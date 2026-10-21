@@ -337,9 +337,26 @@ fn branch_flag_squashes_a_branch_that_is_not_checked_out() {
 }
 
 #[test]
-fn branches_pointing_into_a_group_follow_the_squashed_commit() {
+fn branch_inside_a_group_is_refused_by_name() {
     let fixture = pilot5();
-    fixture.git(&["branch", "marker", "HEAD~5"]); // "extract parser helpers"
+    fixture.git(&["branch", "marker", "HEAD~5"]); // "extract parser helpers", not the newest
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&[
+        "squash",
+        "--into",
+        "add parser pipeline",
+        "extract parser helpers",
+        "wire parser helpers",
+    ]);
+    assert_eq!(run.code, 1);
+    assert!(run.stderr.contains("branch 'marker'"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn branch_at_the_newest_member_follows_the_squashed_commit() {
+    let fixture = pilot5();
+    fixture.git(&["branch", "marker", "HEAD~4"]); // "wire parser helpers", the newest member
     fixture
         .aisc(&[
             "squash",

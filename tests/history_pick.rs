@@ -297,6 +297,142 @@ fn already_applied_commit_is_reported_and_changes_nothing() {
     assert_eq!(fixture.snapshot(), before);
 }
 
+/// `main` has `a/old`-style content; `feature` adds `path`; HEAD is on `main`.
+fn adding(path: &str) -> Fixture {
+    let fixture = Fixture::with_files(&[("keep.txt", "keep\n")]);
+    fixture.git(&["switch", "-c", "feature"]);
+    fixture.write(path, "picked\n");
+    fixture.commit_all("add path");
+    fixture.git(&["switch", "main"]);
+    fixture
+}
+
+fn refused(fixture: &Fixture, needle: &str) {
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["pick", "--from", "feature", "add path"]);
+    assert_eq!(run.code, 1, "{}", run.stdout);
+    assert!(run.stderr.contains(needle), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    assert!(!fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/aisc/oplog/main"]));
+}
+
+#[test]
+fn untracked_file_where_a_directory_is_needed_is_refused() {
+    let fixture = adding("a/b.txt");
+    fixture.write("a", "in the way\n");
+    refused(&fixture, "a is a file where a directory is needed");
+}
+
+#[test]
+fn ignored_file_where_a_directory_is_needed_is_refused() {
+    let fixture = adding("a/b.txt");
+    fixture.write(".git/info/exclude", "a\n");
+    fixture.write("a", "ignored\n");
+    refused(&fixture, "a is a file where a directory is needed");
+}
+
+#[test]
+fn ignored_file_at_the_target_path_is_refused() {
+    let fixture = adding("out.log");
+    fixture.write(".git/info/exclude", "*.log\n");
+    fixture.write("out.log", "ignored\n");
+    refused(&fixture, "an untracked or ignored file is in the way");
+}
+
+#[test]
+fn untracked_directory_where_a_file_is_needed_is_refused() {
+    let fixture = adding("a");
+    fixture.write("a/inner.txt", "untracked\n");
+    refused(&fixture, "directory");
+}
+
+#[test]
+fn symlinked_parent_is_refused() {
+    let fixture = adding("a/b.txt");
+    fixture.write("elsewhere/keep", "x\n");
+    std::os::unix::fs::symlink("elsewhere", fixture.path("a")).unwrap();
+    refused(&fixture, "a is a symlink");
+    assert!(!fixture.exists("elsewhere/b.txt"));
+}
+
+#[test]
+fn clean_directory_replaced_by_a_file_is_refused_clearly() {
+    let fixture = Fixture::with_files(&[("a/b.txt", "tracked\n")]);
+    fixture.git(&["switch", "-c", "feature"]);
+    fixture.git(&["rm", "-q", "-r", "a"]);
+    fixture.write("a", "now a file\n");
+    fixture.commit_all("add path");
+    fixture.git(&["switch", "main"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["pick", "--from", "feature", "add path"]);
+    assert_eq!(run.code, 1);
+    assert!(
+        run.stderr.contains("a directory is where") && !run.stderr.contains("uncommitted"),
+        "{}",
+        run.stderr
+    );
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn clean_file_replaced_by_a_directory_is_picked() {
+    let fixture = Fixture::with_files(&[("a", "tracked file\n")]);
+    fixture.git(&["switch", "-c", "feature"]);
+    fixture.git(&["rm", "-q", "a"]);
+    fixture.write("a/b.txt", "now a dir\n");
+    fixture.commit_all("add path");
+    fixture.git(&["switch", "main"]);
+    fixture
+        .aisc(&["pick", "--from", "feature", "add path"])
+        .ok();
+    assert_eq!(fixture.read("a/b.txt"), "now a dir\n");
+    assert_eq!(fixture.git(&["status", "--porcelain"]), "");
+}
+
+#[test]
+fn dirty_tracked_overlap_is_refused_as_uncommitted() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.git(&["switch", "-c", "feature"]);
+    fixture.write("f.txt", "two\n");
+    fixture.commit_all("add path");
+    fixture.git(&["switch", "main"]);
+    fixture.write("f.txt", "mine\n");
+    refused(&fixture, "f.txt has uncommitted changes");
+}
+
+#[test]
+fn staged_only_overlap_is_refused() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.git(&["switch", "-c", "feature"]);
+    fixture.write("f.txt", "two\n");
+    fixture.commit_all("add path");
+    fixture.git(&["switch", "main"]);
+    fixture.write("f.txt", "staged\n");
+    fixture.git(&["add", "f.txt"]);
+    fixture.write("f.txt", "one\n"); // worktree == HEAD, index differs
+    refused(&fixture, "f.txt has staged changes");
+}
+
+#[test]
+fn branch_with_new_branch_is_a_usage_error() {
+    let fixture = pilot13();
+    fixture.git(&["branch", "target", "main"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&[
+        "pick",
+        "--from",
+        "revive-worktree-command",
+        "Revive worktree command",
+        "--branch",
+        "target",
+        "-b",
+        "fresh",
+    ]);
+    assert_eq!(run.code, 1);
+    assert!(run.stderr.contains("not both"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+}
+
 #[test]
 fn new_branch_name_must_be_free_and_valid() {
     let fixture = pilot13();

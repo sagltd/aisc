@@ -116,6 +116,56 @@ fn tree_changes(git: &Git, old: &str, new: &str) -> Result<Vec<Raw>> {
     Ok(changes)
 }
 
+/// Checks that writing `path` cannot fail later: no symlinked or file-shaped parents, no
+/// untracked or ignored file or directory in the way.
+fn preflight(
+    root: &std::path::Path,
+    path: &str,
+    tracked: bool,
+    written: bool,
+    removed: &std::collections::BTreeSet<&str>,
+    dirty: &std::collections::BTreeSet<String>,
+) -> Result<()> {
+    let blocked = |why: &str| {
+        fail_hint(
+            Code::Dirty,
+            format!("{path}: {why}"),
+            "move it away first, or pick onto another branch with -b NEW",
+        )
+    };
+    let mut current = root.to_path_buf();
+    let parts: Vec<&str> = path.split('/').collect();
+    for (index, part) in parts.iter().enumerate() {
+        current.push(part);
+        let Ok(metadata) = std::fs::symlink_metadata(&current) else {
+            return Ok(()); // nothing there: parents get created
+        };
+        let last = index + 1 == parts.len();
+        if !last {
+            let prefix = parts[..=index].join("/");
+            if metadata.file_type().is_symlink() {
+                return Err(blocked(&format!("{prefix} is a symlink")));
+            }
+            if !metadata.is_dir() && written {
+                // A tracked file that this very pick deletes may be replaced by a directory.
+                let replaced = removed.contains(prefix.as_str()) && !dirty.contains(&prefix);
+                if !replaced {
+                    return Err(blocked(&format!(
+                        "{prefix} is a file where a directory is needed"
+                    )));
+                }
+            }
+        } else if written && metadata.is_dir() {
+            return Err(blocked(
+                "a directory is where the picked commit puts a file",
+            ));
+        } else if !tracked && written {
+            return Err(blocked("an untracked or ignored file is in the way"));
+        }
+    }
+    Ok(())
+}
+
 /// Worktree and index edits that carry the checked-out branch from `old` to `new` tree.
 fn carry(git: &Git, view: &View, old: &str, new: &str, plan: &mut Plan) -> Result<()> {
     let status = view.status.as_ref().context("missing status")?;
@@ -123,7 +173,18 @@ fn carry(git: &Git, view: &View, old: &str, new: &str, plan: &mut Plan) -> Resul
         return Err(fail(Code::Dirty, "resolve the unmerged paths first"));
     }
     let dirty = dirty_paths(view.changes.as_ref());
+    let staged: std::collections::BTreeSet<String> = git
+        .run(&["diff", "--cached", "--name-only", "-z", "--no-renames"])?
+        .split(|byte| *byte == 0)
+        .filter(|part| !part.is_empty())
+        .map(|part| String::from_utf8_lossy(part).into_owned())
+        .collect();
     let changes = tree_changes(git, old, new)?;
+    let removed: std::collections::BTreeSet<&str> = changes
+        .iter()
+        .filter(|(_, _, after)| after.is_none())
+        .map(|(path, _, _)| path.as_str())
+        .collect();
     let mut blobs: Vec<String> = Vec::new();
     for (path, before, after) in &changes {
         for entry in [before, after].into_iter().flatten() {
@@ -135,17 +196,29 @@ fn carry(git: &Git, view: &View, old: &str, new: &str, plan: &mut Plan) -> Resul
             }
             blobs.push(entry.1.clone());
         }
-        let overlaps = dirty.contains(path)
-            || (before.is_none()
-                && std::fs::symlink_metadata(git.root.join(path)).is_ok()
-                && !dirty.contains(path));
-        if overlaps {
+        let hint = "commit or discard them first, or pick onto another branch with -b NEW";
+        if dirty.contains(path) {
             return Err(fail_hint(
                 Code::Dirty,
                 format!("{path} has uncommitted changes that overlap the picked commits"),
-                "commit or discard them first, or pick onto another branch with -b NEW",
+                hint,
             ));
         }
+        if staged.contains(path) {
+            return Err(fail_hint(
+                Code::Dirty,
+                format!("{path} has staged changes that overlap the picked commits"),
+                hint,
+            ));
+        }
+        preflight(
+            &git.root,
+            path,
+            before.is_some(),
+            after.is_some(),
+            &removed,
+            &dirty,
+        )?;
     }
     blobs.sort();
     blobs.dedup();
@@ -175,6 +248,12 @@ fn carry(git: &Git, view: &View, old: &str, new: &str, plan: &mut Plan) -> Resul
 pub(crate) fn run(args: &cli::Pick) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    if args.opts.branch.is_some() && args.new_branch.is_some() {
+        return Err(fail(
+            Code::Usage,
+            "use -b NEW to create a branch, or --branch/--to to pick onto an existing one, not both",
+        ));
+    }
     if args.opts.branch.is_some() && args.to.is_some() {
         return Err(fail(Code::Usage, "use --to or --branch, not both"));
     }
