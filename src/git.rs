@@ -58,18 +58,7 @@ impl Drop for Lock {
 
 impl Repo {
     pub fn discover() -> Result<Self> {
-        for name in [
-            "GIT_DIR",
-            "GIT_WORK_TREE",
-            "GIT_INDEX_FILE",
-            "GIT_COMMON_DIR",
-            "GIT_OBJECT_DIRECTORY",
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        ] {
-            if std::env::var_os(name).is_some() {
-                bail!("{name} overrides are unsupported; unset it before running aisc");
-            }
-        }
+        validate_environment()?;
         let cwd = std::env::current_dir()?;
         let root = PathBuf::from(
             text(&run_git(&cwd, &["rev-parse", "--show-toplevel"], None)?)?
@@ -226,70 +215,6 @@ impl Repo {
         }
         Ok(())
     }
-    pub fn context(&self, limit: usize) -> Result<Value> {
-        let head = self.head()?;
-        let branch = self.branch()?;
-        let entries = self.entries()?;
-        let staged = entries
-            .iter()
-            .filter(|entry| !matches!(entry.status.as_bytes()[0], b' ' | b'?'))
-            .count();
-        let unstaged = entries
-            .iter()
-            .filter(|entry| !matches!(entry.status.as_bytes()[1], b' ' | b'?'))
-            .count();
-        let untracked = entries.iter().filter(|entry| entry.status == "??").count();
-        let conflicts = entries
-            .iter()
-            .filter(|entry| is_conflict(&entry.status))
-            .count();
-        let staged_stat = self.numstat(true, limit)?;
-        let unstaged_stat = self.numstat(false, limit)?;
-        if self.head()? != head || self.branch()? != branch {
-            bail!("repository changed while reading context; retry");
-        }
-        Ok(
-            json!({"branch": branch, "head": head, "staged": staged, "unstaged": unstaged, "untracked": untracked, "conflicts": conflicts, "files": entries.iter().take(limit).collect::<Vec<_>>(), "omitted": entries.len().saturating_sub(limit), "diffstat": {"staged": staged_stat, "unstaged": unstaged_stat}}),
-        )
-    }
-    fn numstat(&self, cached: bool, limit: usize) -> Result<Value> {
-        let mut args = vec![
-            "diff",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--find-renames",
-            "--numstat",
-            "-z",
-        ];
-        if cached {
-            args.push("--cached");
-        }
-        let output = self.git(&args)?;
-        let mut records = Vec::new();
-        let mut parts_iter = output
-            .split(|byte| *byte == 0)
-            .filter(|record| !record.is_empty());
-        while let Some(record) = parts_iter.next() {
-            let parts = record.splitn(3, |byte| *byte == b'\t').collect::<Vec<_>>();
-            if parts.len() != 3 {
-                bail!("invalid Git numstat record");
-            }
-            if parts[2].is_empty() {
-                let original = parts_iter
-                    .next()
-                    .context("numstat rename missing original path")?;
-                let path = parts_iter
-                    .next()
-                    .context("numstat rename missing destination")?;
-                records.push(json!({"path": text(path)?, "original_path": text(original)?, "added": text(parts[0])?, "deleted": text(parts[1])?}));
-            } else {
-                records.push(json!({"path": text(parts[2])?, "added": text(parts[0])?, "deleted": text(parts[1])?}));
-            }
-        }
-        Ok(
-            json!({"files": records.iter().take(limit).collect::<Vec<_>>(), "omitted": records.len().saturating_sub(limit)}),
-        )
-    }
     pub fn diff(&self, paths: &[String], limit: usize) -> Result<Value> {
         self.paths(paths)?;
         let mut args = vec![
@@ -322,7 +247,7 @@ pub(crate) fn is_conflict(status: &str) -> bool {
     matches!(status, "DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU")
 }
 
-fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
+pub(crate) fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
     let mut command = Command::new("git");
     command
         .arg("--literal-pathspecs")
@@ -337,12 +262,14 @@ fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> 
     let output = process::execute(&mut command, Duration::from_secs(30), GIT_LIMIT)?;
     if !output.success() {
         let stderr = String::from_utf8_lossy(&output.stderr[..output.stderr.len().min(4_096)]);
+        let stdout = String::from_utf8_lossy(&output.stdout[..output.stdout.len().min(4_096)]);
         bail!(
-            "git {} failed (exit {:?}, timeout={}): {}",
+            "git {} failed (exit {:?}, timeout={}): {}; stdout: {}",
             args.first().copied().unwrap_or(""),
             output.code,
             output.timed_out,
-            stderr.trim()
+            stderr.trim(),
+            stdout.trim()
         );
     }
     if output.stdout_omitted != 0 || output.stderr_omitted != 0 {
@@ -354,4 +281,20 @@ fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> 
 pub(crate) fn os_bytes(value: &OsStr) -> &[u8] {
     use std::os::unix::ffi::OsStrExt;
     value.as_bytes()
+}
+
+pub(crate) fn validate_environment() -> Result<()> {
+    for name in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    ] {
+        if std::env::var_os(name).is_some() {
+            bail!("{name} overrides are unsupported; unset it before running aisc");
+        }
+    }
+    Ok(())
 }
