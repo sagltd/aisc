@@ -275,7 +275,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
         let commit = git.commit_tree(
             &tree,
             std::slice::from_ref(&parent),
-            group.message.as_bytes(),
+            format!("{}\n", group.message).as_bytes(),
             None,
         )?;
         commits.push((commit.clone(), group.message.clone()));

@@ -33,6 +33,9 @@ pub(crate) struct OpFile {
     /// Blob id (no filters) of the bytes the operation wrote; `None` when deleted.
     pub after: Option<String>,
     pub mode: String,
+    /// Mode before the operation (absent in records written before modes were tracked).
+    #[serde(default)]
+    pub before_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -79,6 +82,7 @@ impl OpRecord {
                 before,
                 after: None, // filled by `build` once the blob id is known
                 mode: write.mode.clone(),
+                before_mode: write.before_mode.clone(),
             });
         }
         let data = OpData {
@@ -181,7 +185,7 @@ pub(crate) fn build(git: &Git, record: &OpRecord) -> Result<(String, Option<Stri
     // so that a first-parent walk never leaks into branch history.
     let root = match &previous {
         Some(_) => None,
-        None => Some(git.commit_tree(&empty, &[], GENESIS.as_bytes(), None)?),
+        None => Some(git.commit_tree(&empty, &[], format!("{GENESIS}\n").as_bytes(), None)?),
     };
     push(&previous.clone().or(root));
     for movement in &data.refs {
@@ -191,7 +195,7 @@ pub(crate) fn build(git: &Git, record: &OpRecord) -> Result<(String, Option<Stri
         }
     }
     let message = format!("aisc {}: {}", data.verb, data.summary);
-    let oid = git.commit_tree(&tree, &parents, message.as_bytes(), None)?;
+    let oid = git.commit_tree(&tree, &parents, format!("{message}\n").as_bytes(), None)?;
     Ok((oid, previous))
 }
 

@@ -251,7 +251,7 @@ fn concurrent_ref_update_exits_four_and_changes_nothing() {
 fn index_changed_during_operation_is_refused() {
     let fixture = dirty();
     let hook = "cp .git/index .git/idx2 && GIT_INDEX_FILE=.git/idx2 \"$REAL_GIT\" add new.txt && cp .git/idx2 .git/index && rm .git/idx2";
-    let env = fixture.fake_git("commit-tree", hook);
+    let env = fixture.fake_git("hash-object", hook);
     let before = fixture.snapshot();
     let run = fixture.aisc_env(&["commit", "-m", "mine", "f.txt"], &env_refs(&env));
     assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);

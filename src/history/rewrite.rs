@@ -41,7 +41,10 @@ pub(crate) struct WorktreeWrite {
     pub path: String,
     pub before: Option<Vec<u8>>,
     pub after: Option<Vec<u8>>,
+    /// Mode after the write (`100644`, `100755`, `120000`).
     pub mode: String,
+    /// Mode before the write; `None` when the file did not exist.
+    pub before_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -430,6 +433,7 @@ mod tests {
             before: before.map(<[u8]>::to_vec),
             after: after.map(<[u8]>::to_vec),
             mode: "100644".to_owned(),
+            before_mode: before.map(|_| "100644".to_owned()),
         }
     }
 

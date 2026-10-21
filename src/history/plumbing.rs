@@ -21,11 +21,20 @@ pub(crate) struct Git {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CommitMeta {
-    pub author_name: String,
-    pub author_email: String,
-    /// `@<unix> <tz>` as accepted by GIT_AUTHOR_DATE.
-    pub author_date: String,
+    /// The raw `author` header value: `Name <email> <unix> <tz>`, byte for byte.
+    pub author: String,
+    /// The raw `committer` header value; `None` means "use the current identity".
+    pub committer: Option<String>,
+    /// The raw message bytes, exactly as stored.
     pub message: Vec<u8>,
+}
+
+impl CommitMeta {
+    /// Keeps the author but commits as the current identity (every verb except a pure re-parent).
+    pub fn with_current_committer(mut self) -> Self {
+        self.committer = None;
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -353,7 +362,8 @@ impl Git {
             .context("commit without message separator")?;
         let header = text(&raw[..split])?;
         let mut author = None;
-        for line in header.lines() {
+        let mut committer = None;
+        for line in header.split('\n') {
             if line.starts_with("encoding ") {
                 return Err(fail(
                     Code::Unsupported,
@@ -361,24 +371,63 @@ impl Git {
                 ));
             }
             if let Some(value) = line.strip_prefix("author ") {
-                author = Some(value);
+                author = Some(value.to_owned());
+            }
+            if let Some(value) = line.strip_prefix("committer ") {
+                committer = Some(value.to_owned());
             }
         }
-        let author = author.context("commit without author")?;
-        let open = author.rfind('<').context("malformed author line")?;
-        let close = author.rfind('>').context("malformed author line")?;
-        let name = author[..open].trim_end().to_owned();
-        let email = author[open + 1..close].to_owned();
-        let date = author[close + 1..].trim();
         Ok(CommitMeta {
-            author_name: name,
-            author_email: email,
-            author_date: format!("@{date}"),
+            author: author.context("commit without author")?,
+            committer,
             message: raw[split + 2..].to_vec(),
         })
     }
 
+    /// Writes a commit object with exactly the given message bytes. The author line is copied
+    /// verbatim from `meta`; the committer is the current identity unless `meta.committer` keeps
+    /// the original (a pure re-parent). With `commit.gpgsign=true` Git's own `commit-tree -S` is
+    /// used instead, which cannot preserve odd identity whitespace.
     pub fn commit_tree(
+        &self,
+        tree: &str,
+        parents: &[String],
+        message: &[u8],
+        meta: Option<&CommitMeta>,
+    ) -> Result<String> {
+        let signing = self
+            .probe(&["config", "--bool", "--get", "commit.gpgsign"])?
+            .is_some_and(|value| value == "true");
+        if signing {
+            return self.signed_commit_tree(tree, parents, message, meta);
+        }
+        let ident = |kind: &str| -> Result<String> {
+            let variable = format!("GIT_{kind}_IDENT");
+            self.line(&["var", &variable])
+        };
+        let author = match meta {
+            Some(meta) => meta.author.clone(),
+            None => ident("AUTHOR")?,
+        };
+        let committer = match meta.and_then(|meta| meta.committer.clone()) {
+            Some(committer) => committer,
+            None => ident("COMMITTER")?,
+        };
+        let mut object = format!("tree {tree}\n").into_bytes();
+        for parent in parents {
+            object.extend_from_slice(format!("parent {parent}\n").as_bytes());
+        }
+        object.extend_from_slice(format!("author {author}\ncommitter {committer}\n\n").as_bytes());
+        object.extend_from_slice(message);
+        let output = self.run_with(
+            &["hash-object", "-t", "commit", "-w", "--stdin"],
+            &[],
+            Some(object),
+        )?;
+        Ok(text(&output)?.trim().to_owned())
+    }
+
+    fn signed_commit_tree(
         &self,
         tree: &str,
         parents: &[String],
@@ -390,30 +439,24 @@ impl Git {
             args.push("-p");
             args.push(parent);
         }
-        let signing = self
-            .probe(&["config", "--bool", "--get", "commit.gpgsign"])?
-            .is_some_and(|value| value == "true");
-        if signing {
-            args.push("-S");
-        }
-        args.extend(["-F", "-"]);
-        let mut body = message.to_vec();
-        if !body.ends_with(b"\n") {
-            body.push(b'\n');
-        }
-        let name_value;
-        let email_value;
-        let date_value;
+        args.extend(["-S", "-F", "-"]);
+        let split = |line: &str| -> Option<(String, String, String)> {
+            let open = line.rfind('<')?;
+            let close = line.rfind('>')?;
+            Some((
+                line[..open].trim_end().to_owned(),
+                line[open + 1..close].to_owned(),
+                format!("@{}", line[close + 1..].trim()),
+            ))
+        };
+        let parts = meta.and_then(|meta| split(&meta.author));
         let mut env: Vec<(&str, &OsStr)> = Vec::new();
-        if let Some(meta) = meta {
-            name_value = meta.author_name.clone();
-            email_value = meta.author_email.clone();
-            date_value = meta.author_date.clone();
-            env.push(("GIT_AUTHOR_NAME", OsStr::new(&name_value)));
-            env.push(("GIT_AUTHOR_EMAIL", OsStr::new(&email_value)));
-            env.push(("GIT_AUTHOR_DATE", OsStr::new(&date_value)));
+        if let Some((name, email, date)) = &parts {
+            env.push(("GIT_AUTHOR_NAME", OsStr::new(name)));
+            env.push(("GIT_AUTHOR_EMAIL", OsStr::new(email)));
+            env.push(("GIT_AUTHOR_DATE", OsStr::new(date)));
         }
-        let output = self.run_with(&args, &env, Some(body))?;
+        let output = self.run_with(&args, &env, Some(message.to_vec()))?;
         Ok(text(&output)?.trim().to_owned())
     }
 
@@ -660,9 +703,51 @@ mod tests {
         let again = git
             .commit_tree(&tree, &[], &meta.message, Some(&meta))
             .unwrap();
+        assert_eq!(git.read_commit_meta(&again).unwrap().author, meta.author);
+        // Hand-built commit with awkward but legal bytes survives a re-commit exactly.
+        let object = format!(
+            "tree {tree}\nauthor  Spaced  Name  <a@example.invalid> 1700000000 +0130\ncommitter C <c@example.invalid> 1700000001 -0200\n\nsubject  \n\ntrailing spaces   \nno final newline"
+        );
+        let hand = git
+            .run_with(
+                &["hash-object", "-t", "commit", "-w", "--stdin"],
+                &[],
+                Some(object.into_bytes()),
+            )
+            .unwrap();
+        let hand = text(&hand).unwrap().trim().to_owned();
+        let original = git.read_commit_meta(&hand).unwrap();
+        let copy = git
+            .commit_tree(
+                &tree,
+                &[],
+                &original.message,
+                Some(&original.clone().with_current_committer()),
+            )
+            .unwrap();
+        let copied = git.read_commit_meta(&copy).unwrap();
         assert_eq!(
-            git.read_commit_meta(&again).unwrap().author_date,
-            meta.author_date
+            copied.author,
+            " Spaced  Name  <a@example.invalid> 1700000000 +0130"
+        );
+        assert_eq!(copied.message, original.message);
+        assert!(copied.message.ends_with(b"no final newline"));
+        assert_ne!(
+            copied.committer, original.committer,
+            "committer is the current identity"
+        );
+        let reparent = git
+            .commit_tree(&tree, &[], &original.message, Some(&original))
+            .unwrap();
+        assert_eq!(
+            git.read_commit_meta(&reparent).unwrap().committer,
+            original.committer,
+            "a pure re-parent keeps the committer"
+        );
+        assert_eq!(
+            git.run(&["cat-file", "commit", &reparent]).unwrap(),
+            git.run(&["cat-file", "commit", &hand]).unwrap(),
+            "identical bytes"
         );
         assert!(
             git.dir
