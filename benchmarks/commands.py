@@ -14,6 +14,24 @@ from competitor import prepare
 from fixture import environment, snapshot
 
 
+EXPECTED = {"branch": "bench", "changes": {"docs/guide.txt": (1, 1), "src/math.txt": (1, 1)}}
+
+
+def inspection_facts(arm, transcript):
+    if arm == "aisc":
+        value = json.loads(transcript[0]["stdout"])
+        return {"branch": value["branch"], "changes": {
+            item["path"]: (int(item["added"]), int(item["deleted"]))
+            for item in value["diffstat"]["unstaged"]["files"]}}
+    status = transcript[0]["stdout"]
+    branch = "bench" if ("# branch.head bench\n" in status if arm == "git" else "[bench]" in status) else None
+    changes = {}
+    for line in transcript[-1]["stdout"].splitlines():
+        added, deleted, path = line.split("\t", 2)
+        changes[path] = (int(added), int(deleted))
+    return {"branch": branch, "changes": changes}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--aisc", type=Path, required=True)
@@ -48,13 +66,16 @@ if __name__ == "__main__":
             if entry["command"][0] == str(arguments.but):
                 entry["command"][0] = "but"
         text = text_for(transcript)
+        facts = inspection_facts(arm, transcript)
         records.append({"repetition": repetition, "arm": arm, "commands": transcript,
                         "wall_ms": elapsed, "text_tokens": len(encoding.encode(text)),
-                        "text_bytes": len(text.encode()), "state_preserved": before == snapshot(repository)})
+                        "text_bytes": len(text.encode()), "state_preserved": before == snapshot(repository),
+                        "inspection_facts": facts, "semantic_grade": facts == EXPECTED})
     rows = []
     for arm in ("git", "aisc", "but"):
         runs = [record for record in records if record["arm"] == arm]
-        rows.append({"arm": arm, "correct": sum(record["state_preserved"] for record in runs),
+        rows.append({"arm": arm, "state_preserved_runs": sum(record["state_preserved"] for record in runs),
+                     "semantic_passes": sum(record["semantic_grade"] for record in runs),
                      "metrics": {key: {"median": statistics.median(record[key] for record in runs),
                                       "min": min(record[key] for record in runs), "max": max(record[key] for record in runs)}
                                  for key in ("wall_ms", "text_tokens", "text_bytes")}})

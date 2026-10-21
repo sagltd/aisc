@@ -38,7 +38,7 @@ def sanitize(value, aliases):
         value = value.replace(source, replacement)
     value = re.sub(r"/var/folders/[^'\"\s\\]+", "<runtime-temp>", value)
     value = re.sub(r"/tmp/cc-socks/[^'\"\s\\]+", "<runtime-socket>", value)
-    if re.search(r"/(?:Users|home|private|tmp|var/folders)/", value) or CREDENTIAL.search(value):
+    if re.search(r"/(?:Users|home|private|tmp|var/folders|Volumes)/|[A-Za-z]:[\\/]|\\\\[A-Za-z0-9_.-]+[\\/]", value) or CREDENTIAL.search(value):
         raise ValueError("Unsafe path or credential shape in public projection")
     return value
 

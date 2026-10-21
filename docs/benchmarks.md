@@ -69,3 +69,13 @@ python3 benchmarks/competitor.py --provider codex --aisc /path/to/aisc --but /pa
 ```
 
 That cohort has 18 sessions/provider (two tasks × three tools × three repetitions), shuffled with seed 130363. `commands.py` separately runs actual prepared commands using canonical executable names before text tokenization; foreground command time excludes setup and grading. It is a text proxy and local latency measurement, not provider usage. GitButler can complete asynchronous local maintenance after CLI exit; scratch is retained to avoid racing that maintenance during cleanup. No savings relative to GitButler is established merely by defining this protocol.
+
+The first [command-only comparison](../benchmarks/results/commands-v1.json) used AISC binary SHA256 `94204beac2f830a5537b3c649bc70085eba2df41d0a0ea710f86b06daf57e78a` (source `f0f6657`). Every arm passed five state-preservation checks and five post-run semantic checks for the exact branch and per-file line counts. The original timings/token counts were retained when semantic grading was added.
+
+| Form used for the same compact inspection | Median foreground time (range), ms | Text-proxy tokens |
+| --- | --- | --- |
+| Git porcelain v2 + numstat | 27.42 (21.31–64.52) | 202 |
+| AISC context JSON | 192.99 (146.26–212.71) | 143 |
+| GitButler human status + Git numstat | 38.60 (33.66–39.38) | 106 |
+
+On this fixture, AISC was slower than both alternatives and produced more text-proxy tokens than GitButler. The report does not imply these representations are identical: AISC was JSON, GitButler used its concise human output without hints, and Git used stable porcelain/numstat. Minimum requested facts were graded equivalently. This is evidence against a general speed or token-savings claim for this candidate, not a whole-agent/provider usage result.

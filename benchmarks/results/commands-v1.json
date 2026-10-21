@@ -1,0 +1,717 @@
+{
+  "schema": 1,
+  "task": "inspect_compact",
+  "metric_kind": "command_runtime_and_text_proxy_not_provider_usage",
+  "tokenizer": "tiktoken/o200k_base",
+  "tokenizer_version": "0.12.0",
+  "seed": 130363,
+  "candidate_sha256": "94204beac2f830a5537b3c649bc70085eba2df41d0a0ea710f86b06daf57e78a",
+  "timing": "fresh prepared fixture per arm; setup/grading excluded; warm filesystem; no inference",
+  "token_text": "canonical executable names git/aisc/but, command + stdout + stderr; no provider envelopes",
+  "rows": [
+    {
+      "arm": "git",
+      "metrics": {
+        "wall_ms": {
+          "median": 27.4220000000005,
+          "min": 21.313791000000748,
+          "max": 64.5191249999999
+        },
+        "text_tokens": {
+          "median": 202,
+          "min": 202,
+          "max": 202
+        },
+        "text_bytes": {
+          "median": 422,
+          "min": 422,
+          "max": 422
+        }
+      },
+      "state_preserved_runs": 5,
+      "semantic_passes": 5
+    },
+    {
+      "arm": "aisc",
+      "metrics": {
+        "wall_ms": {
+          "median": 192.9865420000001,
+          "min": 146.2643340000005,
+          "max": 212.709834
+        },
+        "text_tokens": {
+          "median": 143,
+          "min": 143,
+          "max": 143
+        },
+        "text_bytes": {
+          "median": 420,
+          "min": 420,
+          "max": 420
+        }
+      },
+      "state_preserved_runs": 5,
+      "semantic_passes": 5
+    },
+    {
+      "arm": "but",
+      "metrics": {
+        "wall_ms": {
+          "median": 38.59725000000047,
+          "min": 33.65733399999993,
+          "max": 39.384957999999415
+        },
+        "text_tokens": {
+          "median": 106,
+          "min": 106,
+          "max": 106
+        },
+        "text_bytes": {
+          "median": 256,
+          "min": 256,
+          "max": 256
+        }
+      },
+      "state_preserved_runs": 5,
+      "semantic_passes": 5
+    }
+  ],
+  "runs": [
+    {
+      "repetition": 1,
+      "arm": "aisc",
+      "commands": [
+        {
+          "command": [
+            "aisc",
+            "context"
+          ],
+          "stdout": "{\"branch\":\"bench\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\" M\"},{\"path\":\"src/math.txt\",\"status\":\" M\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":0,\"unstaged\":2,\"untracked\":0}\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 151.73225000000002
+        }
+      ],
+      "wall_ms": 151.74179200000003,
+      "text_tokens": 143,
+      "text_bytes": 420,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 2,
+      "arm": "git",
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head bench\n1 .M N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 docs/guide.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 21.828959000000037
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 42.67979200000016
+        }
+      ],
+      "wall_ms": 64.5191249999999,
+      "text_tokens": 202,
+      "text_bytes": 422,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 4,
+      "arm": "aisc",
+      "commands": [
+        {
+          "command": [
+            "aisc",
+            "context"
+          ],
+          "stdout": "{\"branch\":\"bench\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\" M\"},{\"path\":\"src/math.txt\",\"status\":\" M\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":0,\"unstaged\":2,\"untracked\":0}\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 192.98033400000003
+        }
+      ],
+      "wall_ms": 192.9865420000001,
+      "text_tokens": 143,
+      "text_bytes": 420,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 3,
+      "arm": "aisc",
+      "commands": [
+        {
+          "command": [
+            "aisc",
+            "context"
+          ],
+          "stdout": "{\"branch\":\"bench\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\" M\"},{\"path\":\"src/math.txt\",\"status\":\" M\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":0,\"unstaged\":2,\"untracked\":0}\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 209.6458750000001
+        }
+      ],
+      "wall_ms": 209.65266699999984,
+      "text_tokens": 143,
+      "text_bytes": 420,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 2,
+      "arm": "aisc",
+      "commands": [
+        {
+          "command": [
+            "aisc",
+            "context"
+          ],
+          "stdout": "{\"branch\":\"bench\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\" M\"},{\"path\":\"src/math.txt\",\"status\":\" M\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":0,\"unstaged\":2,\"untracked\":0}\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 212.70183399999976
+        }
+      ],
+      "wall_ms": 212.709834,
+      "text_tokens": 143,
+      "text_bytes": 420,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 0,
+      "arm": "git",
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head bench\n1 .M N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 docs/guide.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 20.612292000000032
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 37.284291000000195
+        }
+      ],
+      "wall_ms": 57.90916700000004,
+      "text_tokens": 202,
+      "text_bytes": 422,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 1,
+      "arm": "but",
+      "commands": [
+        {
+          "command": [
+            "but",
+            "status",
+            "--no-hint"
+          ],
+          "stdout": "\u256d\u2504 zz [uncommitted]\n\u250a   lp M docs/guide.txt\n\u250a   zl M src/math.txt\n\u250a\n\u250a\u256d\u2504 en [bench] (no commits)\n\u251c\u256f\n\u250a\n\u2534 86e1ac8 (common base) 2026-01-01 initial fixture\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 26.47099999999991
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.374207999999776
+        }
+      ],
+      "wall_ms": 38.85491699999921,
+      "text_tokens": 106,
+      "text_bytes": 256,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 4,
+      "arm": "but",
+      "commands": [
+        {
+          "command": [
+            "but",
+            "status",
+            "--no-hint"
+          ],
+          "stdout": "\u256d\u2504 zz [uncommitted]\n\u250a   lp M docs/guide.txt\n\u250a   zl M src/math.txt\n\u250a\n\u250a\u256d\u2504 en [bench] (no commits)\n\u251c\u256f\n\u250a\n\u2534 86e1ac8 (common base) 2026-01-01 initial fixture\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 22.548957999999786
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 11.384665999999655
+        }
+      ],
+      "wall_ms": 33.94604199999929,
+      "text_tokens": 106,
+      "text_bytes": 256,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 1,
+      "arm": "git",
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head bench\n1 .M N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 docs/guide.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 11.690999999999896
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 11.781291000000138
+        }
+      ],
+      "wall_ms": 23.481333000000326,
+      "text_tokens": 202,
+      "text_bytes": 422,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 0,
+      "arm": "aisc",
+      "commands": [
+        {
+          "command": [
+            "aisc",
+            "context"
+          ],
+          "stdout": "{\"branch\":\"bench\",\"conflicts\":0,\"diffstat\":{\"staged\":{\"files\":[],\"omitted\":0},\"unstaged\":{\"files\":[{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"docs/guide.txt\"},{\"added\":\"1\",\"deleted\":\"1\",\"path\":\"src/math.txt\"}],\"omitted\":0}},\"files\":[{\"path\":\"docs/guide.txt\",\"status\":\" M\"},{\"path\":\"src/math.txt\",\"status\":\" M\"}],\"head\":\"86e1ac8d13f9fb486942b5844dfb88f2a326991d\",\"omitted\":0,\"staged\":0,\"unstaged\":2,\"untracked\":0}\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 146.2589999999997
+        }
+      ],
+      "wall_ms": 146.2643340000005,
+      "text_tokens": 143,
+      "text_bytes": 420,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 4,
+      "arm": "git",
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head bench\n1 .M N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 docs/guide.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 14.142500000000169
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 13.242166000000388
+        }
+      ],
+      "wall_ms": 27.4220000000005,
+      "text_tokens": 202,
+      "text_bytes": 422,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 2,
+      "arm": "but",
+      "commands": [
+        {
+          "command": [
+            "but",
+            "status",
+            "--no-hint"
+          ],
+          "stdout": "\u256d\u2504 zz [uncommitted]\n\u250a   lp M docs/guide.txt\n\u250a   zl M src/math.txt\n\u250a\n\u250a\u256d\u2504 en [bench] (no commits)\n\u251c\u256f\n\u250a\n\u2534 86e1ac8 (common base) 2026-01-01 initial fixture\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 26.911083999999974
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.463958999999747
+        }
+      ],
+      "wall_ms": 39.384957999999415,
+      "text_tokens": 106,
+      "text_bytes": 256,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 0,
+      "arm": "but",
+      "commands": [
+        {
+          "command": [
+            "but",
+            "status",
+            "--no-hint"
+          ],
+          "stdout": "\u256d\u2504 zz [uncommitted]\n\u250a   lp M docs/guide.txt\n\u250a   zl M src/math.txt\n\u250a\n\u250a\u256d\u2504 en [bench] (no commits)\n\u251c\u256f\n\u250a\n\u2534 86e1ac8 (common base) 2026-01-01 initial fixture\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 22.219416000000436
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 11.428125000000122
+        }
+      ],
+      "wall_ms": 33.65733399999993,
+      "text_tokens": 106,
+      "text_bytes": 256,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 3,
+      "arm": "git",
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head bench\n1 .M N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 docs/guide.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 10.939582999999864
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 10.365042000000102
+        }
+      ],
+      "wall_ms": 21.313791000000748,
+      "text_tokens": 202,
+      "text_bytes": 422,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    },
+    {
+      "repetition": 3,
+      "arm": "but",
+      "commands": [
+        {
+          "command": [
+            "but",
+            "status",
+            "--no-hint"
+          ],
+          "stdout": "\u256d\u2504 zz [uncommitted]\n\u250a   lp M docs/guide.txt\n\u250a   zl M src/math.txt\n\u250a\n\u250a\u256d\u2504 en [bench] (no commits)\n\u251c\u256f\n\u250a\n\u2534 86e1ac8 (common base) 2026-01-01 initial fixture\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 26.47591699999996
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--numstat"
+          ],
+          "stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.109291999999883
+        }
+      ],
+      "wall_ms": 38.59725000000047,
+      "text_tokens": 106,
+      "text_bytes": 256,
+      "state_preserved": true,
+      "inspection_facts": {
+        "branch": "bench",
+        "changes": {
+          "docs/guide.txt": [
+            1,
+            1
+          ],
+          "src/math.txt": [
+            1,
+            1
+          ]
+        }
+      },
+      "semantic_grade": true
+    }
+  ],
+  "semantic_grading": "Post-run deterministic extraction of exact task branch and per-file added/deleted counts; original timings and token counts unchanged"
+}

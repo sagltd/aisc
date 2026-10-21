@@ -7,10 +7,19 @@ from fixture import build, git, snapshot
 from events import project, sanitize
 from summarize import counters
 import competitor
+from commands import EXPECTED, inspection_facts
 import json
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_command_semantics_require_exact_branch_and_counts(self):
+        transcript = [{"stdout": "# branch.head bench\n"}, {"stdout": "1\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n"}]
+        self.assertEqual(inspection_facts("git", transcript), EXPECTED)
+        transcript[1]["stdout"] = "2\t1\tdocs/guide.txt\n1\t1\tsrc/math.txt\n"
+        self.assertNotEqual(inspection_facts("git", transcript), EXPECTED)
+        with self.assertRaises(ValueError):
+            inspection_facts("git", [{"stdout": "# branch.head bench\n"}, {"stdout": "malformed"}])
+
     def test_public_projection_rejects_common_secret_shapes(self):
         for value in ("ghp_" + "x" * 30, "github_pat_" + "x" * 30,
                       "glpat-" + "x" * 25, "Authorization: Bearer synthetic-token",
@@ -63,6 +72,9 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(result["events"][0]["aggregated_output"], "<fixture>/repo")
         with self.assertRaises(ValueError):
             sanitize("/Users/private/data", {})
+        for path in ("/Volumes/private/data", r"C:\Users\private\data", r"\\server\Users\private"):
+            with self.assertRaises(ValueError):
+                sanitize(path, {})
         self.assertEqual(sanitize("cache /var/folders/example/T/xcrun-cache", {}), "cache <runtime-temp>")
 
     def test_mixed_fixture_and_read_only_measurement(self):
