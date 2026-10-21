@@ -11,6 +11,16 @@ import json
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_public_projection_rejects_common_secret_shapes(self):
+        for value in ("ghp_" + "x" * 30, "github_pat_" + "x" * 30,
+                      "glpat-" + "x" * 25, "Authorization: Bearer synthetic-token",
+                      "Authorization: Basic c3ludGhldGljOnRva2Vu", "OPENAI_API_KEY=synthetic-token",
+                      "AKIA" + "A" * 16, "-----BEGIN OPENSSH PRIVATE KEY-----", "AWS_SECRET_ACCESS_KEY=synthetic-token",
+                      '"password": "synthetic-password"', "https://user:password@example.invalid"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    sanitize(value, {})
+
     def test_final_grade_cannot_pass_from_tool_output_alone(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = competitor.prepare(Path(temporary), "selected_save", "git", None)

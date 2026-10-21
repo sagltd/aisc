@@ -4,6 +4,19 @@ import json
 import re
 
 
+CREDENTIAL = re.compile(
+    r"sk-[A-Za-z0-9_-]{16,}|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}|"
+    r"glpat-[A-Za-z0-9_-]{16,}|(?:AKIA|ASIA)[A-Z0-9]{16}|"
+    r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----|"
+    r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|"
+    r"authorization\s*[:=]\s*['\"]?\s*(?:bearer|basic)\s+[^\s'\"]+|"
+    r"(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|"
+    r"gh_token|gl_token|github_token|gitlab_token|anthropic_api_key|openai_api_key|aws_secret_access_key|aws_session_token)\s*['\"]?\s*[:=]\s*['\"]?[^\s'\",}]+|"
+    r"https?://[^\s/:@]+:[^\s/@]+@",
+    re.IGNORECASE,
+)
+
+
 def final_text(public):
     answers = [event.get("text", "") for event in public["events"]
                if isinstance(event, dict) and event.get("type") == "answer"]
@@ -25,7 +38,7 @@ def sanitize(value, aliases):
         value = value.replace(source, replacement)
     value = re.sub(r"/var/folders/[^'\"\s\\]+", "<runtime-temp>", value)
     value = re.sub(r"/tmp/cc-socks/[^'\"\s\\]+", "<runtime-socket>", value)
-    if re.search(r"/(?:Users|home|private|tmp|var/folders)/|sk-[A-Za-z0-9_-]{16,}", value):
+    if re.search(r"/(?:Users|home|private|tmp|var/folders)/", value) or CREDENTIAL.search(value):
         raise ValueError("Unsafe path or credential shape in public projection")
     return value
 

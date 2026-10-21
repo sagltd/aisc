@@ -29,6 +29,8 @@ The fixture is small by design. It measures source-control overhead only; it doe
 
 Provider events must be generated in synthetic fresh cwd with private project/user instructions disabled. Store raw envelopes only in ignored `benchmarks/.scratch/`. Export an allowlist of public prompts, commands, outputs, final answers, usage and timing, replacing fixture root/binary paths with `<fixture>`/`<aisc>` and omitting account/session/thread identifiers. Refuse export if machine-specific paths or credential-shaped values remain. Record sanitizer rules and artifact hashes; do not claim sanitized event files are untouched provider envelopes.
 
+The export gate detects known machine paths and common credential prefixes, assignments, private-key headers and authorization headers. Regex matching cannot prove absence of arbitrary or opaque secrets. Only generated public fixtures are inputs; allowlisted transcripts also require manual review before publishing. The projections omit provider identity/session envelopes and replace known ephemeral runtime paths and usernames, rather than publishing raw local CLI events.
+
 ## Reproduce offline baseline
 
 ```sh

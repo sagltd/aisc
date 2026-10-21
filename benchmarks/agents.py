@@ -77,6 +77,8 @@ def run(arguments, prepare_function=prepare, prompt_function=prompt, grade_funct
     results = []
     metadata = {
         "grading_version": getattr(arguments, "grading_version", "lifecycle_v1_stream_evidence"),
+        "harness_source_commit": subprocess.check_output(["git", "-C", str(Path(__file__).resolve().parent.parent), "rev-parse", "HEAD"], text=True).strip(),
+        "harness_sources_sha256": hashlib.sha256(b"".join(path.read_bytes() for path in sorted(Path(__file__).parent.glob("*.py")))).hexdigest(),
         "cli_version": subprocess.check_output([arguments.provider, "--version"], text=True).strip(),
         "git_version": subprocess.check_output(["git", "--version"], text=True).strip(),
         "candidate_sha256": hashlib.sha256(arguments.aisc.read_bytes()).hexdigest() if arguments.aisc.is_file() else None,
