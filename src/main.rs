@@ -1,4 +1,5 @@
 mod cli;
+mod context;
 mod git;
 mod github;
 mod gitlab;
@@ -63,10 +64,13 @@ fn main() {
 }
 
 fn run(command: Operation) -> Result<Value> {
+    if let Operation::Context { limit } = command {
+        return context::read(&std::env::current_dir()?, limit);
+    }
     let repo = git::Repo::discover()?;
     match command {
         Operation::Start(start) => task::start(&repo, &start.name, start.path),
-        Operation::Context { limit } => repo.context(limit),
+        Operation::Context { .. } => unreachable!("context is handled before checkout discovery"),
         Operation::Diff { max_bytes, paths } => repo.diff(&paths, max_bytes),
         Operation::Checkpoint { message, paths } => task::checkpoint(&repo, &message, &paths),
         Operation::Verify { timeout, command } => task::verify(&repo, &command, timeout),

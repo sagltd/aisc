@@ -108,14 +108,16 @@ pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) ->
         stderr_omitted: 0,
         timed_out: false,
     };
+    let mut stdout_open = true;
+    let mut stderr_open = true;
     let status = loop {
-        drain(
+        stdout_open &= !drain(
             &mut stdout,
             &mut result.stdout,
             &mut result.stdout_omitted,
             limit,
         )?;
-        drain(
+        stderr_open &= !drain(
             &mut stderr,
             &mut result.stderr,
             &mut result.stderr_omitted,
@@ -129,7 +131,38 @@ pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) ->
             terminate_group(pid);
             break child.wait().context("could not reap timed out process")?;
         }
-        std::thread::sleep(Duration::from_millis(5));
+        // Closed pipes can precede process exit briefly; avoid adding 25 ms to a fast command.
+        let interval = if stdout_open || stderr_open { 25 } else { 1 };
+        let remaining = timeout
+            .saturating_sub(start.elapsed())
+            .min(Duration::from_millis(interval));
+        let milliseconds = i32::try_from(remaining.as_millis()).unwrap_or(25).max(1);
+        let mut pipes = [
+            libc::pollfd {
+                fd: if stdout_open { stdout.as_raw_fd() } else { -1 },
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: if stderr_open { stderr.as_raw_fd() } else { -1 },
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // SAFETY: both descriptors remain owned and valid; poll only fills this stack array.
+        if unsafe {
+            libc::poll(
+                pipes.as_mut_ptr(),
+                pipes.len() as libc::nfds_t,
+                milliseconds,
+            )
+        } < 0
+        {
+            let error = std::io::Error::last_os_error();
+            if error.kind() != ErrorKind::Interrupted {
+                return Err(error).context("could not wait for process output");
+            }
+        }
     };
     terminate_group(pid);
     drain(
@@ -175,20 +208,20 @@ fn drain(
     bytes: &mut Vec<u8>,
     omitted: &mut usize,
     limit: usize,
-) -> Result<()> {
+) -> Result<bool> {
     let mut buffer = [0_u8; 8_192];
     for _ in 0..64 {
         match reader.read(&mut buffer) {
-            Ok(0) => return Ok(()),
+            Ok(0) => return Ok(true),
             Ok(count) => {
                 let keep = count.min(limit.saturating_sub(bytes.len()));
                 bytes.extend_from_slice(&buffer[..keep]);
                 *omitted = omitted.saturating_add(count - keep);
             }
-            Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(()),
+            Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(false),
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => bail!("could not read process output: {error}"),
         }
     }
-    Ok(())
+    Ok(false)
 }

@@ -106,8 +106,11 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
     }
     let mut index_lock = Lock::acquire(repo.directory.join("index.lock"))?;
     let original = fs::read(&index)?;
+    let original_modified = fs::metadata(&index)?.modified()?;
     let alternate = Lock::acquire(repo.directory.join("aisc-candidate-index"))?;
     fs::write(&alternate.path, &original)?;
+    // Git's racy-stat check depends on index mtime; copying must preserve it.
+    alternate.file.set_modified(original_modified)?;
     let mut add = vec!["add", "--"];
     add.extend(paths.iter().map(String::as_str));
     repo.git_index(&add, &alternate.path)?;

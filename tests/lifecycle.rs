@@ -665,3 +665,71 @@ fn codex_tool_call_metadata_does_not_invalidate_separate_invocations() {
         String::from_utf8_lossy(&finished.stderr)
     );
 }
+
+#[test]
+fn context_paths_and_stats_are_root_relative_from_subdirectories() {
+    let fixture = Fixture::new();
+    fs::create_dir(fixture.root.join("subdirectory")).unwrap();
+    fs::write(fixture.root.join("first.txt"), "changed\n").unwrap();
+    git(&fixture.root, &["config", "diff.relative", "true"]);
+    let value = success(&fixture.root.join("subdirectory"), &["context"]);
+    assert_eq!(value["files"][0]["path"], "first.txt");
+    assert_eq!(
+        value["diffstat"]["unstaged"]["files"][0]["path"],
+        "first.txt"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn context_rejects_changed_status_even_when_head_and_branch_stay_the_same() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let bin = fixture.directory.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let marker = fixture.directory.path().join("marker");
+    let capture = fixture.directory.path().join("status");
+    let script = "#!/bin/sh\ncase \"$*\" in *' status '*) PATH=\"$AISC_ORIGINAL_PATH\" git \"$@\" > \"$AISC_STATUS_CAPTURE\" || exit $?\nif [ ! -e \"$AISC_RACE_MARKER\" ]; then printf changed > race-untracked; printf marker > \"$AISC_RACE_MARKER\"; fi\ncat \"$AISC_STATUS_CAPTURE\";; *) PATH=\"$AISC_ORIGINAL_PATH\" exec git \"$@\";; esac\n";
+    fs::write(bin.join("git"), script).unwrap();
+    fs::set_permissions(bin.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
+    let original = std::env::var_os("PATH").unwrap();
+    let path =
+        std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&original))).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_aisc"))
+        .arg("context")
+        .current_dir(&fixture.root)
+        .env("PATH", path)
+        .env("AISC_ORIGINAL_PATH", original)
+        .env("AISC_STATUS_CAPTURE", capture)
+        .env("AISC_RACE_MARKER", marker)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("changed"));
+}
+
+#[test]
+fn alternate_index_preserves_gits_racy_stat_protection_for_same_size_edits() {
+    let fixture = Fixture::new();
+    git(&fixture.root, &["config", "core.trustctime", "false"]);
+    let timestamp = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(10_000);
+    fs::File::open(fixture.root.join("first.txt"))
+        .unwrap()
+        .set_modified(timestamp)
+        .unwrap();
+    git(&fixture.root, &["add", "first.txt"]);
+    fs::File::open(fixture.root.join(".git/index"))
+        .unwrap()
+        .set_modified(timestamp - std::time::Duration::from_secs(1))
+        .unwrap();
+    fs::write(fixture.root.join("first.txt"), "task\n").unwrap();
+    fs::File::open(fixture.root.join("first.txt"))
+        .unwrap()
+        .set_modified(timestamp)
+        .unwrap();
+    success(
+        &fixture.root,
+        &["checkpoint", "-m", "same size", "--", "first.txt"],
+    );
+    assert_eq!(git(&fixture.root, &["show", "HEAD:first.txt"]), b"task\n");
+}
