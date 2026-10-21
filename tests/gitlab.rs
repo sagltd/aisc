@@ -89,6 +89,14 @@ fn request(iid: u64, branch: &str, state: &str) -> Value {
     })
 }
 
+fn output_text(result: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    )
+}
+
 const SCRIPT: &str =
     "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AISC_GLAB_ARGS\"\ncat \"$AISC_GLAB_FIXTURE\"\n";
 
@@ -224,11 +232,7 @@ fn gitlab_errors_are_bounded_and_never_echo_credentials() {
     );
     let result = command.args(["--json", "gitlab"]).output().unwrap();
     assert!(!result.status.success());
-    let error = format!(
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
+    let error = output_text(&result);
     assert!(error.contains("authentication"));
     assert!(!error.contains("secret-value"));
 
@@ -239,12 +243,21 @@ fn gitlab_errors_are_bounded_and_never_echo_credentials() {
     );
     let result = command.args(["--json", "gitlab"]).output().unwrap();
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stdout).contains("network/API"));
+    assert!(output_text(&result).contains("network/API"));
 
     let (_directory, mut command) = fixture("feature", "#!/bin/sh\nprintf '{broken'\n", &json!([]));
     let result = command.args(["--json", "gitlab"]).output().unwrap();
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stdout).contains("invalid glab JSON"));
+    assert!(output_text(&result).contains("invalid glab JSON"));
+
+    let (_directory, mut command) = fixture(
+        "feature",
+        "#!/bin/sh\nprintf '[{\"iid\":\"not-a-number\"}]'\n",
+        &json!([]),
+    );
+    let result = command.args(["--json", "gitlab"]).output().unwrap();
+    assert!(!result.status.success());
+    assert!(output_text(&result).contains("missing valid iid"));
 
     let (_directory, mut command) = fixture(
         "feature",
@@ -253,7 +266,7 @@ fn gitlab_errors_are_bounded_and_never_echo_credentials() {
     );
     let result = command.args(["--json", "gitlab"]).output().unwrap();
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stdout).contains("4 MiB safety limit"));
+    assert!(output_text(&result).contains("4 MiB safety limit"));
 
     let (directory, mut command) = fixture(
         "feature",
