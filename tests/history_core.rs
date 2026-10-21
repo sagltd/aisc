@@ -373,13 +373,7 @@ fn recorded_objects_survive_aggressive_gc() {
 fn stub_verbs_are_wired_and_report_not_implemented() {
     let fixture = dirty();
     let before = fixture.snapshot();
-    let verbs: [&[&str]; 5] = [
-        &["amend", "--into", "base", "f.txt"],
-        &["discard", "f.txt"],
-        &["split", "base", "--into", "m", "f.txt"],
-        &["uncommit", "base", "f.txt"],
-        &["gc"],
-    ];
+    let verbs: [&[&str]; 1] = [&["gc"]];
     for args in verbs {
         let run = fixture.aisc(args);
         assert_eq!(run.code, 1, "{args:?}: {}", run.stderr);
