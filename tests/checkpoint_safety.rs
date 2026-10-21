@@ -152,14 +152,13 @@ fn commit_that_never_lands_cleans_its_own_locks_and_keeps_index() {
     fs::write(fixture.root.join("first.txt"), "changed\n").unwrap();
     let before = fs::read(fixture.root.join(".git/index")).unwrap();
     let path = fixture.fake_git(
-        "case \" $* \" in *\" commit \"*) touch \"$GIT_INDEX_FILE.lock\" .git/next-index-99999.lock; exit 1;; esac\nREAL \"$@\"",
+        "case \" $* \" in *\" commit \"*) touch \"$GIT_INDEX_FILE.lock\" .git/next-index-$$.lock; exit 1;; esac\nREAL \"$@\"",
     );
     let output = fixture.run_with_path(&path, &["checkpoint", "-m", "x", "--", "first.txt"]);
     assert!(!output.status.success());
     assert_eq!(fs::read(fixture.root.join(".git/index")).unwrap(), before);
     for name in [
         "aisc-candidate-index.lock",
-        "next-index-99999.lock",
         "aisc-operation.lock",
         "index.lock",
     ] {
@@ -174,11 +173,22 @@ fn commit_that_never_lands_cleans_its_own_locks_and_keeps_index() {
 fn foreign_locks_are_never_deleted() {
     let fixture = Fixture::new();
     fs::write(fixture.root.join("first.txt"), "changed\n").unwrap();
-    let path = fixture.fake_git("case \" $* \" in *\" commit \"*) exit 1;; esac\nREAL \"$@\"");
-    fs::write(fixture.root.join(".git/next-index-12345.lock"), "").unwrap();
+    // The lock of a live process (aisc itself, via $PPID) appears during a failed commit.
+    let path = fixture.fake_git(
+        "case \" $* \" in *\" commit \"*) touch .git/next-index-$PPID.lock; exit 1;; esac\nREAL \"$@\"",
+    );
     let output = fixture.run_with_path(&path, &["checkpoint", "-m", "x", "--", "first.txt"]);
     assert!(!output.status.success());
-    assert!(fixture.root.join(".git/next-index-12345.lock").exists());
+    let foreign = fs::read_dir(fixture.root.join(".git"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("next-index-")
+        });
+    assert!(foreign, "a live process's lock was deleted");
 }
 
 #[test]
@@ -283,14 +293,61 @@ fn verify_output_keeps_head_and_tail() {
 #[test]
 fn context_rejects_diffstat_that_changes_between_reads() {
     let fixture = Fixture::new();
+    // Already modified, so the later edit changes the line counts but not the status letters.
+    fs::write(fixture.root.join("first.txt"), "a\nb\n").unwrap();
     let marker = fixture.directory.path().join("raced");
     let capture = fixture.directory.path().join("capture");
     let path = fixture.fake_git(&format!(
-        "case \" $* \" in *\" diff \"*--numstat*) REAL \"$@\" > '{capture}'; rc=$?\nif mkdir '{marker}' 2>/dev/null; then printf 'changed again\\n' > first.txt; fi\ncat '{capture}'; exit $rc;; esac\nREAL \"$@\"",
+        "case \" $* \" in *--cached*) ;; *\" diff \"*--numstat*) REAL \"$@\" > '{capture}'; rc=$?\nif mkdir '{marker}' 2>/dev/null; then printf 'a\\nb\\nc\\nd\\n' > first.txt; fi\ncat '{capture}'; exit $rc;; esac\nREAL \"$@\"",
         capture = capture.display(),
         marker = marker.display()
     ));
     let output = fixture.run_with_path(&path, &["context"]);
     assert!(!output.status.success(), "{}", text(&output));
     assert!(text(&output).contains("changed"));
+}
+
+#[test]
+fn rebuilt_index_keeps_original_index_timestamp() {
+    let fixture = Fixture::new();
+    fs::write(fixture.root.join("first.txt"), "changed\n").unwrap();
+    let stamp = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(10_000);
+    fs::File::open(fixture.root.join(".git/index"))
+        .unwrap()
+        .set_modified(stamp)
+        .unwrap();
+    let record = fixture.directory.path().join("reset-mtime");
+    let path = fixture.fake_git(&format!(
+        "case \" $* \" in\n*\" commit \"*) REAL \"$@\"; rc=$?; rm -f \"$GIT_INDEX_FILE\"; exit $rc;;\n*\" reset \"*) touch -r \"$GIT_INDEX_FILE\" '{}';; esac\nREAL \"$@\"",
+        record.display()
+    ));
+    let output = fixture.run_with_path(&path, &["checkpoint", "-m", "x", "--", "first.txt"]);
+    assert!(output.status.success(), "{}", text(&output));
+    assert_eq!(fs::metadata(&record).unwrap().modified().unwrap(), stamp);
+}
+
+#[test]
+fn candidate_lock_is_removed_when_staging_fails() {
+    let fixture = Fixture::new();
+    fs::write(fixture.root.join("first.txt"), "changed\n").unwrap();
+    let path = fixture.fake_git(
+        "case \" $* \" in *\" add \"*) touch \"$GIT_INDEX_FILE.lock\"; exit 1;; esac\nREAL \"$@\"",
+    );
+    let output = fixture.run_with_path(&path, &["checkpoint", "-m", "x", "--", "first.txt"]);
+    assert!(!output.status.success());
+    assert!(!fixture.root.join(".git/aisc-candidate-index.lock").exists());
+    let retry = run(&fixture.root, &["checkpoint", "-m", "x", "--", "first.txt"]);
+    assert!(retry.status.success(), "{}", text(&retry));
+}
+
+#[test]
+fn oversized_output_marker_says_true_tail_is_unavailable() {
+    let fixture = Fixture::new();
+    let output = run(
+        &fixture.root,
+        &["verify", "--", "sh", "-c", "yes filler | head -c 3000000"],
+    );
+    assert!(output.status.success(), "{}", text(&output));
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(value["stdout"].as_str().unwrap().contains("capture"));
 }

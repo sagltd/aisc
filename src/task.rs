@@ -42,7 +42,13 @@ fn head_and_tail(bytes: &[u8], omitted: usize) -> (String, usize) {
         return (String::from_utf8_lossy(bytes).into_owned(), omitted);
     }
     let dropped = omitted + bytes.len() - OUTPUT_KEEP;
-    let marker = format!("\n… {dropped} bytes omitted …\n");
+    let marker = if omitted > 0 {
+        format!(
+            "\n… {dropped} bytes omitted (only the first {CAPTURE_LIMIT} bytes were captured; the true tail is unavailable) …\n"
+        )
+    } else {
+        format!("\n… {dropped} bytes omitted …\n")
+    };
     let tail = OUTPUT_KEEP.saturating_sub(OUTPUT_HEAD + marker.len());
     let mut result = String::from_utf8_lossy(&bytes[..OUTPUT_HEAD]).into_owned();
     result.push_str(&marker);
@@ -149,6 +155,8 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
     let original = fs::read(&index)?;
     let original_modified = fs::metadata(&index)?.modified()?;
     let alternate = Lock::acquire(repo.directory.join("aisc-candidate-index"))?;
+    // Git's own lock beside our alternate index must not outlive any exit path.
+    let _candidate_lock = RemoveOnDrop(candidate_lock_path(&alternate.path));
     fs::write(&alternate.path, &original)?;
     // Git's racy-stat check depends on index mtime; copying must preserve it.
     alternate.file.set_modified(original_modified)?;
@@ -172,7 +180,9 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
                 .map_or_else(String::new, |cause| format!(" (commit reported: {cause})"))
         ),
     };
-    remove_stray_locks(repo, &alternate.path, &stray_before);
+    if outcome.is_err() {
+        remove_dead_locks(repo, &stray_before);
+    }
     if committed == head {
         return match outcome {
             Err(error) => Err(error).context("checkpoint failed; original index retained (configured hooks may have their own side effects)"),
@@ -197,14 +207,16 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
             "committed {committed} but could not update index: {cause}; run `{recovery}`"
         )
     };
-    if repo.branch()? != branch || fs::read(&index)? != original {
+    let branch_now = repo.branch().map_err(|error| after_commit(&error))?;
+    let index_now = fs::read(&index).map_err(|error| after_commit(&error))?;
+    if branch_now != branch || index_now != original {
         bail!(
             "concurrent repository change after commit {committed}; original index retained; inspect Git state before proceeding"
         );
     }
     let new_index = match fs::read(&alternate.path) {
         Ok(bytes) => bytes,
-        Err(_) => rebuild_index(repo, &original, &alternate.path, paths)
+        Err(_) => rebuild_index(repo, &original, original_modified, &alternate.path, paths)
             .map_err(|error| after_commit(&error))?,
     };
     let candidate_modified = fs::metadata(&alternate.path)
@@ -276,15 +288,41 @@ fn next_index_locks(directory: &Path) -> Vec<std::ffi::OsString> {
         .collect()
 }
 
-/// Removes lock files a killed or failed Git child left for our alternate index.
-/// Locks that existed before the commit started belong to someone else and stay.
-fn remove_stray_locks(repo: &Repo, alternate: &Path, before: &[std::ffi::OsString]) {
+struct RemoveOnDrop(PathBuf);
+
+impl Drop for RemoveOnDrop {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+fn candidate_lock_path(alternate: &Path) -> PathBuf {
     let mut own = alternate.as_os_str().to_owned();
     own.push(".lock");
-    let _ = fs::remove_file(own);
+    PathBuf::from(own)
+}
+
+/// Removes `next-index-<pid>.lock` files that appeared during a failed commit and whose
+/// owning process no longer exists, i.e. the child we killed. Locks of live processes stay.
+fn remove_dead_locks(repo: &Repo, before: &[std::ffi::OsString]) {
     for name in next_index_locks(&repo.directory) {
-        if !before.contains(&name) {
-            let _ = fs::remove_file(repo.directory.join(name));
+        if before.contains(&name) {
+            continue;
+        }
+        let text = name.to_string_lossy();
+        let Some(pid) = text
+            .strip_prefix("next-index-")
+            .and_then(|rest| rest.strip_suffix(".lock"))
+            .and_then(|pid| pid.parse::<i32>().ok())
+            .filter(|pid| *pid > 0)
+        else {
+            continue;
+        };
+        // SAFETY: signal 0 only probes for existence of the process.
+        let alive = unsafe { libc::kill(pid, 0) } == 0
+            || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH);
+        if !alive {
+            let _ = fs::remove_file(repo.directory.join(&name));
         }
     }
 }
@@ -294,10 +332,13 @@ fn remove_stray_locks(repo: &Repo, alternate: &Path, before: &[std::ffi::OsStrin
 fn rebuild_index(
     repo: &Repo,
     original: &[u8],
+    original_modified: std::time::SystemTime,
     alternate: &Path,
     paths: &[String],
 ) -> Result<Vec<u8>> {
     fs::write(alternate, original)?;
+    // Keep the original timestamp so Git's racy-entry detection stays valid.
+    File::open(alternate)?.set_modified(original_modified)?;
     let mut reset = vec!["reset", "-q", "--"];
     reset.extend(paths.iter().map(String::as_str));
     repo.git_index(&reset, alternate)?;
