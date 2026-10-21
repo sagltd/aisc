@@ -48,9 +48,8 @@ pub(crate) fn overview(repo: &Repo, limit: usize) -> Result<Value> {
         bail!("GitHub response exceeds the 4 MiB safety limit");
     }
     let data: Value = serde_json::from_slice(&output.stdout).context("invalid gh JSON response")?;
-    let current = data
-        .get("currentBranch")
-        .context("gh response missing currentBranch")?;
+    // gh omits this optional key when the current branch has no pull request.
+    let current = data.get("currentBranch").unwrap_or(&Value::Null);
     let created = data
         .get("createdBy")
         .and_then(Value::as_array)

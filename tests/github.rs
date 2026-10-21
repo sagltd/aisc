@@ -75,3 +75,19 @@ fn github_errors_are_not_empty_success_or_credential_disclosure() {
     let (_directory, mut command) = fixture("#!/bin/sh\nprintf '{}'\n", &json!({}));
     assert!(!command.arg("github").output().unwrap().status.success());
 }
+
+#[test]
+fn github_accepts_gh_omitting_absent_current_branch() {
+    let (_directory, mut command) = fixture(
+        "#!/bin/sh\ncat \"$AISC_GH_FIXTURE\"\n",
+        &json!({"createdBy":[],"needsReview":[]}),
+    );
+    let result = command.arg("github").output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let value: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert!(value["current_branch"].is_null());
+}
