@@ -1,0 +1,18 @@
+[package]
+name = "aisc"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91.1"
+description = "Bounded, task-oriented source control for agents, backed by Git"
+license = "MIT"
+repository = "https://github.com/sagltd/aisc"
+
+[dependencies]
+anyhow = "1.0"
+libc = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3.23"
