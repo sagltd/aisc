@@ -17,8 +17,8 @@ Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:ST
 - Remove part of a commit: `aisc uncommit COMMIT SEL...`
 - Squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG ...]`
 - Reorder: `aisc move COMMIT... --before|--after COMMIT`
-- Rebase onto a moved base, keeping uncommitted work: `aisc sync [ONTO]`. On CONFLICTS, edit the marked files, then `aisc sync --continue`
-- Copy commits: `aisc pick COMMIT... [-b NEW --onto BASE]`; integrate: `aisc land BRANCH... --into main --switch`
+- Rebase onto a moved base, keeping uncommitted work: `aisc sync [ONTO] [--fetch] [--prefer-branch PATH...]`. On CONFLICTS, edit the marked files, then `aisc sync --continue`
+- Copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be `origin/BRANCH`); integrate: `aisc land BRANCH... --into main --switch`
 - Discard uncommitted changes: `aisc discard SEL...`; undo the last operation: `aisc undo`
 
 Every write prints the resulting log; don't re-check. Anything not selected stays uncommitted. Use `aisc show COMMIT` to see a commit's hunks.

@@ -52,7 +52,9 @@ Status: the harness side (arm, policy, disk metric, reference solutions) is comp
 
    `aisc:check` runs the aisc reference solution for pilots 1-6 and the deterministic references for expansion tasks 7-13. It fails until the history verbs exist. `check-runner-infra.mjs` (part of `runner:check`) has a 250 ms timing assertion that can fail on a loaded machine.
 
-5. Run trials (all arms in one batch, same sandbox, models and effort):
+5. Permission smoke test: one real run per arm and agent on the simplest task, before the matrix. Check that no run hit a sandbox or permission denial (for example `grep -il "permission\|denied\|not allowed\|sandbox" runs/*/agent-stdout.txt runs/*/command-output/*.stderr`), that every arm's tool state was writable (GitButler app data, `.jj`, `.git`) and that no run ended in `AGENT_RUNTIME_ERROR`. If a denial appears, widen the allowlist or `--add-dir` set identically for all arms, and discard the smoke runs.
+
+6. Run trials (all arms in one batch, same sandbox, models and effort):
 
    ```sh
    npm run matrix:run -- --arms git,but+skill,jj+skill,aisc+skill --k 5 \
@@ -74,6 +76,7 @@ Status: the harness side (arm, policy, disk metric, reference solutions) is comp
 
 ## Fairness rules
 
+- The `AGENTS.md`/`CLAUDE.md` block has the same shape in every skill arm (benchmark boundary, local skill location, a short version-control policy: use the tool, no other tool's writes, read-only Git allowed); tool-specific usage lives only in the skill.
 - Same task text and wrapper prompt, fixtures, sandbox, agent CLI, model, effort and timeout for every arm; arms differ only in the tool and its skill/instructions. Use `--rotate-arms true` to spread order effects.
 - Fixture creation, tool setup and skill installation happen before the timed agent phase and are excluded from wall time, commands and tokens (except the deliberately cold task 8).
 - Same verifier for every arm: Git-visible state, with the minefield checks (stash, operation residue, protected refs, uncommitted work).
@@ -86,7 +89,9 @@ Status: the harness side (arm, policy, disk metric, reference solutions) is comp
 
 Upstream runs Codex with `--dangerously-bypass-approvals-and-sandbox` and Claude with `--permission-mode bypassPermissions`. Our configuration does not bypass the sandbox, and this fork defaults to it for all arms (`--agent-sandbox false` restores the upstream behavior; `matrix:run` forwards the flag):
 
-- **Codex:** `--sandbox workspace-write` plus `--add-dir` for the fixture's Git directory (`--absolute-git-dir` and `--git-common-dir`; Git metadata is read-only under the workspace sandbox) and the run directory (policy-shim trace and, for GitButler, its isolated app data).
-- **Claude:** `--permission-mode acceptEdits` with an allowlist in the per-run settings file: file tools (`Read`, `Edit`, `MultiEdit`, `Write`, `Glob`, `Grep`), `Bash(git|but|jj|aisc:*)` and a few shell utilities (`cat`, `ls`, `head`, `tail`, `wc`, `echo`, `printf`, `pwd`, `diff`, `sort`, `grep`, `rg`, `sed`, `node`, `python3`). Override with `--claude-allowed-tools`. Claude has no OS sandbox in this mode, so the allowlist only limits which commands run without a prompt.
+- **Codex:** `--sandbox workspace-write` plus `--add-dir` for the fixture's Git directory (`--absolute-git-dir` and `--git-common-dir`; Git metadata is read-only under the workspace sandbox), the run directory (policy-shim trace and GitButler's isolated app data) and, when the arm created it, `.jj`.
+- **Claude:** `--permission-mode acceptEdits` with an allowlist in the per-run settings file: file tools (`Read`, `Edit`, `MultiEdit`, `Write`, `Glob`, `Grep`), `Bash(git|but|jj|aisc:*)` and common shell and file utilities (`cat`, `ls`, `head`, `tail`, `wc`, `echo`, `printf`, `pwd`, `diff`, `sort`, `grep`, `rg`, `sed`, `awk`, `cut`, `tr`, `uniq`, `find`, `mkdir`, `cp`, `mv`, `rm`, `touch`, `chmod`, `test`, `cd`, `node`, `python3`). Override with `--claude-allowed-tools`. Claude has no OS sandbox in this mode, so the allowlist only limits which commands run without a prompt.
 
 Results are therefore not directly comparable with the published upstream numbers; compare arms within one batch. Both configurations are recorded in `result.json` under `agent_config`.
+
+`runs:export` replaces host paths (run, batch, harness and home directories) with placeholders and reduces tool and pin paths in `result.json` to file names before the secret scan.
