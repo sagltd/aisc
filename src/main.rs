@@ -1,95 +1,77 @@
+mod cli;
 mod git;
 mod github;
+mod gitlab;
+mod output;
 mod process;
 mod task;
 
-use anyhow::{Context, Result, bail};
-use serde_json::json;
-use std::path::PathBuf;
-
-const HELP: &str = "aisc 0.1.0 — task-oriented Git operations\n\nstart NAME (--path PATH | --in-place)\ncontext [--limit N]\ndiff [--max-bytes N] -- [PATH...]\ncheckpoint -m MESSAGE -- PATH...\nverify [--timeout SECONDS] -- PROGRAM ARG...\nfinish\ngithub [--limit N]\n\nRun checkpoint → verify → finish in the task checkout. All results are JSON.\nPaths are literal files relative to the repository root. No automatic push, merge, or cleanup.\nVerification fingerprints tracked files, index, Git config, environment and executable; ignored files and external services are not hermetic. Configured Git hooks/signing run normally.\nGitHub is an explicit read-only gh pr status request; local context stays offline.";
+use anyhow::Result;
+use clap::{CommandFactory, FromArgMatches};
+use cli::{Cli, Operation};
+use output::Presentation;
+use serde_json::{Value, json};
 
 fn main() {
-    match run() {
-        Ok(value) => println!("{value}"),
+    let arguments = std::env::args_os().collect::<Vec<_>>();
+    let presentation = Presentation::from_arguments(&arguments);
+    let mut parser = Cli::command().color(presentation.clap_color());
+    let matches = match parser.try_get_matches_from_mut(&arguments) {
+        Ok(matches) => matches,
         Err(error) => {
-            eprintln!("{}", json!({"error": format!("{error:#}")}));
+            let code = error.exit_code();
+            match error.kind() {
+                clap::error::ErrorKind::DisplayHelp => println!(
+                    "{}",
+                    presentation.help(
+                        &error.render().to_string(),
+                        &error.render().ansi().to_string()
+                    )
+                ),
+                clap::error::ErrorKind::DisplayVersion => println!(
+                    "{}",
+                    presentation.success("version", &json!({"version": env!("CARGO_PKG_VERSION")}))
+                ),
+                _ => eprintln!("{}", presentation.error(&error.render().to_string())),
+            }
+            std::process::exit(code);
+        }
+    };
+    let command = match Cli::from_arg_matches(&matches) {
+        Ok(parsed) => parsed.command,
+        Err(error) => {
+            eprintln!("{}", presentation.error(&error.to_string()));
+            std::process::exit(2);
+        }
+    };
+    let Some(command) = command else {
+        let help = parser.render_help();
+        println!(
+            "{}",
+            presentation.help(&help.to_string(), &help.ansi().to_string())
+        );
+        return;
+    };
+    let operation = command.name();
+    match run(command) {
+        Ok(value) => println!("{}", presentation.success(operation, &value)),
+        Err(error) => {
+            eprintln!("{}", presentation.error(&format!("{error:#}")));
             std::process::exit(1);
         }
     }
 }
 
-fn run() -> Result<serde_json::Value> {
-    let args = std::env::args_os()
-        .skip(1)
-        .map(|arg| {
-            arg.into_string()
-                .map_err(|_| anyhow::anyhow!("non-UTF-8 arguments are unsupported"))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    if args.is_empty() || args == ["--help"] || args == ["help"] || args == ["-h"] {
-        return Ok(json!({"help": HELP}));
-    }
-    if args == ["--version"] {
-        return Ok(json!({"version": env!("CARGO_PKG_VERSION")}));
-    }
+fn run(command: Operation) -> Result<Value> {
     let repo = git::Repo::discover()?;
-    let tail = &args[1..];
-    match args[0].as_str() {
-        "start" => match tail {
-            [name, option] if option == "--in-place" => task::start(&repo, name, None),
-            [name, option, path] if option == "--path" => {
-                task::start(&repo, name, Some(PathBuf::from(path)))
-            }
-            _ => bail!("usage: start NAME (--path PATH | --in-place)"),
-        },
-        "context" => repo.context(number_option(tail, "--limit", 30, 1_000)?),
-        "github" => github::overview(&repo, number_option(tail, "--limit", 10, 100)?),
-        "diff" => {
-            let separator = tail
-                .iter()
-                .position(|arg| arg == "--")
-                .context("usage: diff [--max-bytes N] -- [PATH...]")?;
-            repo.diff(
-                &tail[separator + 1..],
-                number_option(&tail[..separator], "--max-bytes", 8_192, 1_048_576)?,
-            )
-        }
-        "checkpoint" => match tail {
-            [option, message, separator, paths @ ..]
-                if option == "-m" && separator == "--" && !paths.is_empty() =>
-            {
-                task::checkpoint(&repo, message, paths)
-            }
-            _ => bail!("usage: checkpoint -m MESSAGE -- PATH..."),
-        },
-        "verify" => {
-            let separator = tail
-                .iter()
-                .position(|arg| arg == "--")
-                .context("usage: verify [--timeout SECONDS] -- PROGRAM ARG...")?;
-            let timeout = number_option(&tail[..separator], "--timeout", 300, 3_600)?;
-            let command = &tail[separator + 1..];
-            if command.is_empty() {
-                bail!("verification requires a program after --");
-            }
-            task::verify(&repo, command, timeout)
-        }
-        "finish" if tail.is_empty() => task::finish(&repo),
-        _ => bail!("unknown command or arguments; run aisc --help"),
+    match command {
+        Operation::Start(start) => task::start(&repo, &start.name, start.path),
+        Operation::Context { limit } => repo.context(limit),
+        Operation::Diff { max_bytes, paths } => repo.diff(&paths, max_bytes),
+        Operation::Checkpoint { message, paths } => task::checkpoint(&repo, &message, &paths),
+        Operation::Verify { timeout, command } => task::verify(&repo, &command, timeout),
+        Operation::Finish => task::finish(&repo),
+        Operation::Github { limit } => github::overview(&repo, limit),
+        Operation::Gitlab { limit } => gitlab::overview(&repo, limit),
     }
-}
-
-fn number_option(args: &[String], option: &str, default: usize, maximum: usize) -> Result<usize> {
-    let value = match args {
-        [] => return Ok(default),
-        [name, value] if name == option => {
-            value.parse::<usize>().context("invalid positive integer")?
-        }
-        _ => bail!("expected optional {option} N"),
-    };
-    if value == 0 || value > maximum {
-        bail!("{option} must be between 1 and {maximum}");
-    }
-    Ok(value)
 }
