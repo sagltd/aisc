@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -24,6 +25,46 @@ struct Evidence {
     fingerprint: String,
     command: Vec<String>,
     executable: String,
+    #[serde(default)]
+    environment: BTreeMap<String, String>,
+}
+
+/// Bytes of command output returned to the caller; the middle is dropped.
+const OUTPUT_KEEP: usize = 16_384;
+const OUTPUT_HEAD: usize = 4_096;
+/// Larger capture so the tail of long output is still available to slice.
+const CAPTURE_LIMIT: usize = 2 * 1_024 * 1_024;
+/// Variables that describe the calling shell, not the verified candidate.
+const VOLATILE_ENVIRONMENT: &[&str] = &["CODEX_TOOL_CALL_ID", "PWD", "OLDPWD", "SHLVL", "_"];
+
+fn head_and_tail(bytes: &[u8], omitted: usize) -> (String, usize) {
+    if bytes.len() <= OUTPUT_KEEP {
+        return (String::from_utf8_lossy(bytes).into_owned(), omitted);
+    }
+    let dropped = omitted + bytes.len() - OUTPUT_KEEP;
+    let marker = format!("\n… {dropped} bytes omitted …\n");
+    let tail = OUTPUT_KEEP.saturating_sub(OUTPUT_HEAD + marker.len());
+    let mut result = String::from_utf8_lossy(&bytes[..OUTPUT_HEAD]).into_owned();
+    result.push_str(&marker);
+    result.push_str(&String::from_utf8_lossy(&bytes[bytes.len() - tail..]));
+    (
+        result,
+        dropped + OUTPUT_KEEP.saturating_sub(OUTPUT_HEAD + tail),
+    )
+}
+
+fn environment_digests() -> BTreeMap<String, String> {
+    std::env::vars_os()
+        .filter(|(name, _)| !VOLATILE_ENVIRONMENT.iter().any(|skip| name == skip))
+        .map(|(name, value)| {
+            let mut hash = Sha256::new();
+            feed(&mut hash, os_bytes(&value));
+            (
+                name.to_string_lossy().into_owned(),
+                format!("{:x}", hash.finalize()),
+            )
+        })
+        .collect()
 }
 
 pub(crate) fn start(repo: &Repo, name: &str, destination: Option<PathBuf>) -> Result<Value> {
@@ -119,19 +160,82 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
     }
     let mut commit = vec!["commit", "--only", "-m", message, "--"];
     commit.extend(paths.iter().map(String::as_str));
-    repo.git_index(&commit, &alternate.path).context("checkpoint failed; original index retained (configured hooks may have their own side effects)")?;
-    let committed = repo.head()?;
+    let stray_before = next_index_locks(&repo.directory);
+    let outcome = repo.git_index(&commit, &alternate.path);
+    // Whatever Git reported, HEAD is the truth about whether the commit landed.
+    let committed = match repo.head() {
+        Ok(committed) => committed,
+        Err(error) => bail!(
+            "could not determine whether the checkpoint commit landed ({error}); original index retained; inspect `git log -1` and `git status`{}",
+            outcome
+                .err()
+                .map_or_else(String::new, |cause| format!(" (commit reported: {cause})"))
+        ),
+    };
+    remove_stray_locks(repo, &alternate.path, &stray_before);
     if committed == head {
-        bail!("Git reported success without advancing HEAD; original index retained");
+        return match outcome {
+            Err(error) => Err(error).context("checkpoint failed; original index retained (configured hooks may have their own side effects)"),
+            Ok(_) => bail!("Git reported success without advancing HEAD; original index retained"),
+        };
     }
+    let warning = outcome.err().map(|error| {
+        format!(
+            "Git reported a failure after the commit landed (hook or timeout); the commit exists and the index was updated: {error}"
+        )
+    });
+    let recovery = format!(
+        "git reset -- {}",
+        paths
+            .iter()
+            .map(|path| quote(path))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    let after_commit = |cause: &dyn std::fmt::Display| {
+        anyhow::anyhow!(
+            "committed {committed} but could not update index: {cause}; run `{recovery}`"
+        )
+    };
     if repo.branch()? != branch || fs::read(&index)? != original {
         bail!(
             "concurrent repository change after commit {committed}; original index retained; inspect Git state before proceeding"
         );
     }
-    let new_index = fs::read(&alternate.path)?;
-    index_lock.file.write_all(&new_index)?;
-    index_lock.file.sync_all()?;
+    let new_index = match fs::read(&alternate.path) {
+        Ok(bytes) => bytes,
+        Err(_) => rebuild_index(repo, &original, &alternate.path, paths)
+            .map_err(|error| after_commit(&error))?,
+    };
+    let candidate_modified = fs::metadata(&alternate.path)
+        .and_then(|data| data.modified())
+        .ok();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Keep a shared repository's group bits and Git's timestamp for racy-entry detection.
+        let mode = fs::metadata(&index)
+            .map_err(|error| after_commit(&error))?
+            .permissions()
+            .mode();
+        index_lock
+            .file
+            .write_all(&new_index)
+            .map_err(|error| after_commit(&error))?;
+        index_lock
+            .file
+            .set_permissions(fs::Permissions::from_mode(mode & 0o7777))
+            .map_err(|error| after_commit(&error))?;
+        if let Some(modified) = candidate_modified {
+            index_lock
+                .file
+                .set_modified(modified)
+                .map_err(|error| after_commit(&error))?;
+        }
+        index_lock
+            .file
+            .sync_all()
+            .map_err(|error| after_commit(&error))?;
+    }
     // Match Git's index transaction: the ref advances before atomic index installation.
     if let Err(error) = fs::rename(&index_lock.path, &index) {
         index_lock.keep = true;
@@ -139,7 +243,65 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
             "commit {committed} exists but index installation failed: {error}; index.lock retained for recovery"
         );
     }
-    Ok(json!({"commit": committed, "branch": branch, "paths": paths, "verification": "required"}))
+    let mut result =
+        json!({"commit": committed, "branch": branch, "paths": paths, "verification": "required"});
+    if let Some(warning) = warning {
+        result["warning"] = Value::String(warning);
+    }
+    Ok(result)
+}
+
+fn quote(path: &str) -> String {
+    if !path.is_empty()
+        && path
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"_-./".contains(&byte))
+    {
+        path.to_owned()
+    } else {
+        format!("'{}'", path.replace('\'', "'\\''"))
+    }
+}
+
+fn next_index_locks(directory: &Path) -> Vec<std::ffi::OsString> {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.file_name()))
+        .filter(|name| {
+            let name = name.to_string_lossy();
+            name.starts_with("next-index-") && name.ends_with(".lock")
+        })
+        .collect()
+}
+
+/// Removes lock files a killed or failed Git child left for our alternate index.
+/// Locks that existed before the commit started belong to someone else and stay.
+fn remove_stray_locks(repo: &Repo, alternate: &Path, before: &[std::ffi::OsString]) {
+    let mut own = alternate.as_os_str().to_owned();
+    own.push(".lock");
+    let _ = fs::remove_file(own);
+    for name in next_index_locks(&repo.directory) {
+        if !before.contains(&name) {
+            let _ = fs::remove_file(repo.directory.join(name));
+        }
+    }
+}
+
+/// Rebuilds the post-commit index from the pre-commit index: checkpointed paths take their
+/// new HEAD state while unrelated staged entries are untouched.
+fn rebuild_index(
+    repo: &Repo,
+    original: &[u8],
+    alternate: &Path,
+    paths: &[String],
+) -> Result<Vec<u8>> {
+    fs::write(alternate, original)?;
+    let mut reset = vec!["reset", "-q", "--"];
+    reset.extend(paths.iter().map(String::as_str));
+    repo.git_index(&reset, alternate)?;
+    Ok(fs::read(alternate)?)
 }
 
 pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<Value> {
@@ -151,28 +313,38 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     let resolved = resolve_executable(&repo.root, &command[0])?;
     let executable = executable_digest(&resolved)?;
     let mut child = Command::new(&resolved);
-    child.args(&command[1..]).current_dir(&repo.root);
+    child
+        .args(&command[1..])
+        .current_dir(&repo.root)
+        .env("PWD", &repo.root);
     process::exact_executable(&mut child, &command[0])?;
-    let output = process::execute(&mut child, Duration::from_secs(timeout as u64), 16_384)?;
+    let output = process::execute(
+        &mut child,
+        Duration::from_secs(timeout as u64),
+        CAPTURE_LIMIT,
+    )?;
     let clean = repo.require_clean();
-    let after = fingerprint(repo)?;
+    // A command that deletes or replaces tracked files makes fingerprinting itself fail.
+    let after = fingerprint(repo);
     if clean.is_err()
-        || before != after
+        || after.as_ref().map_or(true, |after| *after != before)
         || executable != executable_digest(&resolve_executable(&repo.root, &command[0])?)?
     {
         bail!(
             "verification candidate or environment changed while the command ran; no successful evidence recorded"
         );
     }
+    let (stdout, stdout_omitted) = head_and_tail(&output.stdout, output.stdout_omitted);
+    let (stderr, stderr_omitted) = head_and_tail(&output.stderr, output.stderr_omitted);
     if !output.success() {
         bail!(
             "verification failed (exit {:?}, timeout={}): stdout={} [omitted {} bytes]; stderr={} [omitted {} bytes]",
             output.code,
             output.timed_out,
-            String::from_utf8_lossy(&output.stdout),
-            output.stdout_omitted,
-            String::from_utf8_lossy(&output.stderr),
-            output.stderr_omitted
+            stdout,
+            stdout_omitted,
+            stderr,
+            stderr_omitted
         );
     }
     let head = repo.head()?;
@@ -181,10 +353,11 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
         fingerprint: before,
         command: command.to_vec(),
         executable,
+        environment: environment_digests(),
     };
     write_json(&repo.directory.join("aisc-evidence.json"), &evidence)?;
     Ok(
-        json!({"verified": true, "commit": head, "command": command, "stdout": String::from_utf8_lossy(&output.stdout), "stderr": String::from_utf8_lossy(&output.stderr), "stdout_omitted_bytes": output.stdout_omitted, "stderr_omitted_bytes": output.stderr_omitted}),
+        json!({"verified": true, "commit": head, "command": command, "stdout": stdout, "stderr": stderr, "stdout_omitted_bytes": stdout_omitted, "stderr_omitted_bytes": stderr_omitted}),
     )
 }
 
@@ -194,14 +367,36 @@ pub(crate) fn finish(repo: &Repo) -> Result<Value> {
     repo.require_clean()?;
     let evidence: Evidence = read_json(&repo.directory.join("aisc-evidence.json"))
         .context("run successful verification for this exact candidate before finish")?;
+    let mut changed = Vec::new();
+    if repo.head()? != evidence.head {
+        changed.push("HEAD".to_owned());
+    }
+    if fingerprint(repo)? != evidence.fingerprint {
+        changed.push("tracked files, index, branch or Git configuration".to_owned());
+    }
     if evidence.command.is_empty()
-        || repo.head()? != evidence.head
-        || fingerprint(repo)? != evidence.fingerprint
         || executable_digest(&resolve_executable(&repo.root, &evidence.command[0])?)?
             != evidence.executable
     {
+        changed.push("verification executable".to_owned());
+    }
+    let current = environment_digests();
+    let mut names = evidence
+        .environment
+        .keys()
+        .chain(current.keys())
+        .filter(|name| evidence.environment.get(*name) != current.get(*name))
+        .cloned()
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    if !names.is_empty() {
+        changed.push(format!("environment variables {}", names.join(", ")));
+    }
+    if !changed.is_empty() {
         bail!(
-            "verification evidence is stale; rerun verify for the current candidate and environment"
+            "verification evidence is stale; changed since verify: {}; rerun verify for the current candidate and environment",
+            changed.join("; ")
         );
     }
     let state = repo.directory.join("aisc-session.json");
@@ -245,16 +440,6 @@ fn fingerprint(repo: &Repo) -> Result<String> {
             "--show-scope",
         ])?,
     );
-    let mut environment = std::env::vars_os().collect::<Vec<_>>();
-    environment.sort();
-    for (name, value) in environment {
-        // Codex changes this orchestration identifier on every shell tool call.
-        if name == "CODEX_TOOL_CALL_ID" {
-            continue;
-        }
-        feed(&mut hash, os_bytes(&name));
-        feed(&mut hash, os_bytes(&value));
-    }
     // Status alone does not expose assume-unchanged files; hash every tracked file.
     let paths = repo.git(&["ls-files", "-z"])?;
     for path in paths
@@ -264,7 +449,8 @@ fn fingerprint(repo: &Repo) -> Result<String> {
         let path_text = text(path)?;
         feed(&mut hash, path);
         let path = repo.root.join(path_text);
-        let metadata = fs::symlink_metadata(&path)?;
+        let metadata = fs::symlink_metadata(&path)
+            .with_context(|| format!("tracked file {path_text} is missing or unreadable"))?;
         use std::os::unix::fs::PermissionsExt;
         feed(&mut hash, &metadata.permissions().mode().to_le_bytes());
         if metadata.file_type().is_symlink() {

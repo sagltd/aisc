@@ -15,17 +15,9 @@ const STATUS: &[&str] = &[
 pub(crate) fn read(root: &Path, limit: usize) -> Result<Value> {
     validate_environment()?;
     // Native Git resolves the checkout; independent reads overlap without touching its index.
-    let (status, staged, unstaged) = std::thread::scope(|scope| {
-        let status = scope.spawn(|| run_git(root, STATUS, None));
-        let staged = scope.spawn(|| numstat(root, true, limit));
-        let unstaged = scope.spawn(|| numstat(root, false, limit));
-        (status.join(), staged.join(), unstaged.join())
-    });
-    let status = status.map_err(|_| anyhow::anyhow!("Git status reader panicked"))??;
-    let staged_stat = staged.map_err(|_| anyhow::anyhow!("staged diff reader panicked"))??;
-    let unstaged_stat =
-        unstaged.map_err(|_| anyhow::anyhow!("unstaged diff reader panicked"))??;
-    if run_git(root, STATUS, None)? != status {
+    let (status, staged_stat, unstaged_stat) = snapshot(root, limit)?;
+    // Status and both diffstats must agree across two reads, or the checkout moved underneath us.
+    if snapshot(root, limit)? != (status.clone(), staged_stat.clone(), unstaged_stat.clone()) {
         bail!("repository changed while reading context; retry");
     }
     let (head, branch, entries) = parse_status(&status)?;
@@ -47,6 +39,20 @@ pub(crate) fn read(root: &Path, limit: usize) -> Result<Value> {
         "files": entries.iter().take(limit).collect::<Vec<_>>(), "omitted": entries.len().saturating_sub(limit),
         "diffstat": {"staged": staged_stat, "unstaged": unstaged_stat}}),
     )
+}
+
+fn snapshot(root: &Path, limit: usize) -> Result<(Vec<u8>, Value, Value)> {
+    let (status, staged, unstaged) = std::thread::scope(|scope| {
+        let status = scope.spawn(|| run_git(root, STATUS, None));
+        let staged = scope.spawn(|| numstat(root, true, limit));
+        let unstaged = scope.spawn(|| numstat(root, false, limit));
+        (status.join(), staged.join(), unstaged.join())
+    });
+    Ok((
+        status.map_err(|_| anyhow::anyhow!("Git status reader panicked"))??,
+        staged.map_err(|_| anyhow::anyhow!("staged diff reader panicked"))??,
+        unstaged.map_err(|_| anyhow::anyhow!("unstaged diff reader panicked"))??,
+    ))
 }
 
 fn parse_status(bytes: &[u8]) -> Result<(String, Option<String>, Vec<Entry>)> {

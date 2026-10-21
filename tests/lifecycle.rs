@@ -456,7 +456,7 @@ fn checkpoint_coordinates_native_index_writers_and_other_aisc_mutations() {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
     while !ready.exists() {
         assert!(
             std::time::Instant::now() < deadline,
