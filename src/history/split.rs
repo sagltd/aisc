@@ -1,10 +1,10 @@
 //! `aisc split` and `aisc uncommit` (algorithm 6.5): cut a commit into parts, optionally moving
 //! the rest into the worktree. Uncommit is a split whose single part is "everything but SEL".
 use super::amend::{
-    Finished, block_of, chain_to_tip, finish, hunk_name, index_changes, move_refs, position,
-    rebuild, require_checked_out, selection_hunks, short_of,
+    Finished, Sig, chain_to_tip, finish, index_changes, merge3, mismatch, move_refs, position,
+    rebuild, require_checked_out, selection_hunks, short_of, signature,
 };
-use super::apply::{Direction, join_lines, splice, split_lines, transplant};
+use super::apply::{join_lines, splice, split_lines};
 use super::diff::{assign_ids, commit_diff_args, parse_patch};
 use super::model::{Block, ChangeSet, FileChange, Line};
 use super::plumbing::{Entry, Git, TreeEdit};
@@ -372,7 +372,6 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
     // Descendants: re-parented; with `uncommit` rest they also lose the rest.
     let descendants = &chain[1..];
     let mut trees = Vec::new();
-    let mut blob_cache: BTreeMap<String, Vec<Line>> = BTreeMap::new();
     for commit in descendants {
         if keep || rest.is_empty() {
             trees.push(commit.tree.clone());
@@ -383,21 +382,6 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
             .map(|index| changes.files[*index].path.clone())
             .collect();
         let entries = git.ls_tree(&commit.tree, &rest_paths)?;
-        let wanted: Vec<String> = rest
-            .keys()
-            .filter_map(|index| {
-                let file = &changes.files[*index];
-                let (_, oid) = entries.get(&file.path)?;
-                (builder.commit_entries.get(&file.path) != entries.get(&file.path)
-                    && !blob_cache.contains_key(oid))
-                .then(|| oid.clone())
-            })
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        for (oid, blob) in wanted.iter().zip(git.read_blobs(&wanted)?) {
-            blob_cache.insert(oid.clone(), split_lines(&blob));
-        }
         let mut edits = Vec::new();
         for (index, part) in &rest {
             let file = &changes.files[*index];
@@ -405,7 +389,17 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
             let entry = if current == builder.commit_entries.get(&file.path) {
                 after_parts[index].clone()
             } else {
-                Some(strip_rest(file, part, current, &blob_cache, &git, commit)?)
+                Some(strip_rest(
+                    file,
+                    part,
+                    current,
+                    (
+                        builder.commit_entries.get(&file.path),
+                        after_parts[index].as_ref(),
+                    ),
+                    &git,
+                    commit,
+                )?)
             };
             edits.push(TreeEdit {
                 path: file.path.clone(),
@@ -414,11 +408,84 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
         }
         trees.push(git.tree_with(&commit.tree, &edits)?);
     }
+    let new_tip_tree = trees.last().cloned().unwrap_or_else(|| base_tree.clone());
+
+    // Final verification at line level, before any commit is rebuilt: every descendant must
+    // differ from its new parent exactly as it did originally, and the new tip must differ from
+    // the old one by exactly the rest.
+    if !keep && !rest.is_empty() {
+        let (mut old_prev, mut new_prev) = (target.tree.clone(), base_tree.clone());
+        for (commit, tree) in descendants.iter().zip(&trees) {
+            let original = signature(&git, &old_prev, &commit.tree)?;
+            let rewritten = signature(&git, &new_prev, tree)?;
+            if original != rewritten {
+                let path = original
+                    .keys()
+                    .chain(rewritten.keys())
+                    .find(|path| original.get(*path) != rewritten.get(*path))
+                    .cloned()
+                    .unwrap_or_default();
+                return Err(mismatch(
+                    &path,
+                    commit,
+                    ": taking the rest out would alter it",
+                ));
+            }
+            old_prev.clone_from(&commit.tree);
+            new_prev.clone_from(tree);
+        }
+        let old_tip_tree = chain.last().expect("chain has the tip").tree.clone();
+        let delta = signature(&git, &new_tip_tree, &old_tip_tree)?;
+        let rest_paths: BTreeSet<&str> = rest
+            .keys()
+            .map(|index| changes.files[*index].path.as_str())
+            .collect();
+        for path in delta.keys() {
+            if !rest_paths.contains(path.as_str()) {
+                return Err(mismatch(
+                    path,
+                    chain.last().expect("tip"),
+                    ": it would lose other changes",
+                ));
+            }
+        }
+        for (index, part) in &rest {
+            let file = &changes.files[*index];
+            let Some(Sig::Text { removed, added }) = delta.get(&file.path) else {
+                if file.kind == super::model::Kind::Modified && !file.mode_changed() {
+                    return Err(mismatch(
+                        &file.path,
+                        chain.last().expect("tip"),
+                        ": the rest is not where it was",
+                    ));
+                }
+                continue;
+            };
+            let blocks: Vec<usize> = match part {
+                RestFile::Whole => (0..file.blocks.len()).collect(),
+                RestFile::Part { blocks, .. } => blocks.iter().copied().collect(),
+            };
+            let want_removed: Vec<Line> = blocks
+                .iter()
+                .flat_map(|b| file.blocks[*b].removed.clone())
+                .collect();
+            let want_added: Vec<Line> = blocks
+                .iter()
+                .flat_map(|b| file.blocks[*b].added.clone())
+                .collect();
+            if *removed != want_removed || *added != want_added {
+                return Err(mismatch(
+                    &file.path,
+                    chain.last().expect("tip"),
+                    ": the rest would be taken from the wrong place",
+                ));
+            }
+        }
+    }
     let (descendant_pairs, tip) = rebuild(&git, descendants, &trees, base.clone())?;
     let tip = tip
         .or(base.clone())
         .expect("a commit or the parent remains");
-    let new_tip_tree = trees.last().cloned().unwrap_or_else(|| base_tree.clone());
 
     let mut rewritten = Vec::new();
     if let Some(replacement) = &base
@@ -497,12 +564,13 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
     )
 }
 
-/// A descendant's entry for a rest file with the rest taken out (reverse transplant).
+/// A descendant's entry for a rest file with the rest taken out: the change commit -> parts is
+/// merged (3-way) onto the descendant's version, so it is removed exactly where it was made.
 fn strip_rest(
     file: &FileChange,
     part: &RestFile,
     current: Option<&Entry>,
-    blobs: &BTreeMap<String, Vec<Line>>,
+    (original, parts): (Option<&Entry>, Option<&Entry>),
     git: &Git,
     commit: &CommitInfo,
 ) -> Result<Entry> {
@@ -520,7 +588,11 @@ fn strip_rest(
     if file.kind != super::model::Kind::Modified {
         return Err(again());
     }
-    let (mode, oid) = current.ok_or_else(again)?;
+    let ((mode, ours), (_, base), (_, theirs)) = (
+        current.ok_or_else(again)?,
+        original.ok_or_else(again)?,
+        parts.ok_or_else(again)?,
+    );
     let blocks: BTreeSet<usize> = match part {
         RestFile::Whole => (0..file.blocks.len()).collect(),
         RestFile::Part { blocks, .. } => blocks.clone(),
@@ -529,24 +601,28 @@ fn strip_rest(
         RestFile::Whole => file.mode_changed(),
         RestFile::Part { mode, .. } => *mode,
     };
-    let chosen: Vec<&Block> = blocks.iter().map(|block| &file.blocks[*block]).collect();
-    let lines = transplant(&blobs[oid], &chosen, Direction::Reverse).map_err(|error| {
-        let block = blocks.iter().copied().nth(block_of(&error)).unwrap_or(0);
-        fail_hint(
+    let Some(merged) = merge3(git, base, ours, theirs)? else {
+        let names = file
+            .hunks
+            .iter()
+            .filter(|hunk| hunk.blocks.clone().any(|block| blocks.contains(&block)))
+            .map(|hunk| hunk.short.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(fail_hint(
             Code::Conflict,
             format!(
-                "hunk {} ({}) cannot be taken out of {}",
-                hunk_name(file, block),
+                "hunk {names} ({}) cannot be taken out of {}: it changes the same lines",
                 file.path,
                 short_of(commit)
             ),
             "split that commit first, or keep the rest with --rest keep",
-        )
-    })?;
+        ));
+    };
     let mode = if mode_back && file.old_mode.is_some() {
         file.old_mode.clone().unwrap_or_else(|| mode.clone())
     } else {
         mode.clone()
     };
-    Ok((mode, git.write_blob(&join_lines(&lines), true)?))
+    Ok((mode, git.write_blob(&merged, true)?))
 }

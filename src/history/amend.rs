@@ -1,8 +1,8 @@
 //! `aisc amend`: moves uncommitted hunks into several existing commits in one call (algorithm 6.4).
 //! Also hosts the helpers that `split`/`uncommit` share for rewriting a commit chain.
-use super::apply::{ApplyError, Direction, join_lines, splice, split_lines, transplant};
+use super::apply::{ApplyError, join_lines, splice, split_lines};
 use super::model::{Block, ChangeSet, FileChange, Kind, Line};
-use super::plumbing::{Entry, Git, HeadState, TreeEdit};
+use super::plumbing::{Entry, Favor, Git, HeadState, TreeEdit};
 use super::render;
 use super::rewrite::{IndexChange, Plan, RefMove, Session, dependent_moves, stale};
 use super::selector::{self, FileSel, Selection};
@@ -275,6 +275,108 @@ pub(super) fn hunks_in(file: &FileChange, selected: &FileSel) -> usize {
     }
 }
 
+/// Final verification: what a tree-to-tree diff changes, per path, in comparable form.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Sig {
+    Text {
+        removed: Vec<Line>,
+        added: Vec<Line>,
+    },
+    Whole(&'static str),
+}
+
+pub(super) fn signature(git: &Git, from: &str, to: &str) -> Result<BTreeMap<String, Sig>> {
+    let mut args = super::diff::commit_diff_args(false);
+    args.push(from);
+    args.push(to);
+    let patch = git.run(&args)?;
+    Ok(super::diff::parse_patch(&patch)?
+        .into_iter()
+        .map(|file| {
+            let sig = if file.kind == Kind::Modified && !file.binary {
+                Sig::Text {
+                    removed: file.blocks.iter().flat_map(|b| b.removed.clone()).collect(),
+                    added: file.blocks.iter().flat_map(|b| b.added.clone()).collect(),
+                }
+            } else {
+                Sig::Whole(file.kind.label())
+            };
+            (file.path, sig)
+        })
+        .collect())
+}
+
+/// Lines added minus lines removed, position-insensitive.
+fn net(sig: Option<&Sig>, routed: Option<&(Vec<Line>, Vec<Line>)>) -> BTreeMap<Line, i64> {
+    let mut counts: BTreeMap<Line, i64> = BTreeMap::new();
+    let mut add = |added: &[Line], removed: &[Line]| {
+        for line in added {
+            *counts.entry(line.clone()).or_default() += 1;
+        }
+        for line in removed {
+            *counts.entry(line.clone()).or_default() -= 1;
+        }
+    };
+    if let Some(Sig::Text { removed, added }) = sig {
+        add(added, removed);
+    }
+    if let Some((removed, added)) = routed {
+        add(added, removed);
+    }
+    counts.retain(|_, count| *count != 0);
+    counts
+}
+
+pub(super) fn mismatch(path: &str, commit: &CommitInfo, names: &str) -> anyhow::Error {
+    fail_hint(
+        Code::Conflict,
+        format!(
+            "{path}: {} would not keep its own changes{names}; nothing was changed",
+            short_of(commit)
+        ),
+        "the hunk's lines also occur elsewhere; target the commit that contains it, or use PATH:START-END",
+    )
+}
+
+/// Per path the (removed, added) lines routed into a commit, and the paths to skip.
+pub(super) type Routed = (BTreeMap<String, (Vec<Line>, Vec<Line>)>, BTreeSet<String>);
+
+/// Every rewritten commit must differ from its new parent exactly as the original differed from
+/// its parent (plus, at a routed commit, exactly the routed lines). `routed(j)` lists, per path,
+/// the removed and added lines of the hunks routed into commit `j`, and the paths to skip.
+pub(super) fn verify_amend(
+    git: &Git,
+    chain: &[CommitInfo],
+    trees: &[String],
+    parent_tree: &str,
+    routed: &dyn Fn(usize) -> Routed,
+) -> Result<()> {
+    let (mut old_prev, mut new_prev) = (parent_tree.to_owned(), parent_tree.to_owned());
+    for (j, commit) in chain.iter().enumerate() {
+        let original = signature(git, &old_prev, &commit.tree)?;
+        let rewritten = signature(git, &new_prev, &trees[j])?;
+        let (lines, skip) = routed(j);
+        let paths: BTreeSet<&String> = original.keys().chain(rewritten.keys()).collect();
+        for path in paths {
+            if skip.contains(path) {
+                continue;
+            }
+            let ok = match lines.get(path) {
+                None => original.get(path) == rewritten.get(path),
+                Some(extra) => {
+                    net(original.get(path), Some(extra)) == net(rewritten.get(path), None)
+                }
+            };
+            if !ok {
+                return Err(mismatch(path, commit, ""));
+            }
+        }
+        old_prev.clone_from(&commit.tree);
+        new_prev.clone_from(&trees[j]);
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------------------------
 // amend
 // ---------------------------------------------------------------------------------------------
@@ -346,7 +448,6 @@ fn chosen<'a>(file: &'a FileChange, blocks: &BTreeSet<usize>) -> Vec<&'a Block> 
 /// New entry for one file in a commit whose current entry is `current`.
 fn place(
     context: &Context<'_>,
-    blobs: &BTreeMap<String, Vec<Line>>,
     file_index: usize,
     blocks: &BTreeSet<usize>,
     whole: bool,
@@ -373,9 +474,23 @@ fn place(
                     context.git.write_blob(&join_lines(&lines), true)?
                 }
             } else {
-                let lines = transplant(&blobs[oid], &blocks_here, Direction::Forward)
-                    .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
-                context.git.write_blob(&join_lines(&lines), true)?
+                // A different version of the file: 3-way merge of HEAD -> HEAD+hunks onto it.
+                // The merge conflicts when a hunk touches lines this commit does not have, so a
+                // hunk can never land in a look-alike place.
+                let base = file.old_oid.as_deref().ok_or(Miss::Absent)?;
+                let theirs = if whole {
+                    context.hashed[&file.path].clone()
+                } else {
+                    let lines = splice(&context.old_lines[&file.path], &blocks_here)
+                        .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
+                    context.git.write_blob(&join_lines(&lines), true)?
+                };
+                match merge3(context.git, base, oid, &theirs)? {
+                    Some(bytes) => context.git.write_blob(&bytes, true)?,
+                    None => {
+                        return Err(Miss::Apply(first_conflicting(context, file, blocks, oid)?));
+                    }
+                }
             };
             Ok(Some((mode, result)))
         }
@@ -405,6 +520,38 @@ fn place(
             Ok(Some((new_mode, context.hashed[&file.path].clone())))
         }
     }
+}
+
+/// Applies base -> `theirs` onto `ours`; `None` when the merge conflicts.
+pub(super) fn merge3(git: &Git, base: &str, ours: &str, theirs: &str) -> Result<Option<Vec<u8>>> {
+    let (bytes, conflicts) = git.merge_file(
+        base,
+        ours,
+        theirs,
+        ["ours", "base", "theirs"],
+        Favor::None,
+        false,
+    )?;
+    Ok((conflicts == 0).then_some(bytes))
+}
+
+/// The first block that cannot be merged on its own (the first one when only the set conflicts).
+fn first_conflicting(
+    context: &Context<'_>,
+    file: &FileChange,
+    blocks: &BTreeSet<usize>,
+    ours: &str,
+) -> Result<usize> {
+    let base = file.old_oid.as_deref().unwrap_or_default();
+    for block in blocks {
+        let lines = splice(&context.old_lines[&file.path], &[&file.blocks[*block]])
+            .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
+        let theirs = context.git.write_blob(&join_lines(&lines), true)?;
+        if merge3(context.git, base, ours, &theirs)?.is_none() {
+            return Ok(*block);
+        }
+    }
+    Ok(blocks.iter().copied().next().unwrap_or(0))
 }
 
 fn nth(blocks: &BTreeSet<usize>, order: usize) -> usize {
@@ -519,11 +666,15 @@ fn explain(
                 let Some((_, oid)) = entries.get(&file.path) else {
                     return false;
                 };
-                let Ok(mut blobs) = context.git.read_blobs(std::slice::from_ref(oid)) else {
+                let Ok(lines) = splice(&context.old_lines[&file.path], &[&file.blocks[block]])
+                else {
                     return false;
                 };
-                let lines = split_lines(&blobs.remove(0));
-                transplant(&lines, &[&file.blocks[block]], Direction::Forward).is_ok()
+                let Ok(theirs) = context.git.write_blob(&join_lines(&lines), true) else {
+                    return false;
+                };
+                let base = file.old_oid.as_deref().unwrap_or_default();
+                merge3(context.git, base, oid, &theirs).is_ok_and(|merged| merged.is_some())
             });
             match later {
                 Some(candidate) => fail_hint(
@@ -673,7 +824,6 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
 
     // One tree per commit from the oldest target to the tip.
     let mut trees = Vec::new();
-    let mut blob_cache: BTreeMap<String, Vec<Line>> = BTreeMap::new();
     let mut memo: BTreeMap<(String, usize, Vec<usize>, bool), Option<Entry>> = BTreeMap::new();
     for (j, commit) in chain.iter().enumerate() {
         let here: Vec<usize> = routes
@@ -686,22 +836,6 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
             .map(|index| changes.files[*index].path.clone())
             .collect();
         let entries = git.ls_tree(&commit.tree, &paths)?;
-        let missing: Vec<String> = here
-            .iter()
-            .filter_map(|index| {
-                let file = &changes.files[*index];
-                let (_, oid) = entries.get(&file.path)?;
-                (file.kind == Kind::Modified
-                    && file.old_oid.as_ref() != Some(oid)
-                    && !blob_cache.contains_key(oid))
-                .then(|| oid.clone())
-            })
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        for (oid, blob) in missing.iter().zip(git.read_blobs(&missing)?) {
-            blob_cache.insert(oid.clone(), split_lines(&blob));
-        }
         let mut edits = Vec::new();
         for index in here {
             let file = &changes.files[index];
@@ -718,7 +852,7 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
             let entry = match memo.get(&key) {
                 Some(entry) => entry.clone(),
                 None => {
-                    let entry = place(&context, &blob_cache, index, &blocks, whole, current)
+                    let entry = place(&context, index, &blocks, whole, current)
                         .map_err(|miss| explain(&context, &chain, &routes, index, j, miss))?;
                     memo.insert(key, entry.clone());
                     entry
@@ -731,6 +865,37 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
         }
         trees.push(git.tree_with(&commit.tree, &edits)?);
     }
+
+    // Final verification, at line level, before any commit is created.
+    let parent_tree = match chain[0].parents.first() {
+        Some(parent) => git.commit_tree_of(parent)?,
+        None => git.empty_tree()?,
+    };
+    let routed_at = |j: usize| {
+        let mut lines: BTreeMap<String, (Vec<Line>, Vec<Line>)> = BTreeMap::new();
+        let mut skip = BTreeSet::new();
+        for (index, file_routes) in &routes {
+            let file = &changes.files[*index];
+            for (target, selected) in file_routes.iter().filter(|(target, _)| *target == j) {
+                let _ = target;
+                if file.kind != Kind::Modified {
+                    skip.insert(file.path.clone());
+                    continue;
+                }
+                let blocks: Vec<usize> = match selected {
+                    FileSel::Whole => (0..file.blocks.len()).collect(),
+                    FileSel::Blocks(set) => set.iter().copied().collect(),
+                };
+                let entry = lines.entry(file.path.clone()).or_default();
+                for block in blocks {
+                    entry.0.extend(file.blocks[block].removed.clone());
+                    entry.1.extend(file.blocks[block].added.clone());
+                }
+            }
+        }
+        (lines, skip)
+    };
+    verify_amend(&git, &chain, &trees, &parent_tree, &routed_at)?;
 
     let (rewritten, tip) = rebuild(&git, &chain, &trees, chain[0].parents.first().cloned())?;
     let tip = tip.expect("chain is not empty");
