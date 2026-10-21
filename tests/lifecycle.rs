@@ -513,3 +513,59 @@ fn hidden_index_flags_cannot_produce_false_clean_evidence() {
         .success()
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn evidence_hashes_the_executable_actually_selected_from_path() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let blocked = fixture.directory.path().join("blocked");
+    let actual = fixture.directory.path().join("actual");
+    fs::create_dir(&blocked).unwrap();
+    fs::create_dir(&actual).unwrap();
+    fs::write(blocked.join("probe"), "not executable").unwrap();
+    fs::write(actual.join("probe"), "#!/bin/sh\nexit 0\n").unwrap();
+    fs::set_permissions(actual.join("probe"), fs::Permissions::from_mode(0o755)).unwrap();
+    let original = std::env::var_os("PATH").unwrap();
+    let path = std::env::join_paths(
+        [blocked, actual.clone()]
+            .into_iter()
+            .chain(std::env::split_paths(&original)),
+    )
+    .unwrap();
+    let invoke = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_aisc"))
+            .args(args)
+            .current_dir(&fixture.root)
+            .env("PATH", &path)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .output()
+            .unwrap()
+    };
+    let result = invoke(&["verify", "--", "probe"]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    fs::write(actual.join("probe"), "#!/bin/sh\nexit 1\n").unwrap();
+    assert!(!invoke(&["finish"]).status.success());
+}
+
+#[test]
+fn context_preserves_rename_identity_and_zero_line_change_stats() {
+    let fixture = Fixture::new();
+    git(&fixture.root, &["mv", "first.txt", "renamed 雪\nfile.txt"]);
+    let value = success(&fixture.root, &["context"]);
+    assert_eq!(value["staged"], 1);
+    assert_eq!(value["files"][0]["status"], "R ");
+    assert_eq!(value["files"][0]["original_path"], "first.txt");
+    assert_eq!(value["files"][0]["path"], "renamed 雪\nfile.txt");
+    assert_eq!(value["diffstat"]["staged"]["files"][0]["added"], "0");
+    assert_eq!(value["diffstat"]["staged"]["files"][0]["deleted"], "0");
+    assert_eq!(
+        value["diffstat"]["staged"]["files"][0]["original_path"],
+        "first.txt"
+    );
+}

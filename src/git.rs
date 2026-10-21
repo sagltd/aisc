@@ -19,6 +19,8 @@ pub(crate) struct Repo {
 pub(crate) struct Entry {
     pub status: String,
     pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_path: Option<String>,
 }
 
 pub(crate) struct Lock {
@@ -102,22 +104,30 @@ impl Repo {
             "status",
             "--porcelain=v1",
             "-z",
-            "--no-renames",
+            "--renames",
             "--untracked-files=all",
         ])?;
-        status
+        let mut parts = status
             .split(|byte| *byte == 0)
-            .filter(|part| !part.is_empty())
-            .map(|record| {
-                if record.len() < 4 || record[2] != b' ' {
-                    bail!("invalid Git status record");
-                }
-                Ok(Entry {
-                    status: text(&record[..2])?.to_owned(),
-                    path: text(&record[3..])?.to_owned(),
-                })
-            })
-            .collect()
+            .filter(|part| !part.is_empty());
+        let mut entries = Vec::new();
+        while let Some(record) = parts.next() {
+            if record.len() < 4 || record[2] != b' ' {
+                bail!("invalid Git status record");
+            }
+            let original_path =
+                if matches!(record[0], b'R' | b'C') || matches!(record[1], b'R' | b'C') {
+                    Some(text(parts.next().context("rename missing original path")?)?.to_owned())
+                } else {
+                    None
+                };
+            entries.push(Entry {
+                status: text(&record[..2])?.to_owned(),
+                path: text(&record[3..])?.to_owned(),
+                original_path,
+            });
+        }
+        Ok(entries)
     }
     pub fn require_clean(&self) -> Result<()> {
         if !self.entries()?.is_empty() {
@@ -247,7 +257,7 @@ impl Repo {
             "diff",
             "--no-ext-diff",
             "--no-textconv",
-            "--no-renames",
+            "--find-renames",
             "--numstat",
             "-z",
         ];
@@ -256,15 +266,25 @@ impl Repo {
         }
         let output = self.git(&args)?;
         let mut records = Vec::new();
-        for record in output
+        let mut parts_iter = output
             .split(|byte| *byte == 0)
-            .filter(|record| !record.is_empty())
-        {
+            .filter(|record| !record.is_empty());
+        while let Some(record) = parts_iter.next() {
             let parts = record.splitn(3, |byte| *byte == b'\t').collect::<Vec<_>>();
             if parts.len() != 3 {
                 bail!("invalid Git numstat record");
             }
-            records.push(json!({"path": text(parts[2])?, "added": text(parts[0])?, "deleted": text(parts[1])?}));
+            if parts[2].is_empty() {
+                let original = parts_iter
+                    .next()
+                    .context("numstat rename missing original path")?;
+                let path = parts_iter
+                    .next()
+                    .context("numstat rename missing destination")?;
+                records.push(json!({"path": text(path)?, "original_path": text(original)?, "added": text(parts[0])?, "deleted": text(parts[1])?}));
+            } else {
+                records.push(json!({"path": text(parts[2])?, "added": text(parts[0])?, "deleted": text(parts[1])?}));
+            }
         }
         Ok(
             json!({"files": records.iter().take(limit).collect::<Vec<_>>(), "omitted": records.len().saturating_sub(limit)}),
@@ -277,16 +297,18 @@ impl Repo {
             "--no-ext-diff",
             "--no-textconv",
             "--no-color",
-            "--no-renames",
+            "--find-renames",
             "HEAD",
             "--",
         ];
         args.extend(paths.iter().map(String::as_str));
         let output = self.git(&args)?;
-        let mut end = output.len().min(limit);
-        while end > 0 && std::str::from_utf8(&output[..end]).is_err() {
-            end -= 1;
-        }
+        let end = output.len().min(limit);
+        let end = match std::str::from_utf8(&output[..end]) {
+            Ok(_) => end,
+            Err(error) if error.error_len().is_none() => error.valid_up_to(),
+            Err(_) => bail!("non-UTF-8 diff content is unsupported"),
+        };
         Ok(
             json!({"diff": text(&output[..end])?, "omitted_bytes": output.len() - end, "scope": "tracked working tree versus HEAD; untracked files are listed by context"}),
         )

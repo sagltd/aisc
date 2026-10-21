@@ -145,15 +145,16 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     repo.writable()?;
     repo.require_clean()?;
     let before = fingerprint(repo)?;
-    let executable = executable_digest(&repo.root, &command[0])?;
-    let mut child = Command::new(&command[0]);
+    let resolved = resolve_executable(&repo.root, &command[0])?;
+    let executable = executable_digest(&resolved)?;
+    let mut child = Command::new(&resolved);
     child.args(&command[1..]).current_dir(&repo.root);
     let output = process::execute(&mut child, Duration::from_secs(timeout as u64), 16_384)?;
     let clean = repo.require_clean();
     let after = fingerprint(repo)?;
     if clean.is_err()
         || before != after
-        || executable != executable_digest(&repo.root, &command[0])?
+        || executable != executable_digest(&resolve_executable(&repo.root, &command[0])?)?
     {
         bail!(
             "verification candidate or environment changed while the command ran; no successful evidence recorded"
@@ -192,7 +193,8 @@ pub(crate) fn finish(repo: &Repo) -> Result<Value> {
     if evidence.command.is_empty()
         || repo.head()? != evidence.head
         || fingerprint(repo)? != evidence.fingerprint
-        || executable_digest(&repo.root, &evidence.command[0])? != evidence.executable
+        || executable_digest(&resolve_executable(&repo.root, &evidence.command[0])?)?
+            != evidence.executable
     {
         bail!(
             "verification evidence is stale; rerun verify for the current candidate and environment"
@@ -268,21 +270,38 @@ fn fingerprint(repo: &Repo) -> Result<String> {
     Ok(format!("{:x}", hash.finalize()))
 }
 
-fn executable_digest(root: &Path, program: &str) -> Result<String> {
+fn resolve_executable(root: &Path, program: &str) -> Result<PathBuf> {
     let path = if program.contains('/') {
         PathBuf::from(program)
     } else {
         let path = std::env::var_os("PATH").context("PATH is unset")?;
         std::env::split_paths(&path)
             .map(|directory| root.join(directory).join(program))
-            .find(|path| path.is_file())
+            .find(|path| is_executable(path))
             .context("verification executable not found in PATH")?
     };
-    let path =
-        fs::canonicalize(root.join(path)).context("could not resolve verification executable")?;
+    let path = root.join(path);
+    if !is_executable(&path) {
+        bail!("verification program is not an executable regular file");
+    }
+    fs::canonicalize(path).context("could not resolve verification executable")
+}
+
+fn is_executable(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let Ok(path) = std::ffi::CString::new(os_bytes(path.as_os_str())) else {
+        return false;
+    };
+    // SAFETY: access reads this live NUL-terminated path only during the call.
+    unsafe { libc::access(path.as_ptr(), libc::X_OK) == 0 }
+}
+
+fn executable_digest(path: &Path) -> Result<String> {
     let mut hash = Sha256::new();
     feed(&mut hash, os_bytes(path.as_os_str()));
-    hash_file(&mut hash, &path)?;
+    hash_file(&mut hash, path)?;
     Ok(format!("{:x}", hash.finalize()))
 }
 

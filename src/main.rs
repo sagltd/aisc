@@ -1,4 +1,5 @@
 mod git;
+mod github;
 mod process;
 mod task;
 
@@ -6,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::json;
 use std::path::PathBuf;
 
-const HELP: &str = "aisc 0.1.0 — task-oriented Git operations\n\nstart NAME (--path PATH | --in-place)\ncontext [--limit N]\ndiff [--max-bytes N] -- [PATH...]\ncheckpoint -m MESSAGE -- PATH...\nverify [--timeout SECONDS] -- PROGRAM ARG...\nfinish\n\nRun checkpoint → verify → finish in the task checkout. All results are JSON.\nPaths are literal files relative to the repository root. No automatic push, merge, or cleanup.\nVerification fingerprints tracked files, index, Git config, environment and executable; ignored files and external services are not hermetic. Configured Git hooks/signing run normally.";
+const HELP: &str = "aisc 0.1.0 — task-oriented Git operations\n\nstart NAME (--path PATH | --in-place)\ncontext [--limit N]\ndiff [--max-bytes N] -- [PATH...]\ncheckpoint -m MESSAGE -- PATH...\nverify [--timeout SECONDS] -- PROGRAM ARG...\nfinish\ngithub [--limit N]\n\nRun checkpoint → verify → finish in the task checkout. All results are JSON.\nPaths are literal files relative to the repository root. No automatic push, merge, or cleanup.\nVerification fingerprints tracked files, index, Git config, environment and executable; ignored files and external services are not hermetic. Configured Git hooks/signing run normally.\nGitHub is an explicit read-only gh pr status request; local context stays offline.";
 
 fn main() {
     match run() {
@@ -43,6 +44,7 @@ fn run() -> Result<serde_json::Value> {
             _ => bail!("usage: start NAME (--path PATH | --in-place)"),
         },
         "context" => repo.context(number_option(tail, "--limit", 30, 1_000)?),
+        "github" => github::overview(&repo, number_option(tail, "--limit", 10, 100)?),
         "diff" => {
             let separator = tail
                 .iter()
