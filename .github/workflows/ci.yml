@@ -21,6 +21,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      - name: Test benchmark tooling
+        run: python3 -m unittest discover -s benchmarks -v
+
       - name: Install Rust 1.91.1
         uses: dtolnay/rust-toolchain@0f44b27771c32bda9f458f75a1e241b09791b331 # 1.91.1
         with:

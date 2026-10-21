@@ -14,6 +14,7 @@ problem, and include evidence for behavior that can fail or change over time.
 - Run the repository checks locally:
 
   ```sh
+  python3 -m unittest discover -s benchmarks -v
   cargo fmt --check
   cargo clippy --all-targets -- -D warnings
   cargo test

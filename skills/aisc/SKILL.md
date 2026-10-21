@@ -15,6 +15,7 @@ Use AISC for Git-backed checkpoints and repository operations during agent work.
 2. Inspect the current branch, worktree status, and relevant history before changing state.
 3. Read `aisc --help` and the relevant subcommand help. Follow the syntax and behavior documented by the installed version.
 4. Preserve staged and unstaged user changes. Never reset, clean, overwrite, or publish work unless the user asked for that action.
+5. Confirm the host permits the Git metadata writes the requested command needs. In a Codex non-interactive run, use `--add-dir` for only the resolved repository Git metadata directories while retaining the workspace sandbox; never recommend disabling the sandbox.
 
 ## Save and verify work
 
@@ -22,11 +23,22 @@ Use AISC for Git-backed checkpoints and repository operations during agent work.
   working directory is intentional and the starting tree is clean. In-place
   mode does not isolate filesystem changes.
 - For independent work, choose `aisc start NAME --path PATH` with a complete,
-  ignored destination path that does not already exist. Inspect that path first.
+  ignored destination path that does not already exist. Create its parent first
+  and inspect the destination before starting; AISC does not create directories
+  or change `.gitignore`.
 - Save only the files and state that belong to the requested task.
 - Do not describe or attempt restore or rollback commands unless the installed AISC version documents them.
 - After an operation, inspect the resulting status and diff. Report what AISC saved or verified, plus any conflicts or skipped paths.
 - Treat local repository data as private. Do not upload session transcripts, credentials, or machine-specific files.
+
+## Optional GitHub context
+
+- Use `aisc github [--limit N]` only when pull-request status is relevant and
+  network access is available. It is read-only and requires the authenticated
+  GitHub CLI (`gh`). Do not infer that its summary contains every result or
+  reduces API requests compared with an optimized `gh` query.
+- Keep local context, diff, checkpoint, verification, and finish operations
+  independent of GitHub availability.
 
 ## Keep claims measurable
 

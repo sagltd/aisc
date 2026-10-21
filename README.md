@@ -10,6 +10,7 @@ for isolation.
 | Status | Claim | Evidence |
 | --- | --- | --- |
 | Measured baseline | A Git-only inspection run took a median 39.08 ms over five runs. Its transcript was 926 bytes and 409 `o200k_base` tokens. | [Method and results](docs/benchmarks.md) |
+| Dependency audit | `cargo-audit` 0.22.2 reported zero vulnerabilities and warnings across 34 dependencies. This applies only to the audited lockfile snapshot, not to overall security. | `Cargo.lock` SHA-256 `18ef0d289ea4c5f7cb2527f007bcc45ef3214e6b5dc2315e3fd0f354a552ecea`; advisory database `4b587f00996ebe5c05a73eaef105ef241e876414` (2026-10-21). Rerun after lockfile changes. |
 | Goal | Reduce model context and time spent on routine source-control work. | AISC and Git will be compared on matched tasks in the [benchmark](docs/benchmarks.md). |
 | Not established | No AISC speed or token savings, or production-readiness claim, is established by the baseline. | A paired AISC comparison and safety review are still required. |
 
@@ -44,11 +45,13 @@ aisc verify -- cargo test
 aisc finish
 ```
 
-For parallel work that needs its own branch and working directory, create a
-worktree at a complete destination path that does not already exist, then run
-the same lifecycle commands there:
+For parallel work that needs its own branch and working directory, create an
+ignored parent directory first, then create a worktree at a complete destination
+path that does not already exist. The parent must already exist; AISC will not
+create directories or change `.gitignore` for you:
 
 ```sh
+mkdir -p .worktrees
 aisc start parser-fix --path .worktrees/parser-fix
 cd .worktrees/parser-fix
 ```
@@ -62,8 +65,44 @@ same clean candidate commit and environment have a successful verification
 record. It reports the resulting commit and reference; it never pushes, merges,
 or deletes a worktree.
 
+`aisc github` is an explicit, read-only GitHub summary using the authenticated
+GitHub CLI (`gh pr status`). It summarizes the current branch and related pull
+requests, review decision, and checks. It needs network access; the Git context
+commands above work offline. GitHub's own results can be partial, and AISC does
+not claim fewer API requests than an optimized `gh` query.
+
+Verification is supported on macOS and Linux. It requires an existing `HEAD`
+and a clean committed checkout. AISC binds the candidate to tracked files, the
+index, Git configuration, environment, and executable identity; it excludes
+the per-call `CODEX_TOOL_CALL_ID` orchestration variable. Ignored files,
+interpreters, transitive tools, and external services are not hermetic inputs.
+The command runs directly without implicit shell fallback; use `sh -c` only
+when shell behavior is intended. AISC terminates and reaps the command and
+remaining processes in its Unix process group, but deliberately detached
+processes are outside that boundary. Configured Git hooks and signing programs
+run normally and are trusted programs with their own possible side effects.
+Concurrent agents in one checkout are unsupported; use an isolated worktree
+when agents need to run in parallel.
+
 Run `aisc --help` and `aisc <command> --help` for the installed version's full
 syntax and limits.
+
+### Sandbox permissions
+
+AISC uses Git, so the agent host must permit the required writes to Git
+metadata. In a non-interactive Codex run, explicitly allow the repository's
+`.git` directory with `--add-dir /absolute/path/to/repo/.git` while keeping the
+normal workspace sandbox enabled. For a linked worktree, allow the resolved
+Git and common Git directories instead:
+
+```sh
+git -C /path/to/worktree rev-parse --path-format=absolute --git-dir
+git -C /path/to/worktree rev-parse --path-format=absolute --git-common-dir
+```
+
+Pass those specific directories to the host's write-permission mechanism.
+Interactive agents can use their normal approval flow. Do not disable the
+sandbox to grant Git access.
 
 ## Agent skill
 
