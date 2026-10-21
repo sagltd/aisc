@@ -1,0 +1,234 @@
+{
+  "schema": 1,
+  "task": "inspect_mixed",
+  "tool": "optimized_git",
+  "metric_kind": "offline_transcript_proxy_not_provider_usage",
+  "tokenizer": "tiktoken/o200k_base",
+  "tokenizer_version": "0.12.0",
+  "git_version": "git version 2.50.1 (Apple Git-155)",
+  "platform": "Darwin arm64",
+  "timing": "commands only; fixture setup and grading excluded; warm filesystem",
+  "median_wall_ms": 39.07749999999943,
+  "runs": [
+    {
+      "repetition": 0,
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.6890830000006
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--stat"
+          ],
+          "stdout": " notes.txt    | 1 +\n remove.txt   | 1 -\n src/math.txt | 2 +-\n 3 files changed, 2 insertions(+), 2 deletions(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.838666999999582
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--cached",
+            "--stat"
+          ],
+          "stdout": " docs/{guide.txt => manual.txt} | 0\n notes.txt                      | 2 +-\n 2 files changed, 1 insertion(+), 1 deletion(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 13.535958999999487
+        }
+      ],
+      "wall_ms": 39.07749999999943,
+      "text_tokens": 409,
+      "text_bytes": 926,
+      "correct": true
+    },
+    {
+      "repetition": 1,
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 16.66708299999975
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--stat"
+          ],
+          "stdout": " notes.txt    | 1 +\n remove.txt   | 1 -\n src/math.txt | 2 +-\n 3 files changed, 2 insertions(+), 2 deletions(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.775083000000187
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--cached",
+            "--stat"
+          ],
+          "stdout": " docs/{guide.txt => manual.txt} | 0\n notes.txt                      | 2 +-\n 2 files changed, 1 insertion(+), 1 deletion(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.886625000000151
+        }
+      ],
+      "wall_ms": 42.34312499999948,
+      "text_tokens": 409,
+      "text_bytes": 926,
+      "correct": true
+    },
+    {
+      "repetition": 2,
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 14.521583000000504
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--stat"
+          ],
+          "stdout": " notes.txt    | 1 +\n remove.txt   | 1 -\n src/math.txt | 2 +-\n 3 files changed, 2 insertions(+), 2 deletions(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.277667000000214
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--cached",
+            "--stat"
+          ],
+          "stdout": " docs/{guide.txt => manual.txt} | 0\n notes.txt                      | 2 +-\n 2 files changed, 1 insertion(+), 1 deletion(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.181791999999803
+        }
+      ],
+      "wall_ms": 38.99604199999995,
+      "text_tokens": 409,
+      "text_bytes": 926,
+      "correct": true
+    },
+    {
+      "repetition": 3,
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 14.944999999999986
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--stat"
+          ],
+          "stdout": " notes.txt    | 1 +\n remove.txt   | 1 -\n src/math.txt | 2 +-\n 3 files changed, 2 insertions(+), 2 deletions(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 13.506708000000422
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--cached",
+            "--stat"
+          ],
+          "stdout": " docs/{guide.txt => manual.txt} | 0\n notes.txt                      | 2 +-\n 2 files changed, 1 insertion(+), 1 deletion(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.529250000000047
+        }
+      ],
+      "wall_ms": 40.99462500000062,
+      "text_tokens": 409,
+      "text_bytes": 926,
+      "correct": true
+    },
+    {
+      "repetition": 4,
+      "commands": [
+        {
+          "command": [
+            "git",
+            "status",
+            "--porcelain=v2",
+            "--branch"
+          ],
+          "stdout": "# branch.oid 86e1ac8d13f9fb486942b5844dfb88f2a326991d\n# branch.head main\n2 R. N... 100644 100644 100644 51301609e4290430bbbaee9d1b8356cb05936e82 51301609e4290430bbbaee9d1b8356cb05936e82 R100 docs/manual.txt\tdocs/guide.txt\n1 MM N... 100644 100644 100644 038bcf62e1dba4b2033dcfd80c2926c510318e7d 0abf0c179e1acb08b4bc8fb840edadddc1d18b0f notes.txt\n1 .D N... 100644 100644 000000 69ec6be8f8699909a09082771b842ffe3ce8e3ad 69ec6be8f8699909a09082771b842ffe3ce8e3ad remove.txt\n1 .M N... 100644 100644 100644 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c 9dd48a0955f31ed467fc9f3aaf6c4731d902ef0c src/math.txt\n? new file.txt\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.644042000000688
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--stat"
+          ],
+          "stdout": " notes.txt    | 1 +\n remove.txt   | 1 -\n src/math.txt | 2 +-\n 3 files changed, 2 insertions(+), 2 deletions(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 12.259042000000164
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--cached",
+            "--stat"
+          ],
+          "stdout": " docs/{guide.txt => manual.txt} | 0\n notes.txt                      | 2 +-\n 2 files changed, 1 insertion(+), 1 deletion(-)\n",
+          "stderr": "",
+          "exit_code": 0,
+          "wall_ms": 11.954624999999552
+        }
+      ],
+      "wall_ms": 36.87225000000005,
+      "text_tokens": 409,
+      "text_bytes": 926,
+      "correct": true
+    }
+  ]
+}
