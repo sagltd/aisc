@@ -11,6 +11,19 @@ import json
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_final_grade_cannot_pass_from_tool_output_alone(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = competitor.prepare(Path(temporary), "selected_save", "git", None)
+            before = snapshot(repository)
+            public = {"events": [{"type": "command_execution", "aggregated_output": "docs/guide.txt src/math.txt"}, {"type": "answer", "text": ""}]}
+            self.assertFalse(competitor.grade(repository, "inspect_compact", before, public)["final_counts"])
+            git(repository, "commit", "--only", "-qm", "save math", "--", "src/math.txt")
+            public["events"][0]["aggregated_output"] = git(repository, "rev-parse", "HEAD")
+            public["events"][1]["text"] = '{"commit":"wrong-hash"}'
+            checks = competitor.grade(repository, "selected_save", before, public)
+            self.assertFalse(checks["commit_reported"])
+            self.assertTrue(checks["commit_paths"])
+
     def test_competitor_grade_rejects_unrelated_committed_content(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = competitor.prepare(Path(temporary), "selected_save", "git", None)

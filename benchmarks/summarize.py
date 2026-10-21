@@ -47,20 +47,22 @@ def summarize(document):
                                       "max": max(value[key] for value in values)}
                                  for key in values[0]} if values else {}})
     paired = []
-    for task in sorted({run["task"] for run in document["runs"]}):
-        runs = {(run["repetition"], run["arm"]): run for run in document["runs"] if run["task"] == task}
-        deltas = []
-        for repetition in sorted({key[0] for key in runs}):
-            if (repetition, "git") not in runs or (repetition, "aisc") not in runs:
-                continue
-            baseline, candidate = runs[repetition, "git"], runs[repetition, "aisc"]
-            if not baseline["projection"]["usage"] or not candidate["projection"]["usage"]:
-                continue
-            left, right = counters(baseline), counters(candidate)
-            deltas.append({"repetition": repetition, "both_correct": baseline["correct"] and candidate["correct"],
-                           "savings_percent": {key: (left[key] - right[key]) / left[key] * 100
-                                               for key in ("provider_accounted_tokens", "wall_seconds", "shell_tool_calls") if left[key]}})
-        paired.append({"task": task, "pairs": deltas})
+    for comparator in ("git", "but"):
+        for task in sorted({run["task"] for run in document["runs"]}):
+            runs = {(run["repetition"], run["arm"]): run for run in document["runs"] if run["task"] == task}
+            deltas = []
+            for repetition in sorted({key[0] for key in runs}):
+                if (repetition, comparator) not in runs or (repetition, "aisc") not in runs:
+                    continue
+                baseline, candidate = runs[repetition, comparator], runs[repetition, "aisc"]
+                if not baseline["projection"]["usage"] or not candidate["projection"]["usage"]:
+                    continue
+                left, right = counters(baseline), counters(candidate)
+                deltas.append({"repetition": repetition, "both_correct": baseline["correct"] and candidate["correct"],
+                               "savings_percent": {key: (left[key] - right[key]) / left[key] * 100
+                                                   for key in ("provider_accounted_tokens", "wall_seconds", "shell_tool_calls") if left[key]}})
+            if deltas:
+                paired.append({"task": task, "comparator": comparator, "pairs": deltas})
     return {"schema": 1, "provider": document["provider"],
             "negative_savings_mean_regression": True, "rows": rows, "paired": paired}
 

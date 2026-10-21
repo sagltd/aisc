@@ -4,6 +4,16 @@ import json
 import re
 
 
+def final_text(public):
+    answers = [event.get("text", "") for event in public["events"]
+               if isinstance(event, dict) and event.get("type") == "answer"]
+    if answers:
+        return answers[-1]
+    results = [event.get("result", "") for event in public["events"]
+               if isinstance(event, dict) and event.get("type") == "result"]
+    return results[-1] if results else ""
+
+
 def sanitize(value, aliases):
     if isinstance(value, dict):
         return {key: sanitize(item, aliases) for key, item in value.items()}
