@@ -18,6 +18,9 @@ usage. The [benchmark methodology and results](docs/benchmarks.md) keep provider
 usage, transcript estimates, Git-only tasks, and the full agent workflow
 separate.
 
+CI targets Ubuntu 24.04 and macOS 15. Windows is not in the current matrix, so
+these checks cannot establish Windows support.
+
 ## Install
 
 You need Git and Rust 1.91.1 or later. Install the current repository revision
