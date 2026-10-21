@@ -13,12 +13,12 @@ from pathlib import Path
 from fixture import build, environment, git, snapshot
 
 
-def measure(repository, commands):
+def measure(repository, commands, values=None):
     transcript = []
     started = time.perf_counter()
     for command in commands:
         before = time.perf_counter()
-        result = subprocess.run(command, cwd=repository, env=environment(),
+        result = subprocess.run(command, cwd=repository, env=values or environment(),
                                 capture_output=True, text=True, check=False)
         transcript.append({"command": command, "stdout": result.stdout,
                            "stderr": result.stderr, "exit_code": result.returncode,

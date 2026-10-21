@@ -5,10 +5,29 @@ from pathlib import Path
 from baseline import measure, text_for
 from fixture import build, git, snapshot
 from events import project, sanitize
+from summarize import counters
+import competitor
 import json
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_competitor_grade_rejects_unrelated_committed_content(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = competitor.prepare(Path(temporary), "selected_save", "git", None)
+            before = snapshot(repository)
+            git(repository, "commit", "--only", "-qm", "save math", "--", "src/math.txt", "docs/guide.txt")
+            public = {"events": [git(repository, "rev-parse", "HEAD")]}
+            checks = competitor.grade(repository, "selected_save", before, public)
+            self.assertFalse(checks["commit_paths"])
+            self.assertFalse(checks["uncommitted_docs"])
+
+    def test_usage_counters_do_not_double_count_cache(self):
+        base = {"projection": {"usage": [{"input_tokens": 20, "cached_input_tokens": 10, "output_tokens": 3}], "events": []}, "provider": "codex", "wall_seconds": 1}
+        self.assertEqual(counters(base)["provider_accounted_tokens"], 23)
+        base["provider"] = "claude"
+        base["projection"]["usage"] = [{"input_tokens": 2, "cache_read_input_tokens": 10, "cache_creation_input_tokens": 5, "output_tokens": 3, "iterations": [{"input_tokens": 999}]}]
+        self.assertEqual(counters(base)["provider_accounted_tokens"], 20)
+
     def test_provider_projection_drops_identity_and_preserves_usage(self):
         raw = '\n'.join(json.dumps(event) for event in [
             {"type": "thread.started", "thread_id": "private-thread"},
@@ -21,6 +40,7 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(result["events"][0]["aggregated_output"], "<fixture>/repo")
         with self.assertRaises(ValueError):
             sanitize("/Users/private/data", {})
+        self.assertEqual(sanitize("cache /var/folders/example/T/xcrun-cache", {}), "cache <runtime-temp>")
 
     def test_mixed_fixture_and_read_only_measurement(self):
         with tempfile.TemporaryDirectory() as temporary:

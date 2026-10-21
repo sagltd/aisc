@@ -13,6 +13,8 @@ def sanitize(value, aliases):
         return value
     for source, replacement in sorted(aliases.items(), key=lambda pair: -len(pair[0])):
         value = value.replace(source, replacement)
+    value = re.sub(r"/var/folders/[^'\"\s\\]+", "<runtime-temp>", value)
+    value = re.sub(r"/tmp/cc-socks/[^'\"\s\\]+", "<runtime-socket>", value)
     if re.search(r"/(?:Users|home|private|tmp|var/folders)/|sk-[A-Za-z0-9_-]{16,}", value):
         raise ValueError("Unsafe path or credential shape in public projection")
     return value

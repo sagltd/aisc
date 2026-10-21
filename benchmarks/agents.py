@@ -1,7 +1,10 @@
 """Run fresh providers against synthetic Git/AISC tasks; no model routing."""
 
 import argparse
+import getpass
+import hashlib
 import json
+import platform
 import random
 import subprocess
 import time
@@ -29,7 +32,7 @@ def prompt(task, arm, binary):
     return RULES + instruction + hint + " Answer concisely."
 
 
-def prepare(root, task):
+def prepare(root, task, arm):
     repository = build(root / "repo")
     if task == "in_place":
         git(repository, "reset", "--hard", "HEAD")
@@ -44,6 +47,8 @@ def grade(repository, task, before, public):
         names = ["main", "notes.txt", "src/math.txt", "remove.txt", "new file.txt", "docs/manual.txt"]
         return {"state_preserved": now == before, "paths_reported": all(name in answers for name in names)}
     target = repository.parent / "isolated" if task == "isolated" else repository
+    if not target.is_dir():
+        return {"target_created": False, "original_preserved": now == before}
     checks = {}
     if task == "isolated":
         checks["original_preserved"] = now == before
@@ -58,56 +63,83 @@ def grade(repository, task, before, public):
     else:
         checks["clean_target"] = not git(target, "status", "--porcelain").strip()
         checks["target_branch"] = git(target, "branch", "--show-current").strip() == ("aisc/bench" if task == "isolated" else "main")
+        checks["verification_requested"] = "assert Path" in answers and "python3" in answers
     checks["commit_reported"] = git(target, "rev-parse", "--short", "HEAD").strip() in answers or git(target, "rev-parse", "HEAD").strip() in answers
     return checks
 
 
-def run(arguments):
+def run(arguments, prepare_function=prepare, prompt_function=prompt, grade_function=grade):
     scratch = Path(__file__).resolve().parent / ".scratch" / arguments.name
     scratch.mkdir(parents=True, exist_ok=False)
     schedule = [(task, repetition, arm) for task in arguments.tasks
                 for repetition in range(arguments.repetitions) for arm in arguments.arms]
     random.Random(arguments.seed).shuffle(schedule)
     results = []
+    metadata = {
+        "cli_version": subprocess.check_output([arguments.provider, "--version"], text=True).strip(),
+        "git_version": subprocess.check_output(["git", "--version"], text=True).strip(),
+        "candidate_sha256": hashlib.sha256(arguments.aisc.read_bytes()).hexdigest() if arguments.aisc.is_file() else None,
+    }
+    if getattr(arguments, "but", None):
+        metadata["gitbutler_version"] = subprocess.check_output([str(arguments.but), "--version"], text=True).strip()
+        metadata["gitbutler_sha256"] = hashlib.sha256(arguments.but.read_bytes()).hexdigest()
     for task, repetition, arm in schedule:
         root = scratch / f"{task}-{repetition}-{arm}"
         root.mkdir()
-        repository = prepare(root, task)
+        repository = prepare_function(root, task, arm)
         before = snapshot(repository)
-        instruction = prompt(task, arm, arguments.aisc)
+        instruction = prompt_function(task, arm, arguments.aisc)
+        temporary = root / "tmp"
+        temporary.mkdir()
+        child_environment = environment()
+        child_environment.update(TMPDIR=str(temporary) + "/", TMP=str(temporary), TEMP=str(temporary))
+        child_environment.update(E2E_TEST_APP_DATA_DIR=str(root / "appdata"), BUT_PAGER="cat", NO_COLOR="1")
         if arguments.provider == "codex":
             command = ["codex", "exec", "--ignore-user-config", "--ephemeral", "--json", "--color", "never",
-                       "--sandbox", "workspace-write", "--add-dir", str(root),
+                       "--sandbox", "workspace-write", "--add-dir", str(root), "--add-dir", str(repository / ".git"),
                        "-c", "project_doc_max_bytes=0", "-c", 'model="gpt-6.1-sol"',
                        "-c", 'model_reasoning_effort="medium"', "-C", str(repository), instruction]
         else:
             command = ["claude", "-p", "--safe-mode", "--setting-sources", "", "--strict-mcp-config",
                        "--mcp-config", '{"mcpServers":{}}', "--no-session-persistence", "--output-format",
-                       "stream-json", "--verbose", "--effort", "medium", "--permission-mode", "acceptEdits",
+                       "stream-json", "--verbose", "--model", "claude-opus-5-5", "--effort", "medium", "--permission-mode", "acceptEdits",
                        "--allowedTools", "Bash,Read,Edit,Write", "--add-dir", str(root), "--", instruction]
         started = time.perf_counter()
-        completed = subprocess.run(command, cwd=repository, input="", capture_output=True,
-                                   text=True, timeout=240, env=environment())
+        try:
+            completed = subprocess.run(command, cwd=repository, input="", capture_output=True,
+                                       text=True, timeout=240, env=child_environment)
+        except subprocess.TimeoutExpired as error:
+            stdout = error.stdout.decode() if isinstance(error.stdout, bytes) else error.stdout or ""
+            completed = subprocess.CompletedProcess(command, 124, stdout, "provider timeout after 240 seconds")
         elapsed = time.perf_counter() - started
         (root / "raw.jsonl").write_text(completed.stdout)
         (root / "stderr.txt").write_text(completed.stderr)
-        aliases = {str(root): "<fixture>", str(arguments.aisc): "<aisc>"}
+        aliases = {str(root): "<fixture>", str(arguments.aisc): "<aisc>",
+                   getpass.getuser(): "<user>", platform.node(): "<host>"}
+        if getattr(arguments, "but", None):
+            aliases[str(arguments.but)] = "<but>"
         public = project(arguments.provider, completed.stdout, aliases)
         try:
-            checks = grade(repository, task, before, public)
-        except subprocess.CalledProcessError:
+            checks = grade_function(repository, task, before, public)
+        except (subprocess.CalledProcessError, FileNotFoundError):
             checks = {"grade_completed": False}
         record = {"task": task, "repetition": repetition, "arm": arm, "provider": arguments.provider,
-                  "prompt": instruction.replace(str(arguments.aisc), "<aisc>"), "wall_seconds": elapsed,
+                  "prompt": project_prompt(instruction, aliases), "wall_seconds": elapsed,
                   "cli_exit": completed.returncode, "checks": checks,
                   "correct": bool(checks) and all(checks.values()) and completed.returncode == 0,
                   "projection": public}
         results.append(record)
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(json.dumps({"schema": 1, "seed": arguments.seed,
-            "provider": arguments.provider, "model_policy": "installed Codex default gpt-6.1-sol/medium pinned; Claude safe-mode default/medium",
+            "provider": arguments.provider, "metadata": metadata,
+            "model_policy": "installed defaults observed in smoke, then pinned: Codex gpt-6.1-sol/medium; Claude claude-opus-5-5/medium",
             "schedule": schedule, "runs": results}, indent=2) + "\n")
         print(json.dumps({key: value for key, value in record.items() if key not in ("prompt", "projection")}), flush=True)
+
+
+def project_prompt(instruction, aliases):
+    from events import sanitize
+    return sanitize(instruction, aliases)
 
 
 if __name__ == "__main__":
