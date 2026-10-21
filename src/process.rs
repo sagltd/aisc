@@ -32,6 +32,31 @@ impl Drop for ChildGuard {
     }
 }
 
+struct ExecImage {
+    program: CString,
+    // Owns the strings the pointer arrays below refer to.
+    _strings: Vec<CString>,
+    argv: Vec<*const libc::c_char>,
+    envp: Vec<*const libc::c_char>,
+}
+
+// SAFETY: the pointers refer only to heap data owned by the same struct and never mutated.
+unsafe impl Send for ExecImage {}
+unsafe impl Sync for ExecImage {}
+
+impl ExecImage {
+    fn exec(&self) {
+        // SAFETY: argv/envp are NULL-terminated arrays of valid C strings owned by `self`.
+        unsafe {
+            libc::execve(
+                self.program.as_ptr(),
+                self.argv.as_ptr(),
+                self.envp.as_ptr(),
+            );
+        }
+    }
+}
+
 pub(crate) fn exact_executable(command: &mut Command, argument_zero: &str) -> Result<()> {
     use std::os::unix::ffi::OsStrExt;
     const MAXIMUM: usize = 4_096;
@@ -60,19 +85,31 @@ pub(crate) fn exact_executable(command: &mut Command, argument_zero: &str) -> Re
     if arguments.len() >= MAXIMUM || environment.len() >= MAXIMUM {
         bail!("verification supports fewer than 4096 arguments and environment entries");
     }
-    // SAFETY: pre_exec only fills stack pointer arrays and calls async-signal-safe execve.
-    // All referenced CStrings are owned by this closure and survive through the call.
+    // Pointer arrays are built before fork (no large stack buffers or allocation in the child).
+    let mut strings = arguments;
+    let argument_count = strings.len();
+    strings.extend(environment);
+    let mut argv = strings[..argument_count]
+        .iter()
+        .map(|value| value.as_ptr())
+        .collect::<Vec<_>>();
+    argv.push(std::ptr::null());
+    let mut envp = strings[argument_count..]
+        .iter()
+        .map(|value| value.as_ptr())
+        .collect::<Vec<_>>();
+    envp.push(std::ptr::null());
+    let image = ExecImage {
+        program,
+        _strings: strings,
+        argv,
+        envp,
+    };
+    // SAFETY: pre_exec only calls async-signal-safe execve on data owned by `image`, which the
+    // closure keeps alive.
     unsafe {
         command.pre_exec(move || {
-            let mut argv = [std::ptr::null(); MAXIMUM];
-            let mut envp = [std::ptr::null(); MAXIMUM];
-            for (index, value) in arguments.iter().enumerate() {
-                argv[index] = value.as_ptr();
-            }
-            for (index, value) in environment.iter().enumerate() {
-                envp[index] = value.as_ptr();
-            }
-            libc::execve(program.as_ptr(), argv.as_ptr(), envp.as_ptr());
+            image.exec();
             // Returning an error prevents execvp's implicit shell fallback on ENOEXEC.
             Err(std::io::Error::last_os_error())
         });
@@ -82,8 +119,31 @@ pub(crate) fn exact_executable(command: &mut Command, argument_zero: &str) -> Re
 
 // Nonblocking pipes avoid waiting forever for descendants that inherit stdout.
 pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) -> Result<Output> {
+    execute_with(command, None, timeout, limit)
+}
+
+/// Like `execute`, feeding `input` to stdin from a writer thread so large inputs cannot deadlock.
+pub(crate) fn execute_input(
+    command: &mut Command,
+    input: Vec<u8>,
+    timeout: Duration,
+    limit: usize,
+) -> Result<Output> {
+    execute_with(command, Some(input), timeout, limit)
+}
+
+fn execute_with(
+    command: &mut Command,
+    input: Option<Vec<u8>>,
+    timeout: Duration,
+    limit: usize,
+) -> Result<Output> {
     let child = command
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
@@ -92,6 +152,14 @@ pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) ->
     let mut guarded = ChildGuard(child);
     let child = &mut guarded.0;
     let pid = child.id();
+    let writer = match (input, child.stdin.take()) {
+        (Some(bytes), Some(mut pipe)) => Some(std::thread::spawn(move || {
+            use std::io::Write;
+            // A reader that exits early closes the pipe; its exit status reports the failure.
+            let _ = pipe.write_all(&bytes);
+        })),
+        _ => None,
+    };
     let mut stdout = child.stdout.take().context("missing stdout pipe")?;
     let mut stderr = child.stderr.take().context("missing stderr pipe")?;
     if let Err(error) = nonblocking(&stdout).and_then(|()| nonblocking(&stderr)) {
@@ -125,6 +193,13 @@ pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) ->
         )?;
         if let Some(status) = child.try_wait().context("could not inspect process")? {
             break status;
+        }
+        if let Some(signal) = crate::signals::pending()
+            && !crate::signals::deferred()
+        {
+            terminate_group(pid);
+            let _ = child.wait();
+            return Err(crate::signals::Interrupted(signal).into());
         }
         if start.elapsed() >= timeout {
             result.timed_out = true;
@@ -177,6 +252,9 @@ pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) ->
         &mut result.stderr_omitted,
         limit,
     )?;
+    if let Some(writer) = writer {
+        let _ = writer.join();
+    }
     result.code = status.code();
     Ok(result)
 }
@@ -224,4 +302,45 @@ fn drain(
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn execute_input_round_trips_more_than_a_pipe_buffer_without_deadlock() {
+        let input = vec![b'x'; 1_000_000];
+        let output = execute_input(
+            &mut Command::new("cat"),
+            input.clone(),
+            Duration::from_secs(20),
+            2_000_000,
+        )
+        .unwrap();
+        assert!(output.success());
+        assert_eq!(output.stdout, input);
+    }
+
+    #[test]
+    fn execute_input_tolerates_a_reader_that_exits_early() {
+        let output = execute_input(
+            &mut Command::new("true"),
+            vec![b'x'; 1_000_000],
+            Duration::from_secs(20),
+            1_000,
+        )
+        .unwrap();
+        assert!(output.success());
+    }
+
+    #[test]
+    fn exact_executable_passes_arguments_and_environment_from_the_heap() {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "printf '%s:%s' \"$0\" \"$AISC_TEST\""]);
+        command.env("AISC_TEST", "env");
+        exact_executable(&mut command, "zero").unwrap();
+        let output = execute(&mut command, Duration::from_secs(10), 1_000).unwrap();
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "zero:env");
+    }
 }

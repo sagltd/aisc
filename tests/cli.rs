@@ -29,7 +29,7 @@ fn parse_errors_are_json_on_stderr_with_exit_two() {
     for arguments in [
         vec!["unknown"],
         vec!["context", "--limit", "0"],
-        vec!["start", "name"],
+        vec!["start", "name", "--sparse", "dir"],
         vec!["--json", "--human", "context"],
     ] {
         let output = invoke(&arguments);

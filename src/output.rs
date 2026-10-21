@@ -7,11 +7,25 @@ pub(crate) struct Presentation {
     pub json: bool,
     pub color: Color,
     no_color: bool,
+    /// `--json`, `--human` or `AISC_OUTPUT` chose the format; otherwise verbs pick their default.
+    explicit: bool,
 }
 
 impl Presentation {
     pub fn from_arguments(arguments: &[std::ffi::OsString]) -> Self {
         let mut json = !std::io::stdout().is_terminal();
+        let mut explicit = false;
+        match std::env::var("AISC_OUTPUT").as_deref() {
+            Ok("json") => {
+                json = true;
+                explicit = true;
+            }
+            Ok("text" | "human") => {
+                json = false;
+                explicit = true;
+            }
+            _ => {}
+        }
         let mut color = Color::Auto;
         let mut values = arguments.iter().skip(1);
         while let Some(value) = values.next() {
@@ -20,9 +34,11 @@ impl Presentation {
             }
             if value == "--json" {
                 json = true;
+                explicit = true;
             }
             if value == "--human" {
                 json = false;
+                explicit = true;
             }
             let selected = if value == "--color" {
                 values.next().and_then(|value| value.to_str())
@@ -52,7 +68,50 @@ impl Presentation {
             json,
             color,
             no_color: std::env::var_os("NO_COLOR").is_some(),
+            explicit,
         }
+    }
+
+    /// History verbs print compact text when redirected unless a format was requested.
+    pub fn for_operation(mut self, operation: &crate::cli::Operation) -> Self {
+        if !self.explicit && operation.prefers_text() {
+            self.json = false;
+        }
+        self
+    }
+
+    pub fn outcome(&self, operation: &str, outcome: &crate::history::Outcome) -> String {
+        if self.json {
+            return outcome.value.to_string();
+        }
+        match &outcome.text {
+            Some(text) => escape_block(text),
+            None => render(operation, &outcome.value, self.colors(false)),
+        }
+    }
+
+    /// Error line; history verbs add the machine-readable `code` and a `hint`.
+    pub fn error_with(
+        &self,
+        message: &str,
+        code: Option<crate::history::Code>,
+        hint: Option<&str>,
+    ) -> String {
+        let Some(code) = code else {
+            return self.error(message);
+        };
+        if self.json {
+            let mut value = json!({"error": message, "code": code.name()});
+            if let Some(hint) = hint {
+                value["hint"] = json!(hint);
+            }
+            return value.to_string();
+        }
+        let mut line = format!("error: {}", escape_block(message));
+        if let Some(hint) = hint {
+            let _ = write!(line, "\nhint: {}", escape_block(hint));
+        }
+        line
     }
 
     pub fn colors(&self, stderr: bool) -> bool {
@@ -342,7 +401,7 @@ fn display(value: &Value) -> String {
         Value::String(text) => text
             .chars()
             .flat_map(|character| {
-                if character.is_control() {
+                if hostile(character) {
                     character.escape_default().collect::<Vec<_>>()
                 } else {
                     vec![character]
@@ -353,6 +412,33 @@ fn display(value: &Value) -> String {
         _ => value.to_string(),
     }
 }
+/// Control characters (C0 and C1) and bidirectional overrides/isolates/marks are never printed raw.
+pub(crate) fn hostile(character: char) -> bool {
+    character.is_control()
+        || matches!(
+            character,
+            '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+        )
+}
+
+/// Escapes hostile characters (newline and tab included) for single-line display.
+pub(crate) fn escape_line(text: &str) -> String {
+    text.chars()
+        .flat_map(|character| {
+            if hostile(character) {
+                character.escape_default().collect::<Vec<_>>()
+            } else {
+                vec![character]
+            }
+        })
+        .collect()
+}
+
+/// Escapes hostile characters but keeps newlines and tabs for multi-line display.
+pub(crate) fn escape_block(text: &str) -> String {
+    safe_block(text)
+}
+
 fn paint(text: &str, code: &str, enabled: bool) -> String {
     if enabled {
         format!("\x1b[{code}m{text}\x1b[0m")
@@ -363,7 +449,7 @@ fn paint(text: &str, code: &str, enabled: bool) -> String {
 fn safe_block(text: &str) -> String {
     text.chars()
         .flat_map(|character| {
-            if character.is_control() && character != '\n' && character != '\t' {
+            if hostile(character) && character != '\n' && character != '\t' {
                 character.escape_default().collect::<Vec<_>>()
             } else {
                 vec![character]

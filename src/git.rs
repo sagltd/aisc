@@ -75,6 +75,15 @@ impl Repo {
     pub fn git(&self, args: &[&str]) -> Result<Vec<u8>> {
         run_git(&self.root, args, None)
     }
+    #[allow(dead_code)] // the worktree registry (a later slice) lives under the common dir
+    pub fn common_dir(&self) -> Result<PathBuf> {
+        let output = self.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+        Ok(PathBuf::from(
+            text(&output)?
+                .strip_suffix('\n')
+                .context("invalid Git common directory response")?,
+        ))
+    }
     pub fn git_index(&self, args: &[&str], index: &Path) -> Result<Vec<u8>> {
         run_git(&self.root, args, Some(index))
     }
@@ -247,7 +256,52 @@ pub(crate) fn is_conflict(status: &str) -> bool {
     matches!(status, "DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU")
 }
 
-pub(crate) fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
+/// Reads are bounded (30 s). Commands that may run hooks, plus reference transactions, must not be
+/// killed halfway, so they get an hour. `AISC_GIT_TIMEOUT` (seconds) overrides both.
+pub(crate) fn git_timeout(args: &[&str]) -> Duration {
+    if let Some(seconds) = std::env::var("AISC_GIT_TIMEOUT")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+    {
+        return Duration::from_secs(seconds);
+    }
+    let mut position = 0;
+    while position < args.len() {
+        if args[position] == "-c" {
+            position += 2;
+        } else if args[position].starts_with('-') {
+            position += 1;
+        } else {
+            break;
+        }
+    }
+    let subcommand = args.get(position).copied().unwrap_or("");
+    let long = matches!(
+        subcommand,
+        "commit"
+            | "merge"
+            | "rebase"
+            | "am"
+            | "cherry-pick"
+            | "checkout"
+            | "switch"
+            | "pull"
+            | "push"
+            | "gc"
+            | "update-ref"
+            | "fetch"
+    );
+    Duration::from_secs(if long { 3_600 } else { 30 })
+}
+
+pub(crate) fn run_git_raw(
+    root: &Path,
+    args: &[&str],
+    env: &[(&str, &OsStr)],
+    input: Option<Vec<u8>>,
+    limit: usize,
+) -> Result<process::Output> {
     let mut command = Command::new("git");
     command
         .arg("--literal-pathspecs")
@@ -256,20 +310,32 @@ pub(crate) fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Resul
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("LC_ALL", "C");
-    if let Some(index) = index {
-        command.env("GIT_INDEX_FILE", index);
+    for (key, value) in env {
+        command.env(key, value);
     }
-    let output = process::execute(&mut command, Duration::from_secs(30), GIT_LIMIT)?;
+    let timeout = git_timeout(args);
+    match input {
+        Some(input) => process::execute_input(&mut command, input, timeout, limit),
+        None => process::execute(&mut command, timeout, limit),
+    }
+}
+
+pub(crate) fn run_git(root: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
+    let env: Vec<(&str, &OsStr)> = index
+        .map(|index| vec![("GIT_INDEX_FILE", index.as_os_str())])
+        .unwrap_or_default();
+    let output = run_git_raw(root, args, &env, None, GIT_LIMIT)?;
     if !output.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr[..output.stderr.len().min(4_096)]);
-        let stdout = String::from_utf8_lossy(&output.stdout[..output.stdout.len().min(4_096)]);
+        let snippet = |bytes: &[u8]| {
+            crate::output::escape_block(&String::from_utf8_lossy(&bytes[..bytes.len().min(4_096)]))
+        };
         bail!(
             "git {} failed (exit {:?}, timeout={}): {}; stdout: {}",
             args.first().copied().unwrap_or(""),
             output.code,
             output.timed_out,
-            stderr.trim(),
-            stdout.trim()
+            snippet(&output.stderr).trim(),
+            snippet(&output.stdout).trim()
         );
     }
     if output.stdout_omitted != 0 || output.stderr_omitted != 0 {
@@ -297,4 +363,29 @@ pub(crate) fn validate_environment() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hook_running_and_ref_commands_are_not_killed_after_thirty_seconds() {
+        if std::env::var_os("AISC_GIT_TIMEOUT").is_some() {
+            return;
+        }
+        assert_eq!(git_timeout(&["status"]), Duration::from_secs(30));
+        assert_eq!(
+            git_timeout(&["-c", "core.quotePath=true", "diff", "HEAD"]),
+            Duration::from_secs(30)
+        );
+        for args in [
+            vec!["commit", "-m", "x"],
+            vec!["-c", "a=b", "commit"],
+            vec!["update-ref", "--stdin"],
+            vec!["merge", "topic"],
+        ] {
+            assert_eq!(git_timeout(&args), Duration::from_secs(3_600), "{args:?}");
+        }
+    }
 }
