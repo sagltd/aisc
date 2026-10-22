@@ -620,9 +620,34 @@ fn lines(words: &str) -> String {
 }
 
 #[test]
-fn uncommit_never_takes_the_rest_from_a_look_alike_line_at_the_tip() {
+fn uncommit_takes_out_a_line_next_to_one_a_later_commit_inserted() {
+    // `git merge-file` calls adjacent changes a conflict; the rest is still unambiguous.
+    let fixture = Fixture::with_files(&[("f.rs", &lines("a b c d e f g h i j k l"))]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.rs", &lines("A b c d e f g h i j k L"));
+    fixture.commit_all("shout a and l");
+    fixture.write("f.rs", &lines("A b c d e f g h i j k inserted L"));
+    fixture.commit_all("insert a line");
+    let run = fixture.aisc(&["uncommit", "shout a and l", "f.rs~L"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.rs").unwrap(),
+        lines("A b c d e f g h i j k inserted l")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.rs").unwrap(),
+        lines("A b c d e f g h i j k l")
+    );
+    assert_eq!(
+        fixture.read("f.rs"),
+        lines("A b c d e f g h i j k inserted L")
+    );
+}
+
+#[test]
+fn uncommit_takes_the_rest_from_its_own_line_at_the_tip() {
     // "append two" appends after the rest's line; `git merge-file` aligns the run of `a` lines the
-    // other way and takes the rest from the file's last line, which the line counts cannot tell.
+    // other way. The rest comes out where the commits' own diffs carry it.
     let fixture =
         Fixture::with_files(&[("f.txt", &lines("top f1 f2 f3 f4 f5 f6 b b b b a a end"))]);
     fixture.git(&["switch", "-c", "topic"]);
@@ -632,22 +657,22 @@ fn uncommit_never_takes_the_rest_from_a_look_alike_line_at_the_tip() {
     fixture.commit_all("drop a b");
     fixture.write("f.txt", &lines("TOP f1 f2 f3 f4 f5 f6 b b b a a a a a"));
     fixture.commit_all("append two");
-    let before = fixture.snapshot();
     let run = fixture.aisc(&["uncommit", "edit both ends", "f.txt~end"]);
-    if run.code == 0 {
-        assert_eq!(
-            fixture.tree_blob("HEAD", "f.txt").unwrap(),
-            lines("TOP f1 f2 f3 f4 f5 f6 b b b a a end a a"),
-            "{}",
-            run.stdout
-        );
-        assert_eq!(
-            fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
-            lines("TOP f1 f2 f3 f4 f5 f6 b b b a a end")
-        );
-    } else {
-        assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
-        assert!(run.stderr.contains("f.txt"), "{}", run.stderr);
-        assert_eq!(before, fixture.snapshot());
-    }
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.txt").unwrap(),
+        lines("TOP f1 f2 f3 f4 f5 f6 b b b a a end a a")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
+        lines("TOP f1 f2 f3 f4 f5 f6 b b b a a end")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD~2", "f.txt").unwrap(),
+        lines("TOP f1 f2 f3 f4 f5 f6 b b b b a a end")
+    );
+    assert_eq!(
+        fixture.read("f.txt"),
+        lines("TOP f1 f2 f3 f4 f5 f6 b b b a a a a a")
+    );
 }

@@ -623,9 +623,8 @@ fn repeated_runs(created: bool) -> Fixture {
     fixture
 }
 
-fn assert_never_in_the_wrong_run(created: bool) {
+fn assert_placed_in_the_right_run(created: bool) {
     let fixture = repeated_runs(created);
-    let before = fixture.snapshot();
     let run = fixture.aisc(&[
         "amend",
         "--into",
@@ -635,42 +634,97 @@ fn assert_never_in_the_wrong_run(created: bool) {
         "trim the first run",
         "f.txt~HEAD",
     ]);
-    if run.code == 0 {
-        // Placed: only where the commits' own diffs put that line.
-        assert_eq!(
-            fixture.tree_blob("HEAD~2", "f.txt").unwrap(),
-            lines(&format!("{FILLER} a a a b a a X b c b a c tail")),
-            "{}",
-            run.stdout
-        );
-        assert_eq!(
-            fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
-            lines("HEAD f1 f2 f3 f4 f5 f6 a b a a X b c b a c tail")
-        );
-        assert_eq!(
-            fixture.tree_blob("HEAD", "f.txt").unwrap(),
-            fixture.read("f.txt")
-        );
-    } else {
-        // Or refused, naming the commit, with nothing changed.
-        assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
-        assert!(
-            run.stderr.contains("f.txt") && run.stderr.contains("add tail"),
-            "{}",
-            run.stderr
-        );
-        assert_eq!(before, fixture.snapshot());
-    }
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    // Exactly where the commits' own diffs put that line, in every commit.
+    assert_eq!(
+        fixture.tree_blob("HEAD~2", "f.txt").unwrap(),
+        lines(&format!("{FILLER} a a a b a a X b c b a c tail"))
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
+        lines("HEAD f1 f2 f3 f4 f5 f6 a b a a X b c b a c tail")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.txt").unwrap(),
+        fixture.read("f.txt")
+    );
+    // Each later commit still makes only its own change.
+    assert_eq!(
+        fixture
+            .git(&["diff", "-U0", "HEAD~2", "HEAD~1"])
+            .matches("\n-a")
+            .count(),
+        2
+    );
 }
 
 #[test]
-fn a_hunk_among_repeated_lines_never_lands_in_a_look_alike_run() {
-    assert_never_in_the_wrong_run(false);
+fn a_hunk_among_repeated_lines_lands_in_its_own_run() {
+    assert_placed_in_the_right_run(false);
 }
 
 #[test]
-fn a_hunk_into_the_commit_that_creates_the_file_is_checked_by_content() {
-    assert_never_in_the_wrong_run(true);
+fn a_hunk_into_the_commit_that_creates_the_file_lands_in_its_own_run() {
+    assert_placed_in_the_right_run(true);
+}
+
+#[test]
+fn a_fix_next_to_a_line_a_later_commit_inserted_goes_into_the_older_commit() {
+    // `git merge-file` calls adjacent changes a conflict; the line itself is the older commit's.
+    let fixture = Fixture::with_files(&[("other.txt", "other\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.rs", &lines("fn a() { one } fn b() { two }"));
+    fixture.commit_all("add a and b");
+    fixture.write("f.rs", &lines("fn a() { one } inserted fn b() { two }"));
+    fixture.commit_all("insert a line");
+    fixture.write("f.rs", &lines("fn a() { one } inserted fn b() { TWO }"));
+    fixture.commit_all("shout two");
+    fixture.write("f.rs", &lines("fn a() { one }; inserted fn b() { TWO }"));
+    let run = fixture.aisc(&["amend", "--into", "add a and b", "f.rs"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        fixture.tree_blob("HEAD~2", "f.rs").unwrap(),
+        lines("fn a() { one }; fn b() { two }")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.rs").unwrap(),
+        lines("fn a() { one }; inserted fn b() { two }")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.rs").unwrap(),
+        fixture.read("f.rs")
+    );
+}
+
+#[test]
+fn a_fix_to_a_later_commits_line_names_the_one_call_that_works() {
+    let fixture = Fixture::with_files(&[("other.txt", "other\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.rs", &lines("one two three four five six seven eight"));
+    fixture.commit_all("add f");
+    fixture.write("f.rs", &lines("one two three four five SIX seven eight"));
+    fixture.commit_all("shout six");
+    fixture.write("f.rs", &lines("one two three four five SIX seven EIGHT"));
+    fixture.commit_all("shout eight");
+    fixture.write("f.rs", &lines("one two three four five SIX! seven EIGHT"));
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["amend", "--into", "add f", "f.rs"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("shout six"), "{}", run.stderr);
+    assert_eq!(before, fixture.snapshot());
+    // The hint is the exact call that works.
+    let hint = run
+        .stderr
+        .lines()
+        .find_map(|line| line.split_once(" instead: ").map(|(_, call)| call))
+        .unwrap_or_else(|| panic!("{}", run.stderr));
+    let args: Vec<&str> = hint.split(' ').collect();
+    assert_eq!(&args[..2], ["aisc", "amend"], "{hint}");
+    fixture.aisc(&args[1..]).ok();
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.rs").unwrap(),
+        lines("one two three four five SIX! seven eight")
+    );
 }
 
 #[test]
