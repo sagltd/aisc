@@ -379,6 +379,15 @@ impl Session {
                 .map_err(|e| partial("could not switch HEAD", &e))?;
         }
         for write in write_order(&plan.worktree) {
+            let side =
+                preserve_if_changed(&git.root, write).map_err(|e| partial(&write.path, &e))?;
+            if let Some(side) = side {
+                eprintln!(
+                    "aisc: {} changed while aisc was working; your version is in {}",
+                    escape_line(&write.path),
+                    escape_line(&side)
+                );
+            }
             write_file(&git.root, write).map_err(|e| partial(&write.path, &e))?;
         }
         if let Some((mut bytes, _, restore)) = prepared {
@@ -536,6 +545,43 @@ pub(crate) fn write_order(writes: &[WorktreeWrite]) -> Vec<&WorktreeWrite> {
     ordered
 }
 
+fn refuse_symlinked_parents(root: &Path, path: &str) -> Result<()> {
+    let mut parent = root.to_path_buf();
+    let components: Vec<_> = Path::new(path).components().collect();
+    for component in &components[..components.len().saturating_sub(1)] {
+        parent.push(component);
+        if let Ok(metadata) = fs::symlink_metadata(&parent)
+            && metadata.file_type().is_symlink()
+        {
+            anyhow::bail!("{path}: parent is a symlink");
+        }
+    }
+    Ok(())
+}
+
+/// Compare-before-write: a file that no longer holds the bytes the plan was built from (edited
+/// while aisc worked) is moved aside to `PATH.aisc-conflict` (or `PATH.aisc-conflict-N`) before
+/// the write, so a write or delete never destroys unsaved bytes. Returns the side file.
+fn preserve_if_changed(root: &Path, write: &WorktreeWrite) -> Result<Option<String>> {
+    refuse_symlinked_parents(root, &write.path)?;
+    let Ok(work) = read_work(root, &write.path) else {
+        return Ok(None); // a directory: `write_file` replaces only an emptied one
+    };
+    // Absent, as planned, or already the target (a resolved sync file): nothing to lose.
+    let bytes = work.bytes();
+    if work.is_absent() || bytes == write.before || bytes == write.after {
+        return Ok(None);
+    }
+    let mut side = format!("{}.aisc-conflict", write.path);
+    let mut counter = 0;
+    while super::plumbing::path_exists(&root.join(&side)) {
+        counter += 1;
+        side = format!("{}.aisc-conflict-{counter}", write.path);
+    }
+    fs::rename(root.join(&write.path), root.join(&side))?;
+    Ok(Some(side))
+}
+
 /// Removes `directory` when it holds nothing but (nested) empty directories.
 fn remove_empty_tree(directory: &Path) -> std::io::Result<()> {
     for entry in fs::read_dir(directory)? {
@@ -552,16 +598,7 @@ fn remove_empty_tree(directory: &Path) -> std::io::Result<()> {
 /// replaces a directory removes it once the plan's deletions have emptied it.
 pub(crate) fn write_file(root: &Path, write: &WorktreeWrite) -> Result<()> {
     let target = root.join(&write.path);
-    let mut parent = root.to_path_buf();
-    let components: Vec<_> = Path::new(&write.path).components().collect();
-    for component in &components[..components.len().saturating_sub(1)] {
-        parent.push(component);
-        if let Ok(metadata) = fs::symlink_metadata(&parent)
-            && metadata.file_type().is_symlink()
-        {
-            anyhow::bail!("{}: parent is a symlink", write.path);
-        }
-    }
+    refuse_symlinked_parents(root, &write.path)?;
     match &write.after {
         None => {
             if fs::symlink_metadata(&target).is_ok() {

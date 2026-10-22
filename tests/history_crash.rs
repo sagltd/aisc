@@ -390,3 +390,43 @@ fn recovery_removes_only_side_files_still_as_the_plan_saw_them() {
         }
     }
 }
+
+#[test]
+fn an_edit_made_during_the_transaction_is_never_overwritten() {
+    // The user types into the file after the verb's last check, while the refs move.
+    let fixture = Fixture::with_files(&[("f.txt", "one\ntwo\nthree\n")]);
+    fixture.write("f.txt", "one\ntwo CHANGED\nthree\n");
+    let hook = format!(
+        "printf 'user typed this\\n' >> '{}'",
+        fixture.path("f.txt").display()
+    );
+    let env = on_transaction(&fixture, &hook);
+    let run = fixture.aisc_env(&["discard", "f.txt"], &env_refs(&env));
+    run.ok();
+    assert!(all(&run).contains("f.txt.aisc-conflict"), "{}", all(&run));
+    assert_eq!(fixture.read("f.txt"), "one\ntwo\nthree\n", "discarded");
+    assert_eq!(
+        fixture.read("f.txt.aisc-conflict"),
+        "one\ntwo CHANGED\nthree\nuser typed this\n",
+        "the late edit is kept"
+    );
+    // The op itself stays exact: undo brings back what discard saw.
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.read("f.txt"), "one\ntwo CHANGED\nthree\n");
+}
+
+#[test]
+fn a_file_edited_during_the_transaction_is_never_deleted() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.write("new.txt", "draft\n");
+    let hook = format!(
+        "printf 'more\\n' >> '{}'",
+        fixture.path("new.txt").display()
+    );
+    let env = on_transaction(&fixture, &hook);
+    let run = fixture.aisc_env(&["discard", "new.txt"], &env_refs(&env));
+    run.ok();
+    assert!(!fixture.exists("new.txt"));
+    assert_eq!(fixture.read("new.txt.aisc-conflict"), "draft\nmore\n");
+    assert!(all(&run).contains("new.txt.aisc-conflict"), "{}", all(&run));
+}
