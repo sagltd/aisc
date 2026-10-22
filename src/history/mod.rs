@@ -101,13 +101,6 @@ pub(crate) fn fail_hint(
     .into()
 }
 
-pub(crate) fn not_implemented(verb: &str) -> anyhow::Error {
-    fail(
-        Code::Unsupported,
-        format!("aisc {verb} is not implemented yet"),
-    )
-}
-
 /// What a verb prints: JSON value, compact text, and the process exit code.
 pub(crate) struct Outcome {
     pub value: Value,
