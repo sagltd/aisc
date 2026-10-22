@@ -594,3 +594,98 @@ fn line_ranges_are_validated_for_every_file_state() {
     fixture.aisc(&["commit", "-m", "ok", "added.txt:1-2"]).ok();
     assert_eq!(fixture.commit_files("HEAD"), ["added.txt"]);
 }
+
+#[test]
+fn intent_to_add_paired_as_a_rename_is_still_treated_as_unstaged() {
+    let fixture = Fixture::with_files(&[
+        (
+            "old.txt",
+            "content line one\ncontent line two\ncontent line three\n",
+        ),
+        ("a.txt", "a\n"),
+    ]);
+    std::fs::rename(fixture.path("old.txt"), fixture.path("new.txt")).unwrap();
+    fixture.git(&["add", "-N", "new.txt"]);
+    fixture.aisc(&["commit", "-m", "mv", "--all"]).ok();
+    assert_eq!(fixture.git(&["status", "--porcelain"]), "");
+    fixture.git(&["commit", "--allow-empty", "-m", "follow-up"]);
+    assert!(fixture.exists("new.txt"));
+    assert!(fixture.tree_blob("HEAD", "new.txt").is_some());
+    assert!(fixture.tree_blob("HEAD", "old.txt").is_none());
+}
+
+#[test]
+fn undo_restores_the_intent_to_add_state() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("n.txt", "new file\n");
+    fixture.git(&["add", "-N", "n.txt"]);
+    let before = fixture.git(&["status", "--porcelain"]);
+    assert_eq!(before, "A  n.txt".replace("A  ", " A "));
+    fixture.aisc(&["commit", "-m", "c", "n.txt"]).ok();
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.git(&["status", "--porcelain"]), before);
+    // Redo and undo again stay consistent.
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.git(&["status", "--porcelain"]), "");
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.git(&["status", "--porcelain"]), before);
+}
+
+/// Rewrites the latest op record's JSON with `edit`, keeping its parents and message.
+fn rewrite_latest_op(fixture: &Fixture, edit: impl Fn(&mut serde_json::Value)) {
+    let reference = "refs/aisc/oplog/main";
+    let op = fixture.git(&["rev-parse", reference]);
+    let mut record: serde_json::Value =
+        serde_json::from_str(&fixture.git(&["cat-file", "blob", &format!("{op}:op.json")]))
+            .unwrap();
+    edit(&mut record);
+    let blob = fixture.git_stdin(
+        &["hash-object", "-w", "--stdin"],
+        record.to_string().as_bytes(),
+    );
+    let tree = fixture.git_stdin(
+        &["mktree"],
+        format!("100644 blob {blob}\top.json\n").as_bytes(),
+    );
+    let parents = fixture.git(&["rev-list", "--parents", "-n1", &op]);
+    let mut args = vec!["commit-tree".to_owned(), tree];
+    for parent in parents.split_whitespace().skip(1) {
+        args.push("-p".to_owned());
+        args.push(parent.to_owned());
+    }
+    args.extend(["-m".to_owned(), "aisc commit: rewritten".to_owned()]);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let rewritten = fixture.git(&args);
+    fixture.git(&["update-ref", reference, &rewritten, &op]);
+}
+
+#[test]
+fn records_without_head_after_fail_closed_on_other_branches() {
+    for strip_version in [true, false] {
+        let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+        fixture.write("f.txt", "one\ntwo\n");
+        fixture.aisc(&["commit", "-m", "c1", "f.txt"]).ok();
+        rewrite_latest_op(&fixture, |record| {
+            record.as_object_mut().unwrap().remove("head_after");
+            if strip_version {
+                record["v"] = serde_json::json!(1);
+            }
+        });
+        fixture.git(&["switch", "-c", "other"]);
+        let before = fixture.snapshot();
+        let run = fixture.aisc(&["undo"]);
+        assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+        assert_eq!(
+            before,
+            fixture.snapshot(),
+            "nothing staged on the other branch"
+        );
+        assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+        if strip_version {
+            // A legacy record still undoes on the branch it moved.
+            fixture.git(&["switch", "main"]);
+            fixture.aisc(&["undo"]).ok();
+            assert!(fixture.git(&["status", "--porcelain"]).contains(" M f.txt"));
+        }
+    }
+}

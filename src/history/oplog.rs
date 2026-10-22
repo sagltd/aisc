@@ -65,8 +65,12 @@ pub(crate) struct OpData {
     pub index: Vec<OpIndex>,
     pub index_before_tree: Option<String>,
     /// Where HEAD pointed right after the operation; undo refuses when HEAD is elsewhere.
+    /// Required from record version 2 on; older records are undone fail-closed.
     #[serde(default)]
     pub head_after: Option<HeadAfter>,
+    /// Index paths that were `git add -N` placeholders before the operation replaced them.
+    #[serde(default)]
+    pub index_ita: Vec<String>,
     pub undo_of: Option<String>,
 }
 
@@ -96,7 +100,7 @@ impl OpRecord {
             });
         }
         let data = OpData {
-            v: 1,
+            v: 2,
             verb: plan.verb.clone(),
             argv: plan.argv.clone(),
             summary: plan.summary.clone(),
@@ -128,6 +132,7 @@ impl OpRecord {
                 .collect(),
             index_before_tree: None,
             head_after: None,
+            index_ita: Vec::new(),
             undo_of: plan.undo_of.clone(),
         };
         Self { data, files, after }
@@ -288,7 +293,16 @@ pub(crate) fn load(git: &Git, spec: Option<&str>) -> Result<(String, OpData)> {
         }
     };
     let blob = git.run(&["cat-file", "blob", &format!("{oid}:op.json")])?;
-    let data = serde_json::from_slice(&blob).context("unreadable operation record")?;
+    let data: OpData = serde_json::from_slice(&blob).context("unreadable operation record")?;
+    if data.v >= 2 && data.head_after.is_none() {
+        return Err(fail(
+            Code::State,
+            format!(
+                "operation {} has a corrupt record (no HEAD state)",
+                short(&oid)
+            ),
+        ));
+    }
     Ok((oid, data))
 }
 

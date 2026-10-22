@@ -58,6 +58,8 @@ pub(crate) struct Plan {
     pub index: Vec<IndexChange>,
     pub worktree: Vec<WorktreeWrite>,
     pub undo_of: Option<String>,
+    /// Paths whose index entry should become an intent-to-add placeholder (undo of such a commit).
+    pub restore_ita: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -160,6 +162,7 @@ impl Session {
                 "--porcelain=v2",
                 "-z",
                 "--untracked-files=no",
+                "--no-renames",
                 "--",
             ];
             args.extend(chunk.iter().map(|change| change.path.as_str()));
@@ -180,7 +183,8 @@ impl Session {
     }
 
     /// Index bytes with the rule applied: an entry equal to `from` becomes `to`; others are kept.
-    fn prepare_index(&self, changes: &[IndexChange]) -> Result<Option<Vec<u8>>> {
+    fn prepare_index(&self, plan: &Plan) -> Result<Option<(Vec<u8>, Vec<String>)>> {
+        let changes = &plan.index;
         if changes.is_empty() {
             return Ok(None);
         }
@@ -207,6 +211,8 @@ impl Session {
         let intent_to_add = self.intent_to_add(changes)?;
         let zero = git.zero_oid(&self.head.oid);
         let mut input = Vec::new();
+        let mut applied: Vec<&str> = Vec::new();
+        let mut replaced_ita = Vec::new();
         for change in changes {
             let entries = current.get(&change.path).map_or(&[][..], Vec::as_slice);
             if entries.iter().any(|(stage, _)| *stage != 0) {
@@ -223,6 +229,10 @@ impl Session {
             };
             if present != change.from.as_ref() {
                 continue; // staged differently by the user: preserved
+            }
+            applied.push(&change.path);
+            if intent_to_add.contains(&change.path) {
+                replaced_ita.push(change.path.clone());
             }
             match &change.to {
                 Some((mode, oid)) => {
@@ -246,10 +256,18 @@ impl Session {
             }
             let env = [("GIT_INDEX_FILE", alternate.as_os_str())];
             git.run_with(&["update-index", "-z", "--index-info"], &env, Some(input))?;
+            // Undo of a commit made from `git add -N`: put the placeholder back.
+            for path in plan
+                .restore_ita
+                .iter()
+                .filter(|p| applied.contains(&p.as_str()))
+            {
+                git.run_with(&["add", "-N", "--", path], &env, None)?;
+            }
             Ok(fs::read(&alternate)?)
         })();
         let _ = fs::remove_file(&alternate);
-        result.map(Some)
+        result.map(|bytes| Some((bytes, replaced_ita)))
     }
 
     /// Executes the plan. Nothing changes unless every precondition holds up to the ref transaction.
@@ -257,9 +275,13 @@ impl Session {
         self.ensure_unchanged()?;
         let git = self.git.clone();
         preflight_worktree(&git.root, &plan.worktree)?;
-        let index_bytes = self.prepare_index(&plan.index)?;
+        let prepared = self.prepare_index(plan)?;
         let mut record = OpRecord::from_plan(plan);
         record.data.head_after = Some(self.head_after(plan)?);
+        record.data.index_ita = prepared
+            .as_ref()
+            .map(|(_, ita)| ita.clone())
+            .unwrap_or_default();
         let (op_oid, previous) = oplog::build(&git, &record)?;
         self.ensure_unchanged()?;
         let op = oplog::short(&op_oid);
@@ -304,7 +326,7 @@ impl Session {
         for write in &plan.worktree {
             write_file(&git.root, write).map_err(|e| partial(&write.path, &e))?;
         }
-        if let Some(bytes) = index_bytes {
+        if let Some((bytes, _)) = prepared {
             self.install_index(&bytes)
                 .map_err(|e| partial("could not install the index", &e))?;
         }

@@ -60,6 +60,7 @@ pub(crate) fn reverse_plan(git: &Git, op_oid: &str, data: &OpData) -> Result<Pla
             "switch back with git switch --detach",
         ));
     }
+    plan.restore_ita = data.index_ita.clone();
     plan.index = data
         .index
         .iter()
@@ -114,6 +115,21 @@ fn check_current(git: &Git, session: &Session, data: &OpData) -> Result<()> {
         && session.head.symbolic.as_deref() != Some(head.to.as_str())
     {
         return Err(stale("HEAD moved after that operation"));
+    }
+    // Records without a HEAD state (version 1) fail closed: HEAD must be on a branch the
+    // operation moved, so index changes are never staged on an unrelated branch.
+    let legacy_ok = data.head_after.is_none()
+        && session
+            .head
+            .symbolic
+            .as_ref()
+            .is_some_and(|current| data.refs.iter().any(|movement| &movement.name == current));
+    if data.head_after.is_none() && !legacy_ok {
+        return Err(fail_hint(
+            Code::Stale,
+            "HEAD is not on a branch this operation moved; nothing was changed",
+            "switch back to the branch the operation ran on, then run aisc undo",
+        ));
     }
     if let Some(after) = &data.head_after
         && (session.head.symbolic != after.symbolic || session.head.oid != after.oid)

@@ -121,6 +121,27 @@ impl Fixture {
             .to_owned()
     }
 
+    /// Runs git with `input` on stdin and returns trimmed stdout; panics on failure.
+    pub fn git_stdin(&self, args: &[&str], input: &[u8]) -> String {
+        use std::io::Write;
+        let mut child = git_command(&self.root, args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout)
+            .trim_end()
+            .to_owned()
+    }
+
     pub fn git_bytes(&self, args: &[&str]) -> Vec<u8> {
         git_command(&self.root, args).output().unwrap().stdout
     }
