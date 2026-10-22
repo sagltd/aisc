@@ -2,28 +2,53 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-  <img src="assets/logo.svg" alt="AISC" width="400">
+  <img src="assets/logo.svg" alt="AISC" width="360">
 </picture>
 
-### Source control built for coding agents
+**Source control built for coding agents.**<br>
+One command per history edit, output sized for a context window, every change undoable, Git underneath.
 
-One command per history edit · compact output · every change undoable · Git underneath
-
-[![CI](https://github.com/sagltd/aisc/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/sagltd/aisc/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/sagltd/aisc?sort=semver)](https://github.com/sagltd/aisc/releases/latest)
+[![CI](https://github.com/sagltd/aisc/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sagltd/aisc/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust 1.91+](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](Cargo.toml)
 [![Git 2.43+](https://img.shields.io/badge/git-2.43%2B-f05032.svg)](#safety)
-[![macOS · Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-lightgrey.svg)](#safety)
 
-[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [Commands](#commands) · [Safety](#safety) · [Disk](#disk) · [Agent skill](#agent-skill)
+[Install](#install) · [Benchmarks](#benchmarks) · [Commands](#commands) · [Safety](#safety) · [Disk](#disk) · [Agent skill](#agent-skill)
 
 </div>
 
----
+<br>
 
-## At a glance
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/bench/agents-dark.svg">
+  <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 0.98M tokens, 39 commands and $0.61 per suite; Git 1.43M, 63 and $0.73; GitButler 1.62M, 61 and $0.99. All three passed 38 of 39 runs." width="760">
+</picture>
 
-Ten scripted version-control tasks, all four tools in the same run, every end state verified ([method](#benchmarks)):
+These are the same 13 tasks AISC was tuned on, so read them as a strong pilot rather than a final verdict; [the details](#real-agents) list every failure and caveat.
+
+## Install
+
+```sh
+# macOS on Apple Silicon. Intel macOS and Linux (x86_64, arm64) builds are on the Releases page.
+curl -fsSL https://github.com/sagltd/aisc/releases/download/v0.1.1/aisc-v0.1.1-aarch64-apple-darwin.tar.gz | tar -xz
+mkdir -p ~/.local/bin && mv aisc-v0.1.1-aarch64-apple-darwin/aisc ~/.local/bin/
+
+# Or build from source (Rust 1.91+)
+cargo install --git https://github.com/sagltd/aisc --locked
+```
+
+Then give your agent the workflow:
+
+```sh
+npx skills add sagltd/aisc --skill aisc     # the aisc skill
+aisc agent setup --print >> AGENTS.md       # or CLAUDE.md
+```
+
+The agent runs `aisc log` to see ids and state, makes one call per edit, and can reverse anything with `aisc undo`.
+
+## Command benchmark at a glance
+
+Ten scripted version-control tasks, all four tools in the same run, every end state verified ([method](#command-benchmark)):
 
 | | **AISC** | GitButler | Git | Jujutsu |
 | --- | ---: | ---: | ---: | ---: |
@@ -32,9 +57,8 @@ Ten scripted version-control tasks, all four tools in the same run, every end st
 | Transcript tokens (estimate) | **606** | 1,639 | 1,261 | 1,307 |
 | Wall time, all ten tasks | **1,182 ms** | 2,106 ms | 1,370 ms | 1,798 ms |
 | Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
-| Real agents, 13 vcbench tasks × 3: tokens | **0.98M** | 1.62M | 1.43M | — |
 
-Default output, no quiet flags. Tokens are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
+Default output, no quiet flags. Tokens here are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
 
 ## Why AISC
 
@@ -107,19 +131,6 @@ undid commit 7d86
 docs deleted
 ```
 
-## Quickstart
-
-```sh
-# Install (Git 2.43+ and Rust 1.91+)
-cargo install --git https://github.com/sagltd/aisc --locked
-
-# Give your agent the skill, and the workflow block for AGENTS.md / CLAUDE.md
-npx skills add sagltd/aisc --skill aisc
-aisc agent setup --print >> AGENTS.md
-```
-
-Then let the agent work. It runs `aisc log` to see ids and state, makes one call per edit, and can undo anything with `aisc undo`.
-
 ## Commands
 
 A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30` (new-side lines) or `"PATH~text"` (the hunk containing *text*). A commit is a hex id or its exact subject.
@@ -137,7 +148,7 @@ A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30
 | `aisc move COMMIT… --before\|--after COMMIT` | Reorder commits |
 | `aisc pick COMMIT… [-b NEW --onto BASE]` | Copy commits onto another branch |
 | `aisc sync [ONTO] [--fetch]` | Rebase onto the base, carrying your uncommitted work; pauses on conflict |
-| `aisc land BRANCH… --into main` | Integrate finished branches |
+| `aisc land BRANCH… --into main [--delete]` | Integrate finished branches, optionally deleting them |
 | `aisc switch [-c] BRANCH` | Change branch, carrying uncommitted edits |
 | `aisc discard SEL…` | Throw away selected changes (undoable) |
 | `aisc undo` · `aisc oplog` | Reverse the last operation · list operations |
