@@ -187,6 +187,60 @@ Each per-task cell gives calls (`e` = edits) / output bytes / estimated tokens
 | parallel_branch | 3 / 0 B / 34 t / 131 ms | 3 / 336 B / 143 t / 2006 ms | 1 / 71 B / 33 t / 96 ms † | 2 / 0 B / 35 t / 144 ms |
 | inspect_state | 3 / 113 B / 70 t / 116 ms | 1 / 246 B / 86 t / 116 ms | 2 / 274 B / 126 t / 44 ms | 2 / 357 B / 158 t / 115 ms |
 
+### Context cost (agent guidance)
+
+The guidance an agent loads before it runs any command also costs tokens, in
+every session. We counted it with
+[`commands/context_cost.py`](commands/context_cost.py). The exact numbers below
+need `tiktoken` `o200k_base` (0.14.0, run offline). Without it the script falls
+back to bytes/4 and labels the output as an estimate. These are file sizes,
+not billed usage.
+
+Sources, pinned:
+
+- **AGENTS block**: the tool-specific `## Version control` block that the
+  vcbench harness writes into AGENTS.md/CLAUDE.md.
+  - GitButler: `but agent setup --print` from `but` 0.22.3 (sha256
+    `2945e8f55c4d…`).
+  - git, jj and aisc: the blocks in the harness, from vcbench `c714c37`.
+- **Skill**: the installed `SKILL.md`.
+  - GitButler: `but skill install` from `but` 0.22.3 (`SKILL.md` sha256
+    `30da26b0edee…`).
+  - jj: the onevcat-jj skill at commit `4955f5422d99` (sha256 `e0364004…`),
+    the one vcbench pins.
+  - aisc: `skills/aisc/SKILL.md` in this repository.
+  - Git has no skill.
+- **References**: files the skill points to for detail, loaded on demand.
+
+| Context cost (tokens) | git | aisc | but | jj |
+|---|---|---|---|---|
+| AGENTS block | 63 | 83 | 475 | 167 |
+| Skill core (`SKILL.md`) | – | **558** (was 681) | 5415 | 2591 |
+| Block + core | 63 | **641** | 5890 | 2758 |
+| References, on demand | – | 681 (`references/lifecycle.md`) | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
+| Total, core + references (+ block)¹ | 63 | **1239** (1322) | 19902 (20377) | 2591 (2758) |
+
+¹ The two cores do not cover the same scope. GitButler's core also covers
+forge and branch workflows (push, PRs, apply/unapply). AISC moves its
+equivalents to `references/lifecycle.md`: worktrees for parallel agents,
+`verify`/`finish`, `gc` and `github`/`gitlab`. So the totals are the fairer
+comparison: about 1.2k tokens for AISC against 19.9k for GitButler, or 1.3k
+against 20.4k with the AGENTS block.
+
+The AISC core is one page. It holds:
+
+- the task-to-command list;
+- the selector syntax;
+- the rules on exit codes and partial failure, sync conflicts and paused-sync
+  refusals, base-branch refusals, raw-git staleness, and undo.
+
+The lifecycle reference covers `start`/`checkpoint`/`verify`/`finish`/`gc` with
+their disk rules, `github`/`gitlab`, and the Codex sandbox note.
+
+[`commands/skill_check.sh`](commands/skill_check.sh) runs every command form and
+refusal in both files against a real binary (73 checks). The vcbench reference
+check (`npm run aisc:check`) passes all 13 tasks with this skill.
+
 ### Where AISC loses
 
 - **Wall time.** AISC is the slowest tool in every task. The one exception is
@@ -228,6 +282,8 @@ python3 benchmarks/commands/run.py --but /path/to/but --jj /path/to/jj \
   --output benchmarks/results/commands-v2.json --repetitions 6   # builds aisc --release itself
 python3 benchmarks/commands/report.py benchmarks/results/commands-v2.json
 python3 benchmarks/commands/test_scenarios.py    # graders reject no-ops; Git passes in both modes
+benchmarks/commands/skill_check.sh target/release/aisc   # every command in skills/aisc/SKILL.md
+python3 benchmarks/commands/context_cost.py aisc=skills/aisc/SKILL.md but=/path/to/but-skill/SKILL.md
 ```
 
 Any missing tool is skipped and listed under `skipped`. Without `tiktoken`,
