@@ -69,7 +69,11 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
     let mut rewritten: Vec<(String, String)> = Vec::new();
     let mut total = 0usize;
     let mut sources: Vec<(String, String)> = Vec::new();
+    let mut named = BTreeSet::new();
     for name in &args.branches {
+        if !named.insert(name) {
+            return Err(fail(Code::Usage, format!("branch '{name}' is named twice")));
+        }
         if *name == target {
             return Err(fail(Code::Usage, "cannot land a branch into itself"));
         }
@@ -146,13 +150,13 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
         argv: std::env::args().skip(1).collect(),
         ..Plan::default()
     };
-    if tip != old_target {
-        plan.refs.push(RefMove {
-            name: target_ref.clone(),
-            old: Some(old_target.clone()),
-            new: Some(tip.clone()),
-        });
-    }
+    // With nothing new to land, the unchanged target is still compare-and-swapped, so deletions
+    // never commit against a target that moved underneath.
+    plan.refs.push(RefMove {
+        name: target_ref.clone(),
+        old: Some(old_target.clone()),
+        new: Some(tip.clone()),
+    });
     if args.delete {
         // Every landed branch's work is now in the target; the same transaction deletes them, so
         // `aisc undo` brings them back.

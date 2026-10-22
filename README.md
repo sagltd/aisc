@@ -161,7 +161,7 @@ Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev)
 Means over the three runs, with the range in brackets. AISC used 32% fewer commands, 37% fewer tokens and 38% less money than GitButler, and each of its three suite runs cost less and used fewer tokens than any GitButler suite run. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens.
 
 Where AISC lost:
-- **Four failed runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). The next release adds `aisc land --delete` and tells agents to use `aisc switch` for this.
+- **Four failed runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). v0.1.1 adds `aisc land --delete` and tells agents to use `aisc switch` for this; these runs have not been repeated with it yet.
 - **Tuning.** AISC's agent block and three commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`) were improved during an earlier pilot on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that. Held-out tasks are the next step.
 
 Per-run metrics, with no transcripts, are in [`benchmarks/results/agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json).

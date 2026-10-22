@@ -32,7 +32,10 @@ fn help_and_version_are_plain_text_even_when_redirected_or_json_is_requested() {
     for arguments in [vec!["--version"], vec!["--json", "--version"]] {
         let version = invoke(&arguments);
         assert!(version.status.success());
-        assert_eq!(String::from_utf8(version.stdout).unwrap(), "aisc 0.1.0\n");
+        assert_eq!(
+            String::from_utf8(version.stdout).unwrap(),
+            format!("aisc {}\n", env!("CARGO_PKG_VERSION"))
+        );
     }
 }
 
