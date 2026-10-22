@@ -11,7 +11,8 @@
  "notes": [
   "AISC's agent block and three commands were improved on these same 13 tasks during an earlier single-run pilot; GitButler and Git use their shipped setup.",
   "A run fails if the verifier fails or the agent ran a command the arm's policy blocks.",
-  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts, prompts or paths are included."
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts, prompts or paths are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
  ],
  "suite_totals_per_repetition": {
   "aisc+skill": [
@@ -102,7 +103,20 @@
     "output_tokens": 276
    },
    "cost_usd_reported_by_cli": 0.03961119999999999,
-   "wall_ms": 17446
+   "wall_ms": 17446,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add lead input validation -b input-validation qog guq ksv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -121,7 +135,20 @@
     "output_tokens": 397
    },
    "cost_usd_reported_by_cli": 0.0474059,
-   "wall_ms": 15266
+   "wall_ms": 15266,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b input-validation -m Add lead input validation\n\nReject lead payloads with missing name or malformed email, with a test and README note.\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> rl:9 qt:e qp:e",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -140,7 +167,55 @@
     "output_tokens": 1845
    },
    "cost_usd_reported_by_cli": 0.07206539999999999,
-   "wall_ms": 35131
+   "wall_ms": 35131,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -b input-validation",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md tests/handler.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/handler.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "apply --cached --recount -",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add lead input validation\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -159,7 +234,25 @@
     "output_tokens": 275
    },
    "cost_usd_reported_by_cli": 0.040237800000000004,
-   "wall_ms": 7785
+   "wall_ms": 7785,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit 3f9c notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -178,7 +271,25 @@
     "output_tokens": 501
    },
    "cost_usd_reported_by_cli": 0.08015610000000001,
-   "wall_ms": 11480
+   "wall_ms": 11480,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit qsx:xx",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -197,7 +308,50 @@
     "output_tokens": 542
    },
    "cost_usd_reported_by_cli": 0.042651499999999995,
-   "wall_ms": 19771
+   "wall_ms": 19771,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reflog",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rm --cached -q notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --amend --no-edit",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --format=%an %ad %s HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -216,7 +370,30 @@
     "output_tokens": 485
    },
    "cost_usd_reported_by_cli": 0.0433028,
-   "wall_ms": 18997
+   "wall_ms": 18997,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -235,7 +412,65 @@
     "output_tokens": 935
    },
    "cost_usd_reported_by_cli": 0.09312070000000001,
-   "wall_ms": 23373
+   "wall_ms": 23373,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "remote -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pull",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick 6499075 --above 3ce0281",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s feature-service -5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -254,7 +489,105 @@
     "output_tokens": 1280
    },
    "cost_usd_reported_by_cli": 0.0570384,
-   "wall_ms": 23475
+   "wall_ms": 23475,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "fetch origin",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status -sb",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s --name-only d571e57 6499075 ba77b22 a333465 74be52c -1",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an: %s --stat -n1 6499075",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an: %s --stat -n1 a333465",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an: %s --stat -n1 74be52c",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash origin/feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto origin/main 74be52c~1 other-topic",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "checkout feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --ff-only origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an: %s --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status -sb",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -264,7 +597,7 @@
    "correctness_passed": true,
    "compliance_passed": false,
    "policy_violations": [
-    "git b r a n c h   - D   d o c s   g r e e t i n g   n o r m a l i z e"
+    "git branch -D docs greeting normalize"
    ],
    "model_tool_calls": 6,
    "turns": 7,
@@ -275,7 +608,85 @@
     "output_tokens": 962
    },
    "cost_usd_reported_by_cli": 0.059037,
-   "wall_ms": 35835
+   "wall_ms": 35835,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log normalize",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --no-merged main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -D docs greeting normalize",
+     "exit": 42
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -294,7 +705,75 @@
     "output_tokens": 1171
    },
    "cost_usd_reported_by_cli": 0.1129677,
-   "wall_ms": 21039
+   "wall_ms": 21039,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land greeting --whole-stack --yes",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land docs --yes",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "ls-tree -r --name-only main",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -313,7 +792,65 @@
     "output_tokens": 498
    },
    "cost_usd_reported_by_cli": 0.039153600000000004,
-   "wall_ms": 12949
+   "wall_ms": 12949,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --graph --oneline --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "remote -v",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --ff-only greeting",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --no-edit docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --graph --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -d greeting normalize docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -332,7 +869,45 @@
     "output_tokens": 872
    },
    "cost_usd_reported_by_cli": 0.0573427,
-   "wall_ms": 26245
+   "wall_ms": 26245,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -351,7 +926,70 @@
     "output_tokens": 1413
    },
    "cost_usd_reported_by_cli": 0.07773679999999998,
-   "wall_ms": 43744
+   "wall_ms": 43744,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff revive-worktree-command",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat a17e27c 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick -b revive-worktree-no-graph 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -3 revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "archive revive-worktree-no-graph -o <tmp>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat main revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -370,7 +1008,50 @@
     "output_tokens": 472
    },
    "cost_usd_reported_by_cli": 0.0423454,
-   "wall_ms": 32292
+   "wall_ms": 32292,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat main revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show a17e27c --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "switch -c revive-worktree-no-graph main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -389,7 +1070,20 @@
     "output_tokens": 380
    },
    "cost_usd_reported_by_cli": 0.043040800000000004,
-   "wall_ms": 18077
+   "wall_ms": 18077,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -408,7 +1102,50 @@
     "output_tokens": 1097
    },
    "cost_usd_reported_by_cli": 0.08344,
-   "wall_ms": 30496
+   "wall_ms": 30496,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend qk:a tkq",
+     "exit": 2
+    },
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t tkq qk:a nq:6 rl:7 --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t llr qk:5 nq:c",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t rqv rl:e kw:1 --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -427,7 +1164,125 @@
     "output_tokens": 2793
    },
    "cost_usd_reported_by_cli": 0.104269,
-   "wall_ms": 42728
+   "wall_ms": 42728,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline main..HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup 44284a3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "restore --staged src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup 171ea16",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md docs/response.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup 7eddf19",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -6",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -446,7 +1301,25 @@
     "output_tokens": 472
    },
    "cost_usd_reported_by_cli": 0.0486265,
-   "wall_ms": 13048
+   "wall_ms": 13048,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 5efd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 5efd --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -465,7 +1338,45 @@
     "output_tokens": 847
    },
    "cost_usd_reported_by_cli": 0.09838920000000001,
-   "wall_ms": 21812
+   "wall_ms": 21812,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit wsq",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m refactor validation helpers qk:a nq:b",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m tune lead scoring qk:5 nq:c",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m document lead workflow rl:3 lz:1",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move qvp -b split-workflow --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -484,7 +1395,115 @@
     "output_tokens": 2014
    },
    "cost_usd_reported_by_cli": 0.07368739999999999,
-   "wall_ms": 34813
+   "wall_ms": 34813,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --oneline -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show HEAD~1 -- src tests",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q --detach c6df736",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout 21a50f8 -- src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qam refactor validation helpers -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout 21a50f8 -- src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qam tune lead scoring -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout 21a50f8 -- README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qm document lead workflow -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick c11a026",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -B split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout 21a50f8 -- src/config.ts notes/investigation.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -6",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff 21a50f8 --stat",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -503,7 +1522,20 @@
     "output_tokens": 237
    },
    "cost_usd_reported_by_cli": 0.039859200000000004,
-   "wall_ms": 7816
+   "wall_ms": 7816,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -522,7 +1554,30 @@
     "output_tokens": 472
    },
    "cost_usd_reported_by_cli": 0.049328899999999995,
-   "wall_ms": 16475
+   "wall_ms": 16475,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move ruz,ksu --below ulk --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "move ruz ksu --below ulk --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -541,7 +1596,55 @@
     "output_tokens": 505
    },
    "cost_usd_reported_by_cli": 0.037827099999999995,
-   "wall_ms": 11761
+   "wall_ms": 11761,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --reverse main..reorder-series",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -b tmp 41a70a9",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 56a431b 0e6b53c 3f85f23 e897704 10a18cf",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat reorder-series tmp",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -B reorder-series tmp",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -D tmp -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -560,7 +1663,20 @@
     "output_tokens": 286
    },
    "cost_usd_reported_by_cli": 0.0404282,
-   "wall_ms": 22829
+   "wall_ms": 22829,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline 681a 1212 --into add retry support 0912 2d2a 68a6",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -579,7 +1695,60 @@
     "output_tokens": 842
    },
    "cost_usd_reported_by_cli": 0.06723540000000001,
-   "wall_ms": 22112
+   "wall_ms": 22112,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash qqs lkk -m add parser pipeline --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "squash qqs -t lkk -m add parser pipeline --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash wko -t now -m tmp",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash kku -t now -m add retry support --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline gitbutler/workspace -8",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --format=%s now",
+     "exit": 128
+    }
+   ]
   },
   {
    "rep": 1,
@@ -598,7 +1767,65 @@
     "output_tokens": 1062
    },
    "cost_usd_reported_by_cli": 0.04855929999999999,
-   "wall_ms": 15170
+   "wall_ms": 15170,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline main..squash-series",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 642902b",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --soft b1d41d5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m add parser pipeline -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick dbfb144",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick -n 06c34fe dffd013 c175485",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m add retry support -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff c175485 --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -617,7 +1844,25 @@
     "output_tokens": 647
    },
    "cost_usd_reported_by_cli": 0.0492827,
-   "wall_ms": 20928
+   "wall_ms": 20928,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -636,7 +1881,60 @@
     "output_tokens": 783
    },
    "cost_usd_reported_by_cli": 0.096479,
-   "wall_ms": 24067
+   "wall_ms": 24067,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pull",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve conflicts notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve apply src/notify.ts:1 --commit notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve conflicts notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve apply src/config.ts:1 --theirs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -655,7 +1953,135 @@
     "output_tokens": 2469
    },
    "cost_usd_reported_by_cli": 0.09077589999999998,
-   "wall_ms": 54397
+   "wall_ms": 54397,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "stash -u",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase main",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --name-only --diff-filter=U",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/config.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/config.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit --amend --no-edit -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff main -- src",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%B -2",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -u -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup=HEAD~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff main --stat",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -674,7 +2100,40 @@
     "output_tokens": 950
    },
    "cost_usd_reported_by_cli": 0.0549922,
-   "wall_ms": 22061
+   "wall_ms": 22061,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show main:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -693,7 +2152,25 @@
     "output_tokens": 1160
    },
    "cost_usd_reported_by_cli": 0.059509900000000004,
-   "wall_ms": 18107
+   "wall_ms": 18107,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show data-update:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -712,7 +2189,55 @@
     "output_tokens": 741
    },
    "cost_usd_reported_by_cli": 0.0486046,
-   "wall_ms": 11516
+   "wall_ms": 11516,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline main data-update notes -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d23d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show HEAD:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -731,7 +2256,30 @@
     "output_tokens": 646
    },
    "cost_usd_reported_by_cli": 0.046058,
-   "wall_ms": 19491
+   "wall_ms": 19491,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit --all -b app-checkpoint -m Add app checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --oneline HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -750,7 +2298,45 @@
     "output_tokens": 492
    },
    "cost_usd_reported_by_cli": 0.052483699999999994,
-   "wall_ms": 18346
+   "wall_ms": 18346,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "setup",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b app-checkpoint -m Add app checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -3 app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat app-checkpoint",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -769,7 +2355,45 @@
     "output_tokens": 384
    },
    "cost_usd_reported_by_cli": 0.036818000000000004,
-   "wall_ms": 8184
+   "wall_ms": 8184,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -b app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md package.json src test",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -788,7 +2412,20 @@
     "output_tokens": 360
    },
    "cost_usd_reported_by_cli": 0.041642,
-   "wall_ms": 12623
+   "wall_ms": 12623,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -807,7 +2444,40 @@
     "output_tokens": 306
    },
    "cost_usd_reported_by_cli": 0.0445242,
-   "wall_ms": 12673
+   "wall_ms": 12673,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard wp",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard xnv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard to",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -826,7 +2496,35 @@
     "output_tokens": 329
    },
    "cost_usd_reported_by_cli": 0.037722200000000004,
-   "wall_ms": 9670
+   "wall_ms": 9670,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -- src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -845,7 +2543,20 @@
     "output_tokens": 286
    },
    "cost_usd_reported_by_cli": 0.039779300000000004,
-   "wall_ms": 17250
+   "wall_ms": 17250,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add lead input validation -b input-validation qog guq ksv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -864,7 +2575,20 @@
     "output_tokens": 317
    },
    "cost_usd_reported_by_cli": 0.0462667,
-   "wall_ms": 9956
+   "wall_ms": 9956,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b input-validation -m Add lead input validation rl:9 qt:e qp:e",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -883,7 +2607,60 @@
     "output_tokens": 633
    },
    "cost_usd_reported_by_cli": 0.045611000000000006,
-   "wall_ms": 25898
+   "wall_ms": 25898,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "switch -c input-validation",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md tests/handler.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/handler.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached src/handler.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add lead input validation\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -2",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -902,7 +2679,20 @@
     "output_tokens": 289
    },
    "cost_usd_reported_by_cli": 0.0400534,
-   "wall_ms": 10341
+   "wall_ms": 10341,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit ea74 notes/private.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -921,7 +2711,20 @@
     "output_tokens": 703
    },
    "cost_usd_reported_by_cli": 0.085885,
-   "wall_ms": 12703
+   "wall_ms": 12703,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit qsx:xx --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -940,7 +2743,55 @@
     "output_tokens": 476
    },
    "cost_usd_reported_by_cli": 0.038709299999999995,
-   "wall_ms": 19387
+   "wall_ms": 19387,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --stat -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rm --cached -q notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit --amend --no-edit -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --format=%an %s HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "check-ignore notes/private.md",
+     "exit": 1
+    }
+   ]
   },
   {
    "rep": 2,
@@ -959,7 +2810,60 @@
     "output_tokens": 814
    },
    "cost_usd_reported_by_cli": 0.05392159999999999,
-   "wall_ms": 36271
+   "wall_ms": 36271,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "undo",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -969,7 +2873,7 @@
    "correctness_passed": true,
    "compliance_passed": false,
    "policy_violations": [
-    "git f e t c h   o r i g i n"
+    "git fetch origin"
    ],
    "model_tool_calls": 6,
    "turns": 8,
@@ -980,7 +2884,85 @@
     "output_tokens": 1107
    },
    "cost_usd_reported_by_cli": 0.0983806,
-   "wall_ms": 31399
+   "wall_ms": 31399,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pull",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "fetch origin",
+     "exit": 42
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick 6499075 --below fd7c19a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s feature-service -5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s other-topic -2",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -999,7 +2981,80 @@
     "output_tokens": 1020
    },
    "cost_usd_reported_by_cli": 0.048508,
-   "wall_ms": 18537
+   "wall_ms": 18537,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "fetch origin",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status -sb",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash origin/feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto origin/main main other-topic",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "checkout feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --ff-only origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status -sb",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff README.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1018,7 +3073,35 @@
     "output_tokens": 358
    },
    "cost_usd_reported_by_cli": 0.04350059999999999,
-   "wall_ms": 10375
+   "wall_ms": 10375,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land normalize greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1037,7 +3120,70 @@
     "output_tokens": 735
    },
    "cost_usd_reported_by_cli": 0.0941677,
-   "wall_ms": 14719
+   "wall_ms": 14719,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "merge --help",
+     "exit": 2
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "remote -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "--help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land greeting --whole-stack --yes",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land docs --yes",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1056,7 +3202,55 @@
     "output_tokens": 460
    },
    "cost_usd_reported_by_cli": 0.0384618,
-   "wall_ms": 11240
+   "wall_ms": 11240,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "remote -v",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --ff-only greeting",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --no-edit docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1066,7 +3260,7 @@
    "correctness_passed": true,
    "compliance_passed": false,
    "policy_violations": [
-    "git w o r k t r e e   a d d   - q   / t m p / c h k   r e v i v e - w o r k t r e e - n o - g r a p h"
+    "git worktree add -q /tmp/chk revive-worktree-no-graph"
    ],
    "model_tool_calls": 6,
    "turns": 7,
@@ -1077,7 +3271,25 @@
     "output_tokens": 898
    },
    "cost_usd_reported_by_cli": 0.054987999999999995,
-   "wall_ms": 16556
+   "wall_ms": 16556,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "worktree add -q <tmp> revive-worktree-no-graph",
+     "exit": 42
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1096,7 +3308,85 @@
     "output_tokens": 937
    },
    "cost_usd_reported_by_cli": 0.0630301,
-   "wall_ms": 24301
+   "wall_ms": 24301,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff revive-worktree-no-graph",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --format=%h %s main..revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "--help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "branch new revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick 816c4bd revive-worktree-no-graph --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:graph.py",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick 816c4bd -b revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s main..revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1115,7 +3405,40 @@
     "output_tokens": 822
    },
    "cost_usd_reported_by_cli": 0.05523280000000001,
-   "wall_ms": 22247
+   "wall_ms": 22247,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat main revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat main..revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "switch -c revive-worktree-no-graph main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1134,7 +3457,20 @@
     "output_tokens": 392
    },
    "cost_usd_reported_by_cli": 0.043189200000000004,
-   "wall_ms": 14494
+   "wall_ms": 14494,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1153,7 +3489,35 @@
     "output_tokens": 594
    },
    "cost_usd_reported_by_cli": 0.0946443,
-   "wall_ms": 9820
+   "wall_ms": 9820,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t wvl qk:a nq:6 rl:7",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t zmk qk:5 nq:c",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t mkl rl:e kw:1 --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1172,7 +3536,115 @@
     "output_tokens": 2051
    },
    "cost_usd_reported_by_cli": 0.0808544,
-   "wall_ms": 36810
+   "wall_ms": 36810,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup fe46791",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup 0bbaf0f",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md docs/response.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup 92842f9",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q -u",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1191,7 +3663,30 @@
     "output_tokens": 519
    },
    "cost_usd_reported_by_cli": 0.0506445,
-   "wall_ms": 10245
+   "wall_ms": 10245,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show b72c",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split b72c --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1210,7 +3705,55 @@
     "output_tokens": 984
    },
    "cost_usd_reported_by_cli": 0.09795260000000001,
-   "wall_ms": 23905
+   "wall_ms": 23905,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 94c5526 -- src tests",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit kzw",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m refactor validation helpers qk:a nq:b",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m tune lead scoring qk:5 nq:c",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m document lead workflow rl:3 lz:1",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move wvn -b split-workflow --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1229,7 +3772,105 @@
     "output_tokens": 2077
    },
    "cost_usd_reported_by_cli": 0.07156900000000001,
-   "wall_ms": 29494
+   "wall_ms": 29494,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show HEAD~1 -- src tests",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q --detach HEAD~2",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout fd5199c -- src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff HEAD --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qam refactor validation helpers\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout fd5199c -- src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qam tune lead scoring\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout fd5199c -- README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qm document lead workflow\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -f split-workflow HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout fd5199c -- src/config.ts notes/investigation.md src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/lead.ts",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1248,7 +3889,20 @@
     "output_tokens": 234
    },
    "cost_usd_reported_by_cli": 0.039820600000000005,
-   "wall_ms": 18609
+   "wall_ms": 18609,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1267,7 +3921,30 @@
     "output_tokens": 455
    },
    "cost_usd_reported_by_cli": 0.0477603,
-   "wall_ms": 18967
+   "wall_ms": 18967,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move ykl wkp --below rvl",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1286,7 +3963,30 @@
     "output_tokens": 635
    },
    "cost_usd_reported_by_cli": 0.0424715,
-   "wall_ms": 17371
+   "wall_ms": 17371,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --format=%h %s main..reorder-series",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1305,7 +4005,20 @@
     "output_tokens": 331
    },
    "cost_usd_reported_by_cli": 0.040934200000000004,
-   "wall_ms": 15533
+   "wall_ms": 15533,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline extract parser helpers wire parser helpers --into add retry support add retry option test retry option document retry option",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1324,7 +4037,40 @@
     "output_tokens": 560
    },
    "cost_usd_reported_by_cli": 0.0604562,
-   "wall_ms": 22360
+   "wall_ms": 22360,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash yot xok -m add parser pipeline",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash yot -t xok -m add parser pipeline --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash tws tyx -t sru -m add retry support --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1343,7 +4089,65 @@
     "output_tokens": 1185
    },
    "cost_usd_reported_by_cli": 0.0514051,
-   "wall_ms": 17541
+   "wall_ms": 17541,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline main..HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 12c7bfc",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick -n e0ebdc5 7a4bbce",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m add parser pipeline -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 3e688a8",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick -n 31502e2 fcdc9da ae72e98",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m add retry support -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff ae72e98 --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1362,7 +4166,25 @@
     "output_tokens": 1334
    },
    "cost_usd_reported_by_cli": 0.06385370000000001,
-   "wall_ms": 20979
+   "wall_ms": 20979,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --help",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1381,7 +4203,45 @@
     "output_tokens": 764
    },
    "cost_usd_reported_by_cli": 0.09072290000000001,
-   "wall_ms": 13485
+   "wall_ms": 13485,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "pull",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve conflicts notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve apply src/notify.ts:1 --commit notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve conflicts notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve apply src/config.ts:1 --theirs",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1400,7 +4260,200 @@
     "output_tokens": 4215
    },
    "cost_usd_reported_by_cli": 0.13432750000000002,
-   "wall_ms": 83967
+   "wall_ms": 83967,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "stash -u",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase main",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --name-only --diff-filter=U",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/config.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph -5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/config.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit --amend --no-edit -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff HEAD~1 -- src/config.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "grep -n ^<<<<<<<",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%B -2",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -u -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash show -p",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -- src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q --detach 61bddf0",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --amend --no-edit",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 9ef320c",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -f notify-retry HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "grep -n ^<<<<<<<",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s main..",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%B -2",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff main -- src",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1419,7 +4472,30 @@
     "output_tokens": 807
    },
    "cost_usd_reported_by_cli": 0.051184900000000005,
-   "wall_ms": 12940
+   "wall_ms": 12940,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions.json",
+     "exit": 128
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1438,7 +4514,40 @@
     "output_tokens": 1000
    },
    "cost_usd_reported_by_cli": 0.06046459999999999,
-   "wall_ms": 29404
+   "wall_ms": 29404,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show data-update:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline seed-rewrite -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline data-update -3",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1457,7 +4566,55 @@
     "output_tokens": 665
    },
    "cost_usd_reported_by_cli": 0.045371400000000006,
-   "wall_ms": 21681
+   "wall_ms": 21681,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a --contains 668d23d",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse main data-update notes seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d23d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd618:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1476,7 +4633,20 @@
     "output_tokens": 333
    },
    "cost_usd_reported_by_cli": 0.0420824,
-   "wall_ms": 12759
+   "wall_ms": 12759,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add app checkpoint -b app-checkpoint --all",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1495,7 +4665,45 @@
     "output_tokens": 654
    },
    "cost_usd_reported_by_cli": 0.0498172,
-   "wall_ms": 14497
+   "wall_ms": 14497,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "--help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "setup",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -c app-checkpoint -m Add app checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --format=%s app-checkpoint",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1514,7 +4722,45 @@
     "output_tokens": 371
    },
    "cost_usd_reported_by_cli": 0.03668,
-   "wall_ms": 10682
+   "wall_ms": 10682,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -b app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md package.json src test",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1533,7 +4779,20 @@
     "output_tokens": 338
    },
    "cost_usd_reported_by_cli": 0.041302200000000004,
-   "wall_ms": 10329
+   "wall_ms": 10329,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1552,7 +4811,40 @@
     "output_tokens": 340
    },
    "cost_usd_reported_by_cli": 0.0449844,
-   "wall_ms": 12268
+   "wall_ms": 12268,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard wp",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard xnv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard to",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -1571,7 +4863,40 @@
     "output_tokens": 361
    },
    "cost_usd_reported_by_cli": 0.0381462,
-   "wall_ms": 8996
+   "wall_ms": 8996,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -- src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1590,7 +4915,20 @@
     "output_tokens": 308
    },
    "cost_usd_reported_by_cli": 0.040007600000000004,
-   "wall_ms": 15255
+   "wall_ms": 15255,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add lead input validation -b input-validation qog guq ksv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1609,7 +4947,20 @@
     "output_tokens": 375
    },
    "cost_usd_reported_by_cli": 0.0472027,
-   "wall_ms": 22975
+   "wall_ms": 22975,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b input-validation -m Add lead input validation\n\nReject lead payloads with missing name or malformed email, with a test and README note.\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> rl:9 qt:e qp:e",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1628,7 +4979,60 @@
     "output_tokens": 827
    },
    "cost_usd_reported_by_cli": 0.050931500000000005,
-   "wall_ms": 28749
+   "wall_ms": 28749,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/handler.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "apply --cached --recount -",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md tests/handler.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -b input-validation",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add lead input validation -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1647,7 +5051,25 @@
     "output_tokens": 289
    },
    "cost_usd_reported_by_cli": 0.0409114,
-   "wall_ms": 12682
+   "wall_ms": 12682,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit 1915933 notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1666,7 +5088,20 @@
     "output_tokens": 451
    },
    "cost_usd_reported_by_cli": 0.0773098,
-   "wall_ms": 17264
+   "wall_ms": 17264,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit qsx:xx --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1685,7 +5120,50 @@
     "output_tokens": 636
    },
    "cost_usd_reported_by_cli": 0.0432365,
-   "wall_ms": 26177
+   "wall_ms": 26177,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rm --cached -q notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit --amend --no-edit -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --format=%an %ad %s HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1704,7 +5182,25 @@
     "output_tokens": 387
    },
    "cost_usd_reported_by_cli": 0.0424456,
-   "wall_ms": 18527
+   "wall_ms": 18527,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1723,7 +5219,70 @@
     "output_tokens": 1054
    },
    "cost_usd_reported_by_cli": 0.0937728,
-   "wall_ms": 47586
+   "wall_ms": 47586,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pull",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "--help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick 6499075 --below ntm",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s -4 feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1742,7 +5301,105 @@
     "output_tokens": 1217
    },
    "cost_usd_reported_by_cli": 0.0534842,
-   "wall_ms": 26475
+   "wall_ms": 26475,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "fetch origin",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge-base other-topic origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline f64ba87..other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch tmp origin/feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash origin/main tmp",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash --onto tmp d571e57 feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -D tmp",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --autostash origin/main other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1752,7 +5409,7 @@
    "correctness_passed": true,
    "compliance_passed": false,
    "policy_violations": [
-    "git b r a n c h   - D   d o c s   n o r m a l i z e   g r e e t i n g"
+    "git branch -D docs normalize greeting"
    ],
    "model_tool_calls": 5,
    "turns": 6,
@@ -1763,7 +5420,70 @@
     "output_tokens": 804
    },
    "cost_usd_reported_by_cli": 0.05440879999999999,
-   "wall_ms": 44303
+   "wall_ms": 44303,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land normalize greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --no-merged main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline main..docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s -4 main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s -3 docs",
+     "exit": 128
+    },
+    {
+     "tool": "git",
+     "args": "diff main docs --stat --",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -D docs normalize greeting",
+     "exit": 42
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1782,7 +5502,80 @@
     "output_tokens": 1002
    },
    "cost_usd_reported_by_cli": 0.075352,
-   "wall_ms": 31245
+   "wall_ms": 31245,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "merge --help",
+     "exit": 2
+    },
+    {
+     "tool": "but",
+     "args": "land --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land greeting --whole-stack --yes",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "land docs --yes",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff main --stat",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1801,7 +5594,75 @@
     "output_tokens": 592
    },
    "cost_usd_reported_by_cli": 0.0403806,
-   "wall_ms": 23130
+   "wall_ms": 23130,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "remote -v",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --ff-only greeting",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase main docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "merge --ff-only docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -d docs greeting normalize",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1811,7 +5672,7 @@
    "correctness_passed": true,
    "compliance_passed": false,
    "policy_violations": [
-    "git w o r k t r e e   a d d   - q   - - d e t a c h   / t m p / w t 1 3   r e v i v e - w o r k t r e e - n o - g r a p h"
+    "git worktree add -q --detach /tmp/wt13 revive-worktree-no-graph"
    ],
    "model_tool_calls": 9,
    "turns": 10,
@@ -1822,7 +5683,30 @@
     "output_tokens": 1227
    },
    "cost_usd_reported_by_cli": 0.0672732,
-   "wall_ms": 28644
+   "wall_ms": 28644,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "worktree add -q --detach <tmp> revive-worktree-no-graph",
+     "exit": 42
+    },
+    {
+     "tool": "aisc",
+     "args": "show 9d40",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1841,7 +5725,160 @@
     "output_tokens": 2499
    },
    "cost_usd_reported_by_cli": 0.1454092,
-   "wall_ms": 100394
+   "wall_ms": 100394,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat 816c4bd a17e27c",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff main revive-worktree-command --stat",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pick 816c4bd -b revive-worktree-no-graph --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff main revive-worktree-no-graph --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "archive revive-worktree-no-graph --prefix=rwng/ -o <tmp>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:graph.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:graph_core.py",
+     "exit": 128
+    },
+    {
+     "tool": "git",
+     "args": "ls-tree --name-only revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:graph.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "ls-tree --name-only revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:graph.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "ls-tree --name-only revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:graph.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1860,7 +5897,45 @@
     "output_tokens": 524
    },
    "cost_usd_reported_by_cli": 0.0435193,
-   "wall_ms": 26785
+   "wall_ms": 26785,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat main revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show a17e27c 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "switch -c revive-worktree-no-graph main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 816c4bd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "switch ui-note",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1879,7 +5954,20 @@
     "output_tokens": 395
    },
    "cost_usd_reported_by_cli": 0.0432277,
-   "wall_ms": 23414
+   "wall_ms": 23414,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1898,7 +5986,35 @@
     "output_tokens": 546
    },
    "cost_usd_reported_by_cli": 0.0915097,
-   "wall_ms": 27267
+   "wall_ms": 27267,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t xzw qk:a nq:6 rl:7",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t vlv qk:5 nq:c",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "amend -t xss rl:e kw:1",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1917,7 +6033,169 @@
     "output_tokens": 2750
    },
    "cost_usd_reported_by_cli": 0.1049553,
-   "wall_ms": 59442
+   "wall_ms": 59442,
+   "failed_checks": [
+    "branch_has_expected_commit_count",
+    "commit_subjects_preserved",
+    "target_atoms_in_assigned_commits"
+   ],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p README.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup=657496a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup=c487995",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md docs/response.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup=ae00cac",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show HEAD~1 -- src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q HEAD~2",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p src/lead.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -p tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup=c487995",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md docs/response.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --fixup=ae00cac",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1936,7 +6214,25 @@
     "output_tokens": 486
    },
    "cost_usd_reported_by_cli": 0.04869129999999999,
-   "wall_ms": 15383
+   "wall_ms": 15383,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show d703",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split d703 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1955,7 +6251,45 @@
     "output_tokens": 732
    },
    "cost_usd_reported_by_cli": 0.096946,
-   "wall_ms": 20127
+   "wall_ms": 20127,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit llz",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m refactor validation helpers qk:a nq:b",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m tune lead scoring qk:5 nq:c",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b split-workflow -m document lead workflow rl:3 lz:1",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move xqk -b split-workflow --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1974,7 +6308,125 @@
     "output_tokens": 2252
    },
    "cost_usd_reported_by_cli": 0.0761282,
-   "wall_ms": 34447
+   "wall_ms": 34447,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show d008fd1 --stat --format=%H",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show d008fd1 -- src tests",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 4f02b09 --stat --format=%s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q 5d6bb51",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout d008fd1 -- src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff HEAD --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qam refactor validation helpers\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout d008fd1 -- src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff HEAD --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add -A src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qm tune lead scoring\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout d008fd1 -- README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -qm document lead workflow\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 4f02b09",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -f split-workflow HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout d008fd1 -- src/config.ts notes/investigation.md",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff d008fd1 --stat -- src tests README.md docs notes",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -1993,7 +6445,20 @@
     "output_tokens": 290
    },
    "cost_usd_reported_by_cli": 0.0403358,
-   "wall_ms": 12417
+   "wall_ms": 12417,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2012,7 +6477,20 @@
     "output_tokens": 399
    },
    "cost_usd_reported_by_cli": 0.0763753,
-   "wall_ms": 16833
+   "wall_ms": 16833,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move wsq nvm --above rut --status-after",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2031,7 +6509,40 @@
     "output_tokens": 1311
    },
    "cost_usd_reported_by_cli": 0.06113460000000001,
-   "wall_ms": 20970
+   "wall_ms": 20970,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --reverse",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset --hard 3995ea5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 6e5f3ec 7502d10 970a3d2 4ae5f06 9bc0157",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff 9bc0157 HEAD --stat",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2050,7 +6561,20 @@
     "output_tokens": 284
    },
    "cost_usd_reported_by_cli": 0.040376100000000005,
-   "wall_ms": 18835
+   "wall_ms": 18835,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline c8df aaff --into add retry support 1026 795a 853c",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2069,7 +6593,55 @@
     "output_tokens": 816
    },
    "cost_usd_reported_by_cli": 0.06548150000000001,
-   "wall_ms": 44685
+   "wall_ms": 44685,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -v",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash olq qtz -m add parser pipeline --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "squash yml mkw kvr -m add retry support --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "squash olq -t qtz -m add parser pipeline --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "squash yml mkw kvr -t kvr -m add retry support --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "squash yml mkw -t kvr -m add retry support --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2088,7 +6660,75 @@
     "output_tokens": 1248
    },
    "cost_usd_reported_by_cli": 0.0546038,
-   "wall_ms": 35026
+   "wall_ms": 35026,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline main..HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 7dcd514",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --soft bf0a83d",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m add parser pipeline -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 3ba986a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q 4b12c2d -- .",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --soft HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m add retry support -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff 4b12c2d --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2107,7 +6747,20 @@
     "output_tokens": 611
    },
    "cost_usd_reported_by_cli": 0.048250999999999995,
-   "wall_ms": 17309
+   "wall_ms": 17309,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2126,7 +6779,55 @@
     "output_tokens": 808
    },
    "cost_usd_reported_by_cli": 0.0964885,
-   "wall_ms": 33129
+   "wall_ms": 33129,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "pull",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve conflicts notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve apply src/notify.ts:1 --commit notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve conflicts notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "resolve apply src/config.ts:1 --theirs",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4 notify-retry",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2145,7 +6846,60 @@
     "output_tokens": 1734
    },
    "cost_usd_reported_by_cli": 0.0773927,
-   "wall_ms": 44841
+   "wall_ms": 44841,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "stash -u",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase main",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --name-only --diff-filter=U",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/notify.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src/config.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph -5",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2164,7 +6918,35 @@
     "output_tokens": 1372
    },
    "cost_usd_reported_by_cli": 0.0671823,
-   "wall_ms": 41022
+   "wall_ms": 41022,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show data-update:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2183,7 +6965,40 @@
     "output_tokens": 787
    },
    "cost_usd_reported_by_cli": 0.052369200000000005,
-   "wall_ms": 19398
+   "wall_ms": 19398,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph seed-rewrite data-update -5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "ls-tree -r --name-only seed-rewrite~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite~1:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2202,7 +7017,40 @@
     "output_tokens": 459
    },
    "cost_usd_reported_by_cli": 0.0409244,
-   "wall_ms": 13180
+   "wall_ms": 13180,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d23d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd618:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2221,7 +7069,20 @@
     "output_tokens": 396
    },
    "cost_usd_reported_by_cli": 0.0432047,
-   "wall_ms": 13192
+   "wall_ms": 13192,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add app checkpoint --all -b app-checkpoint",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2240,7 +7101,40 @@
     "output_tokens": 592
    },
    "cost_usd_reported_by_cli": 0.07825100000000001,
-   "wall_ms": 16979
+   "wall_ms": 16979,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "setup",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b app-checkpoint -m Add app checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2259,7 +7153,45 @@
     "output_tokens": 385
    },
    "cost_usd_reported_by_cli": 0.03682800000000001,
-   "wall_ms": 19167
+   "wall_ms": 19167,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -b app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add README.md package.json src test",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2278,7 +7210,25 @@
     "output_tokens": 445
    },
    "cost_usd_reported_by_cli": 0.046466799999999996,
-   "wall_ms": 15638
+   "wall_ms": 15638,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/format.ts test/catalog.test.ts src/catalog.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2297,7 +7247,25 @@
     "output_tokens": 396
    },
    "cost_usd_reported_by_cli": 0.07720679999999999,
-   "wall_ms": 15183
+   "wall_ms": 15183,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard wp xnv to",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -2316,7 +7284,35 @@
     "output_tokens": 331
    },
    "cost_usd_reported_by_cli": 0.0378104,
-   "wall_ms": 10507
+   "wall_ms": 10507,
+   "failed_checks": [],
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -- src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
   }
  ]
 }
