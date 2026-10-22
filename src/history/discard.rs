@@ -79,6 +79,33 @@ fn index_entries(git: &Git, paths: &[String]) -> Result<BTreeMap<String, Entry>>
     Ok(entries)
 }
 
+/// Paths whose index entry is an intent-to-add placeholder: porcelain v2 reports them as
+/// index-unchanged (`.`) and worktree-added (`A`).
+fn intent_to_add(git: &Git, paths: &[String]) -> Result<BTreeSet<String>> {
+    let mut found = BTreeSet::new();
+    for chunk in paths.chunks(400) {
+        let mut args = vec![
+            "status",
+            "--porcelain=v2",
+            "-z",
+            "--untracked-files=no",
+            "--no-renames",
+            "--",
+        ];
+        args.extend(chunk.iter().map(String::as_str));
+        let output = git.run(&args)?;
+        for record in output.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
+            let line = String::from_utf8_lossy(record);
+            if line.starts_with("1 .A ")
+                && let Some(path) = line.splitn(9, ' ').nth(8)
+            {
+                found.insert(path.to_owned());
+            }
+        }
+    }
+    Ok(found)
+}
+
 /// Current worktree bytes of a path (a symlink reads as its target); `None` when absent.
 fn worktree_bytes(git: &Git, path: &str) -> Option<Vec<u8>> {
     let full = git.root.join(path);
@@ -139,6 +166,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
     let head_tree = git.commit_tree_of(&head_oid)?;
     let head_entries = git.ls_tree(&head_tree, &paths)?;
     let index = index_entries(&git, &paths)?;
+    let placeholders = intent_to_add(&git, &paths)?;
     let modified: Vec<String> = selection
         .files
         .keys()
@@ -227,6 +255,15 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
                     mode,
                     before_mode,
                 });
+                if placeholders.contains(&file.path) {
+                    // `git add -N` placeholder: counts as absent and is removed with the file.
+                    plan.index.push(IndexChange {
+                        path: file.path.clone(),
+                        from: None,
+                        to: head.cloned(),
+                    });
+                    continue;
+                }
                 let present = index.get(&file.path);
                 if present != head {
                     plan.index.push(IndexChange {

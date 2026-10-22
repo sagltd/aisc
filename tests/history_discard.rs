@@ -260,6 +260,16 @@ fn an_untracked_file_changed_between_read_and_discard_is_a_stale_error() {
 }
 
 #[test]
+fn an_intent_to_add_file_is_removed_with_its_placeholder() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("new.txt", "new\n");
+    fixture.git(&["add", "-N", "new.txt"]);
+    fixture.aisc(&["discard", "new.txt"]).ok();
+    assert!(!fixture.exists("new.txt"));
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+#[test]
 fn failures_change_nothing() {
     let fixture = pilot9();
     fixture.git(&["add", "src/catalog.ts"]);
