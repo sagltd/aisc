@@ -438,7 +438,12 @@ fn system_config_path(root: &Path, common: &Path) -> Option<PathBuf> {
 /// The system attributes file this Git reads (`git var GIT_ATTR_SYSTEM`), remembered like the
 /// system configuration's location; `None` when unknown.
 pub(crate) fn system_attributes_path(root: &Path) -> Option<PathBuf> {
-    git_var_path(root, &common_dir_of(root)?, "GIT_ATTR_SYSTEM", "git-system-attributes")
+    git_var_path(
+        root,
+        &common_dir_of(root)?,
+        "GIT_ATTR_SYSTEM",
+        "git-system-attributes",
+    )
 }
 
 /// The first line of `git --version`, remembered like the system configuration's location;
