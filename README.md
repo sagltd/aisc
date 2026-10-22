@@ -32,6 +32,7 @@ Ten scripted version-control tasks, all four tools in the same run, every end st
 | Transcript tokens (estimate) | **575** | 1,639 | 1,261 | 1,307 |
 | Wall time, all ten tasks | **733 ms** | 1,579 ms | 1,555 ms | 1,415 ms |
 | Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
+| Real agent, 13 vcbench tasks: tokens | **1.02M** | 1.64M | 1.38M | — |
 
 Default output, no quiet flags. Tokens are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
 
@@ -112,8 +113,9 @@ docs deleted
 # Install (Git 2.43+ and Rust 1.91+)
 cargo install --git https://github.com/sagltd/aisc --locked
 
-# Give your agent the skill
+# Give your agent the skill, and the workflow block for AGENTS.md / CLAUDE.md
 npx skills add sagltd/aisc --skill aisc
+aisc agent setup --print >> AGENTS.md
 ```
 
 Then let the agent work. It runs `aisc log` to see ids and state, makes one call per edit, and can undo anything with `aisc undo`.
@@ -140,10 +142,23 @@ A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30
 | `aisc discard SEL…` | Throw away selected changes (undoable) |
 | `aisc undo` · `aisc oplog` | Reverse the last operation · list operations |
 | `aisc start` · `verify` · `finish` · `gc` | Task lifecycle for parallel agents ([details](skills/aisc/references/lifecycle.md)) |
+| `aisc agent setup --print` | The version-control block for an agent's `AGENTS.md` or `CLAUDE.md` |
 
 Every write prints its result, so there is no need to re-check. `-q` prints a single line, `--json` prints machine output, and `aisc <command> --help` is the reference for the version you have installed.
 
 ## Benchmarks
+
+### Real agents
+
+Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev) harness once per tool. Every arm got the same prompt, the same sandbox (accept-edits with an allowlist, no bypass) and its tool's own agent setup block (`aisc agent setup --print`, `but agent setup --print`, plain-Git instructions). Each run is graded by the harness's own verifier, and an arm fails if any raw command breaks the tool's policy.
+
+| 13 tasks, one run each | Passed | Commands | Tokens | Cost | Time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **AISC** | **13/13** | **39** | **1.02M** | **$0.61** | **212 s** |
+| GitButler 0.22.3 | 13/13 | 61 | 1.64M | $1.00 | 304 s |
+| Git 2.50 | 13/13 | 59 | 1.38M | $0.73 | 295 s |
+
+That is 36% fewer commands, 38% fewer tokens and 39% lower cost than GitButler, with every task passing. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens. Per-run metrics, with no transcripts, are in [`benchmarks/results/agent-pilot.json`](benchmarks/results/agent-pilot.json). One run per task is a pilot: single tasks vary. Git used fewer commands than AISC on four tasks (review, cold checkpoint, integrating branches, selective copy), and GitButler on one (split with leftovers).
 
 ### Command benchmark
 

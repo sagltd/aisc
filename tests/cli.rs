@@ -91,3 +91,25 @@ fn runtime_errors_keep_json_default_and_human_labels() {
         }
     }
 }
+
+#[test]
+fn agent_setup_prints_a_plain_text_instructions_block() {
+    let output = invoke(&["--json", "agent", "setup", "--print"]);
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.starts_with("<!-- aisc-agent-setup:start -->\n"),
+        "{text}"
+    );
+    assert!(
+        text.trim_end().ends_with("<!-- aisc-agent-setup:end -->"),
+        "{text}"
+    );
+    assert!(text.contains("two calls: `aisc log`"), "{text}");
+    // Small enough to sit in every agent session.
+    assert!(text.len() < 2000, "{} bytes", text.len());
+    assert!(
+        !invoke(&["agent", "setup"]).status.success(),
+        "--print is required"
+    );
+}

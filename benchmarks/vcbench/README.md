@@ -88,7 +88,7 @@ Every reference passes its verifier. Calls and bytes are the `aisc` invocations 
 
 ## What the patch adds
 
-- **Arm `aisc+skill`.** The fixture is prepared exactly like the `git` arm (dirty fixture created directly, no tool setup), so state equivalence with Git holds trivially. The skill is copied to `.codex/skills/aisc` and `.claude/skills/aisc`, with an `AGENTS.md`/`CLAUDE.md` policy block: use `aisc` for writes, no raw git writes, `but` or `jj`. Scenario verifiers use `gitLike(arm)` (`scripts/lib/arms.mjs`).
+- **Arm `aisc+skill`.** The fixture is prepared exactly like the `git` arm (dirty fixture created directly, no tool setup), so state equivalence with Git holds trivially. The skill is copied to `.codex/skills/aisc` and `.claude/skills/aisc`, with an `AGENTS.md`/`CLAUDE.md` block taken from `aisc agent setup --print`, as the upstream `but+skill` arm embeds `but agent setup --print` (the cold task gets a generic block in both arms). Scenario verifiers use `gitLike(arm)` (`scripts/lib/arms.mjs`).
 - **Policy** (`tool-policy.mjs`, `command-guards.mjs`): `aisc` is blocked in the other arms; raw git writes, `but` and `jj` are blocked in the aisc arm; read-only git stays allowed; git spawned by `aisc` counts as tool-internal, not as an agent command. `aisc log/show/oplog/context/diff/github/gitlab` and `gc` without `--apply` count as inspection, everything else as mutation. Shims are PATH wrappers (observability), not enforcement: an absolute path bypasses them.
 - **Disk metric** (`scripts/lib/disk.mjs`): `result.disk.{before,after,delta}_{apparent,allocated}_bytes` around the agent phase, covering the workspace including `.git`/`.jj`, linked worktrees outside it (from `git worktree list`) and GitButler's app-data directory. Apparent = `st_size`; allocated = `st_blocks * 512`; symlinks are not followed and hard links count once.
 - **Sandboxed permissions** (see below).
@@ -96,7 +96,7 @@ Every reference passes its verifier. Calls and bytes are the `aisc` invocations 
 
 ## Fairness rules
 
-- The `AGENTS.md`/`CLAUDE.md` block has the same shape in every skill arm (benchmark boundary, local skill location, a short version-control policy: use the tool, no other tool's writes, read-only Git allowed); tool-specific usage lives only in the skill.
+- The `AGENTS.md`/`CLAUDE.md` block has the same frame in every skill arm (benchmark boundary, local skill location, version-control block). In the `but+skill` and `aisc+skill` arms the version-control block is the tool's own `agent setup --print` output; `jj+skill` and `git` get the harness's short policy text, as upstream.
 - Same task text and wrapper prompt, fixtures, sandbox, agent CLI, model, effort and timeout for every arm; arms differ only in the tool and its skill/instructions. Use `--rotate-arms true` to spread order effects.
 - Fixture creation, tool setup and skill installation happen before the timed agent phase and are excluded from wall time, commands and tokens (except the deliberately cold task 8).
 - Same verifier for every arm: Git-visible state, with the minefield checks (stash, operation residue, protected refs, uncommitted work).

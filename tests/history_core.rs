@@ -90,7 +90,8 @@ fn clean_worktree_has_no_uncommitted_section_and_branch_view_reports_base() {
     );
     assert!(lines[1].ends_with(" add b | b.txt"));
     assert!(lines[2].ends_with(" add two | a.txt"));
-    assert_eq!(lines.len(), 3, "{}", log.stdout);
+    assert_eq!(lines[3], "clean: nothing uncommitted, no paused sync");
+    assert_eq!(lines.len(), 4, "{}", log.stdout);
     let other = fixture.aisc(&["log", "--branch", "main"]);
     other.ok();
     assert!(

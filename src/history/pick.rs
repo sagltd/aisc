@@ -263,7 +263,7 @@ pub(crate) fn run(args: &cli::Pick) -> Result<Outcome> {
     let head_view = view::read(&git, None, LIMIT, true)?;
     let from_view = match &args.from {
         Some(name) if head_view.branch.as_deref() != Some(name.as_str()) => {
-            Some(view::read(&git, Some(name), LIMIT, false)?)
+            Some(view::read_any(&git, Some(name), LIMIT, false)?)
         }
         _ => None,
     };

@@ -613,3 +613,247 @@ fn case_only_rename_ends_with_the_new_name_on_disk() {
     assert!(!names.contains(&"Readme.md".to_owned()), "{names:?}");
     assert_eq!(fixture.read("README.md"), "docs\n");
 }
+
+#[test]
+fn sync_also_takes_new_commits_pushed_to_the_branch_upstream() {
+    let fixture = Fixture::with_files(&[
+        ("README.md", "Service example.\n"),
+        ("config/runtime.json", "{\"timeout\":10}\n"),
+        ("src/formats.ts", "export const formats = [];\n"),
+    ]);
+    fixture.git(&["switch", "-c", "feature-service"]);
+    fixture.write("src/formats.ts", "export const formats = [\"document\"];\n");
+    commit_as(&fixture, "Support document format");
+    let remote = fixture.directory.path().join("origin.git");
+    let remote = remote.to_str().unwrap().to_owned();
+    fixture.git(&["init", "--bare", "-b", "main", &remote]);
+    fixture.git(&["remote", "add", "origin", &remote]);
+    fixture.git(&["push", "-u", "origin", "main", "feature-service"]);
+    fixture.write("src/retry.ts", "export const retryLimit = 3;\n");
+    commit_as(&fixture, "Add local retry setting");
+    // Another clone advances origin/main and pushes to origin/feature-service.
+    let publisher = fixture.directory.path().join("publisher");
+    let publisher = publisher.to_str().unwrap().to_owned();
+    fixture.git(&["clone", "-q", &remote, &publisher]);
+    let in_publisher = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&publisher)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "Main Author")
+            .env("GIT_AUTHOR_EMAIL", "main@example.test")
+            .env("GIT_COMMITTER_NAME", "Main Author")
+            .env("GIT_COMMITTER_EMAIL", "main@example.test")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    std::fs::write(
+        format!("{publisher}/config/runtime.json"),
+        "{\"timeout\":20}\n",
+    )
+    .unwrap();
+    in_publisher(&["commit", "-qam", "Increase default timeout"]);
+    in_publisher(&["push", "-q", "origin", "main"]);
+    in_publisher(&["switch", "-q", "feature-service"]);
+    std::fs::create_dir_all(format!("{publisher}/.agent")).unwrap();
+    std::fs::write(format!("{publisher}/.agent/environment.json"), "{}\n").unwrap();
+    in_publisher(&["add", ".agent/environment.json"]);
+    in_publisher(&["commit", "-qm", "Add agent environment"]);
+    in_publisher(&["push", "-q", "origin", "feature-service"]);
+    fixture.write("README.md", "Service example.\nUnfinished release notes.\n");
+
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(
+        run.stdout.contains("with origin/feature-service"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(
+        fixture.subjects("origin/main..HEAD"),
+        [
+            "Add local retry setting",
+            "Add agent environment",
+            "Support document format"
+        ]
+    );
+    assert_eq!(fixture.read("config/runtime.json"), "{\"timeout\":20}\n");
+    assert_eq!(
+        fixture.read("README.md"),
+        "Service example.\nUnfinished release notes.\n"
+    );
+    assert_no_git_residue(&fixture);
+    assert_eq!(fixture.calls(), 1);
+    // Undo restores the branch exactly.
+    let synced = fixture.git(&["rev-parse", "HEAD"]);
+    fixture.aisc(&["undo"]).ok();
+    assert_ne!(fixture.git(&["rev-parse", "HEAD"]), synced);
+    assert_eq!(
+        fixture.subjects("main..HEAD"),
+        ["Add local retry setting", "Support document format"]
+    );
+}
+
+/// feature pushed to origin/feature, then origin/main moves (by a push from another clone).
+fn pushed_feature(subjects: &[&str]) -> Fixture {
+    let fixture = Fixture::with_files(&[("README.md", "base\n")]);
+    let remote = fixture.directory.path().join("origin.git");
+    let remote = remote.to_str().unwrap().to_owned();
+    fixture.git(&["init", "-q", "--bare", "-b", "main", &remote]);
+    fixture.git(&["remote", "add", "origin", &remote]);
+    fixture.git(&["push", "-q", "-u", "origin", "main"]);
+    fixture.git(&["switch", "-q", "-c", "feature"]);
+    for (index, subject) in subjects.iter().enumerate() {
+        fixture.write(&format!("f{index}.txt"), &format!("{subject}\n"));
+        commit_as(&fixture, subject);
+    }
+    fixture.git(&["push", "-q", "-u", "origin", "feature"]);
+    fixture.git(&["switch", "-q", "main"]);
+    fixture.write("main.txt", "moved\n");
+    commit_as(&fixture, "move main");
+    fixture.git(&["push", "-q", "origin", "main"]);
+    fixture.git(&["reset", "-q", "--hard", "HEAD~1"]);
+    fixture.git(&["switch", "-q", "feature"]);
+    fixture
+}
+
+#[test]
+fn sync_never_takes_back_pushed_commits_the_user_squashed() {
+    let fixture = pushed_feature(&["wip 1", "wip 2"]);
+    fixture
+        .aisc(&["squash", "--into", "Add feature", "wip 1", "wip 2"])
+        .ok();
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(
+        !run.stdout.contains("with origin/feature"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(fixture.subjects("origin/main..HEAD"), ["Add feature"]);
+}
+
+#[test]
+fn sync_never_takes_back_a_pushed_commit_the_user_amended() {
+    let fixture = pushed_feature(&["feature work"]);
+    fixture.write("f0.txt", "feature work, amended\n");
+    fixture
+        .aisc(&["amend", "--into", "feature work", "f0.txt"])
+        .ok();
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(!run.stdout.contains("CONFLICT"), "{}", run.stdout);
+    assert_eq!(fixture.subjects("origin/main..HEAD"), ["feature work"]);
+    assert_eq!(fixture.read("f0.txt"), "feature work, amended\n");
+}
+
+/// Commits `file` = `content` as `subject` on `branch` of `remote` from another clone.
+fn publish(
+    fixture: &Fixture,
+    remote: &str,
+    branch: &str,
+    file: &str,
+    content: &str,
+    subject: &str,
+) {
+    let clone = fixture
+        .directory
+        .path()
+        .join(format!("publisher-{subject}"));
+    let clone = clone.to_str().unwrap().to_owned();
+    fixture.git(&["clone", "-q", "-b", branch, remote, &clone]);
+    std::fs::write(format!("{clone}/{file}"), content).unwrap();
+    for args in [
+        &["add", file][..],
+        &["commit", "-qm", subject][..],
+        &["push", "-q", "origin", branch][..],
+    ] {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&clone)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "Colleague")
+            .env("GIT_AUTHOR_EMAIL", "colleague@example.test")
+            .env("GIT_COMMITTER_NAME", "Colleague")
+            .env("GIT_COMMITTER_EMAIL", "colleague@example.test")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+/// feature with the given commits, pushed to a fresh origin; main is not moved.
+fn feature_on_origin(commits: &[(&str, &str, &str)]) -> (Fixture, String) {
+    let fixture = Fixture::with_files(&[("README.md", "base\n")]);
+    let remote = fixture.directory.path().join("origin.git");
+    let remote = remote.to_str().unwrap().to_owned();
+    fixture.git(&["init", "-q", "--bare", "-b", "main", &remote]);
+    fixture.git(&["remote", "add", "origin", &remote]);
+    fixture.git(&["push", "-q", "-u", "origin", "main"]);
+    fixture.git(&["switch", "-q", "-c", "feature"]);
+    for (file, content, subject) in commits {
+        fixture.write(file, content);
+        commit_as(&fixture, subject);
+    }
+    fixture.git(&["push", "-q", "-u", "origin", "feature"]);
+    (fixture, remote)
+}
+
+#[test]
+fn a_colleagues_push_is_taken_again_after_undoing_a_sync() {
+    let (fixture, remote) = feature_on_origin(&[("a.txt", "a\n", "A")]);
+    publish(&fixture, &remote, "feature", "c.txt", "c\n", "C");
+    fixture.aisc(&["sync", "--fetch"]).ok();
+    assert_eq!(fixture.subjects("main..HEAD"), ["C", "A"]);
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.subjects("main..HEAD"), ["A"]);
+    let again = fixture.aisc(&["sync", "--fetch"]);
+    again.ok();
+    assert_eq!(
+        fixture.subjects("main..HEAD"),
+        ["C", "A"],
+        "{}",
+        again.stdout
+    );
+}
+
+#[test]
+fn a_push_on_top_of_squashed_commits_replays_after_the_squash() {
+    let (fixture, remote) = feature_on_origin(&[("a.txt", "a\n", "A"), ("b.txt", "b1\n", "B")]);
+    publish(&fixture, &remote, "feature", "b.txt", "b2\n", "C");
+    fixture.aisc(&["squash", "--into", "S", "A", "B"]).ok();
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(!run.stdout.contains("CONFLICT"), "{}", run.stdout);
+    assert_eq!(fixture.subjects("main..HEAD"), ["C", "S"]);
+    assert_eq!(fixture.read("b.txt"), "b2\n");
+}
+
+#[test]
+fn sync_never_takes_back_pushed_rebased_commits_the_user_squashed() {
+    let (fixture, remote) = feature_on_origin(&[("a.txt", "a\n", "A"), ("b.txt", "b\n", "B")]);
+    publish(&fixture, &remote, "main", "m1.txt", "m1\n", "M1");
+    fixture.aisc(&["sync", "--fetch"]).ok();
+    fixture.git(&["push", "-q", "-f", "origin", "feature"]);
+    fixture.aisc(&["squash", "--into", "S", "A", "B"]).ok();
+    publish(&fixture, &remote, "main", "m2.txt", "m2\n", "M2");
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert_eq!(
+        fixture.subjects("origin/main..HEAD"),
+        ["S"],
+        "{}",
+        run.stdout
+    );
+}

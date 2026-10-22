@@ -129,6 +129,21 @@ pub(crate) enum Operation {
     },
     /// List or remove reclaimable aisc worktrees
     Gc(Gc),
+    /// Agent setup: the version-control block for AGENTS.md or CLAUDE.md
+    Agent {
+        #[command(subcommand)]
+        action: AgentAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum AgentAction {
+    /// Print the version-control block to put in an agent's instruction file
+    Setup {
+        /// Print the block to stdout (aisc never edits instruction files itself)
+        #[arg(long, required = true)]
+        print: bool,
+    },
 }
 
 /// Flags shared by every verb that rewrites history.
@@ -147,6 +162,9 @@ pub(crate) struct MutationOpts {
 
 #[derive(Args, Debug)]
 pub(crate) struct Log {
+    /// Another local or remote-tracking branch to view (`main`, `origin/main`)
+    #[arg(value_name = "BRANCH", conflicts_with = "branch")]
+    pub target: Option<String>,
     #[arg(long, value_name = "BRANCH")]
     pub branch: Option<String>,
     #[arg(long, default_value = "20", value_parser = bounded::<1_000>)]
@@ -411,6 +429,7 @@ impl Operation {
             Self::Undo { .. } => "undo",
             Self::Oplog { .. } => "oplog",
             Self::Gc(_) => "gc",
+            Self::Agent { .. } => "agent",
         }
     }
 

@@ -670,7 +670,7 @@ index fb0f3af..b4f2d47 100644
    console.log(`[${plan.idx}/${plans.length}] ${plan.task} ${plan.agent} ${plan.arm} r${plan.rep}`);
    const started = Date.now();
 diff --git a/scripts/run-pilot-agent.mjs b/scripts/run-pilot-agent.mjs
-index 8b5150d..e5d3a27 100755
+index 8b5150d..923f16e 100755
 --- a/scripts/run-pilot-agent.mjs
 +++ b/scripts/run-pilot-agent.mjs
 @@ -14,17 +14,19 @@ import { SCENARIO_TASKS, loadScenario } from "./lib/scenarios.mjs";
@@ -725,7 +725,7 @@ index 8b5150d..e5d3a27 100755
  }
  
  function prepareShellConfig(runDir, binDir) {
-@@ -423,6 +425,60 @@ function installPlainGitInstructions(workspace) {
+@@ -423,6 +425,63 @@ function installPlainGitInstructions(workspace) {
    };
  }
  
@@ -741,15 +741,18 @@ index 8b5150d..e5d3a27 100755
 +    cpSync(skillDir, dest, { recursive: true });
 +    installed.push(dest);
 +  }
-+  // Same shape as the but and jj blocks; tool-specific guidance lives only in the skill.
-+  const setupBlock = [
-+    "## Version control",
-+    "",
-+    "- Use AISC (`aisc`) for version-control write operations in this benchmark trial.",
-+    "- The repository was not given any tool-specific preparation. Git-visible refs still matter to the verifier.",
-+    "- Do not use raw `git` writes, GitButler (`but`) or `jj` in this benchmark trial.",
-+    "- Read-only Git inspection is allowed if it helps you verify Git-visible state.",
-+  ].join("\n") + "\n";
++  // Same treatment as the but arm: the tool's own `agent setup --print` block, or a generic block
++  // for the cold task (GitButler's cold block is generic too).
++  const setupBlock = taskConfig.cold
++    ? [
++        "## Version control",
++        "",
++        "- Use AISC (`aisc`) for version-control write operations in this benchmark trial.",
++        "- The repository was not given any tool-specific preparation. Git-visible refs still matter to the verifier.",
++        "- Do not use raw `git` writes, GitButler (`but`) or `jj` in this benchmark trial.",
++        "- Read-only Git inspection is allowed if it helps you verify Git-visible state.",
++      ].join("\n") + "\n"
++    : run(realAisc, ["agent", "setup", "--print"], { cwd: workspace, env: aiscEnv }).stdout.trimEnd() + "\n";
 +  writeAgentInstructionFiles(workspace, `# AGENTS.md
 +
 +## Benchmark boundary
@@ -786,7 +789,7 @@ index 8b5150d..e5d3a27 100755
  function installGitButlerSkill(workspace, skillDir, realBut, butEnv) {
    const skillFile = path.join(skillDir, "SKILL.md");
    if (!existsSync(skillFile)) {
-@@ -572,7 +628,7 @@ function installJjSkill(workspace, skillDir, realJj, sourceMetadata) {
+@@ -572,7 +631,7 @@ function installJjSkill(workspace, skillDir, realJj, sourceMetadata) {
    };
  }
  
@@ -795,7 +798,7 @@ index 8b5150d..e5d3a27 100755
    const workspace = path.join(runDir, "workspace");
    if (scenario) {
      let setup;
-@@ -580,7 +636,8 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
+@@ -580,7 +639,8 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
        if (setup) return;
        setup = arm === "but+skill" ? installGitButlerSkill(workspace, butSkillDir, realBut, butEnv)
          : arm === "jj+skill" ? installJjSkill(workspace, jjSkill.dir, realJj, jjSkill.source)
@@ -805,7 +808,7 @@ index 8b5150d..e5d3a27 100755
        const localPolicy = "\n## Local task policy\n\nDo not attempt publication with Git push/send-pack, jj git push, or But push/PR commands. "
          + (taskConfig.id === "pilot-12-integrate-topics" ? "But land/merge is allowed only against this disposable repository's configured self-remote local main.\n" : "But land/merge is outside this task.\n")
          + "Git/jj retain unrelated work through named refs/bookmarks; only But must retain any initially applied sibling branches. Harness AGENTS.md, CLAUDE.md, .codex/ and .claude/ files are excluded from project changes.\n";
-@@ -588,12 +645,13 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
+@@ -588,12 +648,13 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
        setup.instructions.installed_instruction_sha256 = sha256File(path.join(workspace, "AGENTS.md"));
      };
      scenarioMetadata = scenario.prepare({repoDir: workspace, arm, butBin: realBut, jjBin: realJj, env: butEnv,
@@ -821,7 +824,7 @@ index 8b5150d..e5d3a27 100755
    run("node", [path.join(repoRoot, taskConfig.createFixtureScript), "--out", workspace, "--force", "true", "--dirty", String(dirty)], {
      cwd: repoRoot, env: butEnv,
    });
-@@ -623,6 +681,7 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
+@@ -623,6 +684,7 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
      return { workspace, setup };
    }
  
@@ -829,7 +832,7 @@ index 8b5150d..e5d3a27 100755
    return { workspace, setup: { instructions: installPlainGitInstructions(workspace) } };
  }
  
-@@ -647,6 +706,20 @@ function agentCliVersion(agent) {
+@@ -647,6 +709,20 @@ function agentCliVersion(agent) {
    return `${probe.stdout}${probe.stderr}`.trim().split("\n")[0] || null;
  }
  
@@ -850,7 +853,7 @@ index 8b5150d..e5d3a27 100755
  async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
    const start = Date.now();
    let cmd;
-@@ -659,7 +732,9 @@ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
+@@ -659,7 +735,9 @@ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
        "--json",
        "-C",
        workspace,
@@ -861,7 +864,7 @@ index 8b5150d..e5d3a27 100755
      ];
      if (env.VCB_CODEX_CLEAN_CONFIG === "true") {
        args.push("--ignore-user-config", "--ignore-rules", "--ephemeral");
-@@ -672,7 +747,7 @@ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
+@@ -672,7 +750,7 @@ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
      args.push(prompt);
    } else if (agent === "claude") {
      cmd = "claude";
@@ -870,7 +873,7 @@ index 8b5150d..e5d3a27 100755
      if (env.VCB_CLAUDE_CLEAN_CONFIG === "true" && env.VCB_CLAUDE_SETTINGS) {
        args.push(
          "--settings",
-@@ -910,7 +985,7 @@ function isShellParent(parent) {
+@@ -910,7 +988,7 @@ function isShellParent(parent) {
  }
  
  function isVcEntry(entry) {
@@ -879,7 +882,7 @@ index 8b5150d..e5d3a27 100755
  }
  
  function isNumber(value) {
-@@ -975,6 +1050,7 @@ function isInspection(entry) {
+@@ -975,6 +1053,7 @@ function isInspection(entry) {
    if (entry.tool === "git") return isGitInspection(entry);
    if (entry.tool === "but") return isButInspection(entry);
    if (entry.tool === "jj") return isJjInspection(entry);
@@ -887,7 +890,7 @@ index 8b5150d..e5d3a27 100755
    return false;
  }
  
-@@ -982,6 +1058,7 @@ function isMutation(entry) {
+@@ -982,6 +1061,7 @@ function isMutation(entry) {
    if (entry.tool === "git") return isGitMutation(entry);
    if (entry.tool === "but") return isButMutation(entry);
    if (entry.tool === "jj") return isJjMutation(entry);
@@ -895,7 +898,7 @@ index 8b5150d..e5d3a27 100755
    return false;
  }
  
-@@ -1133,6 +1210,7 @@ function summarizeCommands(entries) {
+@@ -1133,6 +1213,7 @@ function summarizeCommands(entries) {
      git_command_count: vc.filter((entry) => entry.tool === "git").length,
      but_command_count: vc.filter((entry) => entry.tool === "but").length,
      jj_command_count: vc.filter((entry) => entry.tool === "jj").length,
@@ -903,7 +906,7 @@ index 8b5150d..e5d3a27 100755
      inspection_count: inspections.length,
      mutation_count: mutations.length,
      failed_vc_command_count: failed.length,
-@@ -1344,6 +1422,7 @@ if (agent === "claude" && !/\d/.test(model)) {
+@@ -1344,6 +1425,7 @@ if (agent === "claude" && !/\d/.test(model)) {
  const timeoutMs = Number(args.get("timeout-ms") ?? 900000);
  const configuredButSkillDir = args.has("skill-dir") ? path.resolve(args.get("skill-dir")) : null;
  let skillDir = configuredButSkillDir;
@@ -911,7 +914,7 @@ index 8b5150d..e5d3a27 100755
  const configuredJjSkillDir = args.get("jj-skill-dir") ? path.resolve(args.get("jj-skill-dir")) : null;
  const jjSkillUrlArg = args.get("jj-skill-url") ?? null;
  const jjSkillSha256Arg = args.get("jj-skill-sha256") ?? null;
-@@ -1367,6 +1446,17 @@ const codexIsolatedHome = agent === "codex" && codexCleanConfig && args.get("cod
+@@ -1367,6 +1449,17 @@ const codexIsolatedHome = agent === "codex" && codexCleanConfig && args.get("cod
  const codexDisablePlugins = agent === "codex" && codexCleanConfig && args.get("codex-disable-plugins") !== "false";
  const claudeCleanConfig = agent === "claude" ? args.get("claude-clean-config") !== "false" : false;
  const claudeEffortLevel = agent === "claude" && claudeCleanConfig ? (args.get("claude-effort-level") ?? "medium") : null;
@@ -929,7 +932,7 @@ index 8b5150d..e5d3a27 100755
  const codexEffortLevel = agent === "codex" ? args.get("codex-effort-level") ?? null : null;
  const runId = args.get("run-id") ?? `${Date.now()}-${agent}-${arm.replaceAll("+", "-")}`;
  const runDir = path.resolve(args.get("out") ?? path.join("tmp/pilot-runs", runId));
-@@ -1374,6 +1464,7 @@ const runDir = path.resolve(args.get("out") ?? path.join("tmp/pilot-runs", runId
+@@ -1374,6 +1467,7 @@ const runDir = path.resolve(args.get("out") ?? path.join("tmp/pilot-runs", runId
  let realGit = null, gitBinaryMetadata = null;
  let realBut = path.join(runDir, "unavailable-tools", "but");
  let realJj = path.join(runDir, "unavailable-tools", "jj");
@@ -937,7 +940,7 @@ index 8b5150d..e5d3a27 100755
  let versionPins = null;
  
  taskConfig = TASK_CONFIGS[taskId];
-@@ -1385,8 +1476,8 @@ if (!taskConfig) {
+@@ -1385,8 +1479,8 @@ if (!taskConfig) {
  taskDir = path.join(repoRoot, taskConfig.taskDir);
  scenario = taskConfig.module ? await loadScenario(taskId) : null;
  
@@ -948,7 +951,7 @@ index 8b5150d..e5d3a27 100755
    process.exit(2);
  }
  
-@@ -1415,10 +1506,11 @@ try {
+@@ -1415,10 +1509,11 @@ try {
    gitBinaryMetadata = {path:realGit, sha256:sha256File(realGit), version:null};
    if (arm === "but+skill") realBut = executablePath(args.get("but-bin"), "but");
    if (arm === "jj+skill") realJj = executablePath(args.get("jj-bin"), "jj");
@@ -962,7 +965,7 @@ index 8b5150d..e5d3a27 100755
        const observed = probe.status === 0 ? probe.stdout.trim() : null;
        if (name === "git") {
          gitBinaryMetadata.version = observed;
-@@ -1439,7 +1531,7 @@ try {
+@@ -1439,7 +1534,7 @@ try {
      run(realBut, ["skill", "install", "--path", skillDir], {cwd: runDir, env: butEnv, timeoutMs: 15000});
    }
    resolvedJjSkill = arm === "jj+skill" ? resolveJjSkillSource(runDir, configuredJjSkillDir, jjSkillSource) : null;
@@ -971,7 +974,7 @@ index 8b5150d..e5d3a27 100755
  } catch (error) {
    const failure = {task: taskId, agent, arm, git_binary: gitBinaryMetadata, version_pins: versionPins, run_failure_class: "ENV_FAILURE", phase: "preparation", agent_result: null, verifier: {passed:false, score:0, failure_class:"ENV_FAILURE"}, error: String(error)};
    writeFileSync(path.join(runDir, "result.json"), JSON.stringify(failure, null, 2));
-@@ -1450,10 +1542,10 @@ if (prepareOnly) {
+@@ -1450,10 +1545,10 @@ if (prepareOnly) {
    console.log(JSON.stringify({task: taskId, arm, workspace, prepared:true, cold:!!taskConfig.cold}, null, 2));
    process.exit(0);
  }
@@ -984,7 +987,7 @@ index 8b5150d..e5d3a27 100755
  let claudeConfig;
  try { claudeConfig = prepareClaudeConfig(claudeCleanConfig && !referenceMode); }
  catch (error) {
-@@ -1490,6 +1582,10 @@ if (butAppDataDir) {
+@@ -1490,6 +1585,10 @@ if (butAppDataDir) {
    env.E2E_TEST_APP_DATA_DIR = butAppDataDir;
  }
  
@@ -995,7 +998,7 @@ index 8b5150d..e5d3a27 100755
  // Capture the CLI used to start this trial, outside the measured agent phase.
  const agentCliVersionAtStart = referenceMode ? null : agentCliVersion(agent);
  let agentResult;
-@@ -1499,7 +1595,7 @@ try {
+@@ -1499,7 +1598,7 @@ try {
      if (!scenario) throw new Error("--reference is supported by expansion tasks only");
      const start = Date.now();
      try {
@@ -1004,7 +1007,7 @@ index 8b5150d..e5d3a27 100755
        agentResult = {status:0, signal:null, timed_out:false, start_ms:start, end_ms:Date.now(), duration_ms:Date.now()-start, stdout:response, stderr:"", error:null, cmd:"native-reference", args:[]};
      } catch (error) {
        agentResult = {status:1, signal:null, timed_out:false, start_ms:start, end_ms:Date.now(), duration_ms:Date.now()-start, stdout:"", stderr:String(error), error:String(error), cmd:"native-reference", args:[]};
-@@ -1511,6 +1607,7 @@ try {
+@@ -1511,6 +1610,7 @@ try {
      process.off("exit", claudeConfig.cleanup);
    }
  }
@@ -1012,7 +1015,7 @@ index 8b5150d..e5d3a27 100755
  writeFileSync(path.join(runDir, "agent-result.json"), JSON.stringify(agentResult, null, 2));
  writeFileSync(path.join(runDir, "agent-stdout.txt"), agentResult.stdout);
  writeFileSync(path.join(runDir, "agent-stderr.txt"), agentResult.stderr);
-@@ -1539,7 +1636,7 @@ if (violations.length) {
+@@ -1539,7 +1639,7 @@ if (violations.length) {
    verifierResult.protocol_violations = violations;
  }
  const metrics = traceMetrics(trace);
@@ -1021,7 +1024,7 @@ index 8b5150d..e5d3a27 100755
  const activeSkillName = arm.endsWith("+skill") ? setup.name : null;
  const activeSkillInstallName = arm.endsWith("+skill") ? (setup.install_name ?? activeSkillName) : null;
  const measurement = measurementBreakdown(trace, prompt, agentResult, activeSkillDir, activeSkillInstallName, eventData);
-@@ -1565,7 +1662,14 @@ const jjBinaryMetadata = arm === "jj+skill"
+@@ -1565,7 +1665,14 @@ const jjBinaryMetadata = arm === "jj+skill"
        version: run(realJj, ["--version"], { cwd: workspace }).stdout.trimEnd(),
      }
    : null;
@@ -1037,7 +1040,7 @@ index 8b5150d..e5d3a27 100755
  const skillSourceGit = activeSkillDir
    ? (arm === "but+skill" && !configuredButSkillDir || arm === "jj+skill" && !setup.source?.configured_dir ? null : gitSourceInfo(activeSkillDir))
    : null;
-@@ -1573,7 +1677,8 @@ const skillMetadata = activeSkillDir
+@@ -1573,7 +1680,8 @@ const skillMetadata = activeSkillDir
    ? {
        name: activeSkillName,
        source_dir: activeSkillDir,
@@ -1047,7 +1050,7 @@ index 8b5150d..e5d3a27 100755
        embedded_binary_sha256: arm === "but+skill" && !configuredButSkillDir ? butBinaryMetadata.sha256 : null,
        source_package: setup.source?.package ?? null,
        source_url: setup.source?.source_url ?? null,
-@@ -1629,6 +1734,11 @@ const result = {
+@@ -1629,6 +1737,11 @@ const result = {
      claude_effort_level: claudeSettings?.settings.effortLevel ?? null,
      claude_strict_mcp_config: agent === "claude" ? claudeCleanConfig : null,
      claude_setting_sources: agent === "claude" && claudeCleanConfig ? ["project", "local"] : null,
@@ -1059,7 +1062,7 @@ index 8b5150d..e5d3a27 100755
      claude_config_dir: claudeConfig?.path ?? null,
      claude_auth_source: claudeConfig?.auth_source ?? null,
    },
-@@ -1637,13 +1747,14 @@ const result = {
+@@ -1637,13 +1750,14 @@ const result = {
    research_rank: taskConfig.researchRank ?? null,
    workload_temperature: taskConfig.cold ? "cold-adoption" : "warm",
    pre_run_setup: {
@@ -1075,7 +1078,7 @@ index 8b5150d..e5d3a27 100755
      skill_installed_before_agent: arm.endsWith("+skill"),
      agent_instructions_before_agent: true,
      but_app_data_dir: butAppDataDir,
-@@ -1655,6 +1766,8 @@ const result = {
+@@ -1655,6 +1769,8 @@ const result = {
    git_binary: gitBinaryMetadata,
    but_binary: butBinaryMetadata,
    jj_binary: jjBinaryMetadata,
