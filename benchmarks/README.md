@@ -191,35 +191,55 @@ Each per-task cell gives calls (`e` = edits) / output bytes / estimated tokens
 
 The guidance an agent loads before it runs any command also costs tokens, in
 every session. We counted it with
-[`commands/context_cost.py`](commands/context_cost.py), using `tiktoken`
-`o200k_base` 0.14.0. These are file sizes, not billed usage.
+[`commands/context_cost.py`](commands/context_cost.py). The exact numbers below
+need `tiktoken` `o200k_base` (0.14.0, run offline). Without it the script falls
+back to bytes/4 and labels the output as an estimate. These are file sizes,
+not billed usage.
 
-What each tool's guidance contains:
+Sources, pinned:
 
 - **AGENTS block**: the tool-specific `## Version control` block that the
-  vcbench harness writes into AGENTS.md/CLAUDE.md. For GitButler that block is
-  `but agent setup --print`.
-- **Skill**: the installed `SKILL.md`. For GitButler this is
-  `but skill install`, 0.22.3. For jj it is the SHA-pinned onevcat-jj skill
-  that vcbench fetches. Git has no skill.
-- **References**: files the skill points to for detail, which are loaded on
-  demand.
+  vcbench harness writes into AGENTS.md/CLAUDE.md.
+  - GitButler: `but agent setup --print` from `but` 0.22.3 (sha256
+    `2945e8f55c4d…`).
+  - git, jj and aisc: the blocks in the harness, from vcbench `c714c37`.
+- **Skill**: the installed `SKILL.md`.
+  - GitButler: `but skill install` from `but` 0.22.3 (`SKILL.md` sha256
+    `30da26b0edee…`).
+  - jj: the onevcat-jj skill at commit `4955f5422d99` (sha256 `e0364004…`),
+    the one vcbench pins.
+  - aisc: `skills/aisc/SKILL.md` in this repository.
+  - Git has no skill.
+- **References**: files the skill points to for detail, loaded on demand.
 
 | Context cost (tokens) | git | aisc | but | jj |
 |---|---|---|---|---|
 | AGENTS block | 63 | 83 | 475 | 167 |
-| Skill core (`SKILL.md`) | – | **493** (was 681) | 5415 | 2591 |
-| Block + core | 63 | **576** | 5890 | 2758 |
-| References, on demand | – | 590 (`references/lifecycle.md`) | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
+| Skill core (`SKILL.md`) | – | **558** (was 681) | 5415 | 2591 |
+| Block + core | 63 | **641** | 5890 | 2758 |
+| References, on demand | – | 681 (`references/lifecycle.md`) | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
+| Total, core + references (+ block)¹ | 63 | **1239** (1322) | 19902 (20377) | 2591 (2758) |
 
-The AISC core is one page: a task-to-command list, the selector syntax, and the
-rules on exit codes, sync conflicts and undo. The parallel-agent lifecycle is in
-`references/lifecycle.md`, which an agent loads only when it needs it. That
-lifecycle covers `start`/`checkpoint`/`verify`/`finish`/`gc` and their disk
-rules, `github`/`gitlab`, and the Codex sandbox note. To check both files,
-[`commands/skill_check.sh`](commands/skill_check.sh) runs every command form in
-them against a real binary (63 checks). The vcbench reference check
-(`npm run aisc:check`) passes all 13 tasks with this skill.
+¹ The two cores do not cover the same scope. GitButler's core also covers
+forge and branch workflows (push, PRs, apply/unapply). AISC moves its
+equivalents to `references/lifecycle.md`: worktrees for parallel agents,
+`verify`/`finish`, `gc` and `github`/`gitlab`. So the totals are the fairer
+comparison: about 1.2k tokens for AISC against 19.9k for GitButler, or 1.3k
+against 20.4k with the AGENTS block.
+
+The AISC core is one page. It holds:
+
+- the task-to-command list;
+- the selector syntax;
+- the rules on exit codes and partial failure, sync conflicts and paused-sync
+  refusals, base-branch refusals, raw-git staleness, and undo.
+
+The lifecycle reference covers `start`/`checkpoint`/`verify`/`finish`/`gc` with
+their disk rules, `github`/`gitlab`, and the Codex sandbox note.
+
+[`commands/skill_check.sh`](commands/skill_check.sh) runs every command form and
+refusal in both files against a real binary (73 checks). The vcbench reference
+check (`npm run aisc:check`) passes all 13 tasks with this skill.
 
 ### Where AISC loses
 

@@ -22,8 +22,14 @@ handed over for review.
   `verify`.
   - Disk: `finish` removes a `--path` worktree and keeps the branch.
   - `--keep` leaves the worktree in place.
-  - It refuses to delete ignored files that are secret-like or not known to be
-    regenerable. `--delete-ignored` overrides that.
+  - Regenerable ignored directories are deleted without a prompt. These are
+    `node_modules`, `.venv` and other tool directories anywhere, plus
+    `target`, `build`, `dist` and similar at the root or next to a project
+    manifest. Files inside installed packages (`node_modules`, `site-packages`,
+    `.gradle`, `.dart_tool`) get no secret-name check.
+  - Other ignored files that are secret-like or unknown, and nested
+    repositories, keep the worktree in place. `--delete-ignored` removes them
+    anyway.
   - If your shell was inside the removed worktree, `cd` to the path it prints.
 - `aisc gc` lists reclaimable AISC worktrees; this is a dry run. `aisc gc --apply`
   removes them.

@@ -80,6 +80,9 @@ ok 0 "sync --continue" -- a sync --continue
 has "feature now on origin/main" -- git merge-base --is-ancestor origin/main feature
 (cd ../up && printf 'CHANNELS = ["email", "push", "sms"]\n' > notify.py && git commit -qam "add sms" && git push -q origin main)
 ok 0 "sync --fetch --prefer-branch" -- a sync origin/main --fetch --prefer-branch notify.py
+(cd ../up && printf 'CHANNELS = ["push"]\n' > notify.py && git commit -qam "push only" && git push -q origin main)
+ok 0 "sync --fetch --prefer-onto" -- a sync origin/main --fetch --prefer-onto notify.py
+has "--prefer-onto took the upstream side" -- grep -q '^CHANNELS = \["push"\]$' notify.py
 # Copy and integrate
 ok 0 "pick --from -b --onto" -- a pick --from feature "add models" -b copy --onto main
 (cd ../up && git switch -qc remote-topic && echo r > r.txt && git add r.txt && git commit -qm "remote topic" && git push -q origin remote-topic)
@@ -93,10 +96,24 @@ ok 1 "unknown selector is an error (exit 1)" -- a commit -m x "app.py~no such te
 ok 2 "usage error (exit 2)" -- a commit --no-such-flag
 has "errors changed nothing" -- test "$(git rev-parse HEAD)" = "$before"
 echo q >> README.md; ok 0 "-q" -- a commit -q -m "r" README.md
+# Refusals the skill names: base-branch commits, paused sync, raw git rewrites make undo stale
+git switch -q -c refuse-check
+echo z >> README.md
+ok 1 "amend into a commit already on the base branch is refused" -- a amend --into initial README.md
+a commit -q -m "z" README.md >/dev/null 2>&1 </dev/null
+(cd ../up && git switch -q main && printf 'r\n' > README.md && git commit -qam "readme upstream" && git push -q origin main)
+git fetch -q origin
+out=$(a sync origin/main </dev/null 2>&1); n=$((n + 1)); case "$out" in CONFLICTS*) ;; *) fail=$((fail + 1)); echo "FAIL no conflict to pause: $out";; esac
+echo y > y.txt
+ok 1 "verbs refuse while a sync is paused" -- a commit -m y y.txt
+ok 0 "sync --abort ends the pause" -- a sync --abort
+a commit -q -m y y.txt >/dev/null 2>&1 </dev/null
+git commit -q --amend -m "y amended by raw git"
+ok 4 "undo after a raw git rewrite is refused as stale" -- a undo
 
 # references/lifecycle.md: start/checkpoint/verify/finish/gc, sparse, keep, github/gitlab
 git init -q -b main "$ROOT/life"; cd "$ROOT/life"
-mkdir -p src docs; echo a > src/a.txt; echo d > docs/d.txt; printf '.wt/\n.env\n' > .gitignore
+mkdir -p src docs; echo a > src/a.txt; echo d > docs/d.txt; printf '.wt/\n.env\nnode_modules/\n' > .gitignore
 git add -A; git commit -qm init; mkdir .wt
 ok 0 "start --path" -- a start fix --path .wt/fix
 has "worktree on branch aisc/fix" -- test "$(git -C .wt/fix branch --show-current)" = aisc/fix
@@ -125,6 +142,12 @@ cd "$ROOT/life"
 has "finish keeps a worktree holding a secret-like ignored file" -- test -f .wt/s3/.env
 ok 0 "gc --apply --min-age 0 --delete-ignored" -- a gc --apply --min-age 0 --delete-ignored
 has "--delete-ignored removed it" -- test ! -e .wt/s3
+ok 0 "start s4" -- a start s4 --path .wt/s4
+cd .wt/s4; mkdir -p node_modules/pkg; echo 'TOKEN=x' > node_modules/pkg/.env; echo f >> src/a.txt
+a checkpoint -m f -- src/a.txt >/dev/null 2>&1 </dev/null; a verify -- true >/dev/null 2>&1 </dev/null
+ok 0 "finish with only regenerable ignored dirs" -- a finish
+cd "$ROOT/life"
+has "finish deleted node_modules (no secret-name check inside packages)" -- test ! -e .wt/s4
 ok 0 "start --in-place (clean checkout)" -- a start inplace --in-place
 echo x >> src/a.txt; ok 1 "start --in-place refuses a dirty checkout" -- a start other --in-place
 git checkout -q -- src/a.txt
