@@ -32,7 +32,7 @@ Ten scripted version-control tasks, all four tools in the same run, every end st
 | Transcript tokens (estimate) | **606** | 1,639 | 1,261 | 1,307 |
 | Wall time, all ten tasks | **1,182 ms** | 2,106 ms | 1,370 ms | 1,798 ms |
 | Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
-| Real agents, 13 vcbench tasks × 3: tokens | **1.02M** | 1.62M | 1.43M | — |
+| Real agents, 13 vcbench tasks × 3: tokens | **0.98M** | 1.62M | 1.43M | — |
 
 Default output, no quiet flags. Tokens are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
 
@@ -152,19 +152,20 @@ Every write prints its result, so there is no need to re-check. `-q` prints a si
 
 Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev) harness three times with each tool, in rotating order. Every arm got the same prompt, the same sandbox (accept-edits with an allowlist, no bypass) and its tool's own agent setup block (`aisc agent setup --print`, `but agent setup --print`, plain-Git instructions). The harness's own verifier grades each run, and a run also fails if the agent used a command the arm's policy blocks.
 
-| 13 tasks × 3 runs, AISC v0.1.0 | Passed | Commands per suite | Tokens per suite | Cost per suite | Time per suite |
+| 13 tasks × 3 runs | Passed | Commands per suite | Tokens per suite | Cost per suite | Time per suite |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **AISC** | 35/39 | **41** (38–45) | **1.02M** (0.97–1.09M) | **$0.61** ($0.60–0.62) | **242 s** (207–277) |
+| **AISC v0.1.1** | **38/39** | **39** (39–40) | **0.98M** (0.95–1.00M) | **$0.61** ($0.60–0.61) | **218 s** (187–239) |
+| AISC v0.1.0 | 35/39 | 41 (38–45) | 1.02M (0.97–1.09M) | $0.61 ($0.60–0.62) | 242 s (207–277) |
 | GitButler 0.22.3 | 38/39 | 61 (56–65) | 1.62M (1.52–1.77M) | $0.99 ($0.94–1.07) | 310 s (238–413) |
 | Git 2.50 | 38/39 | 63 (61–65) | 1.43M (1.42–1.44M) | $0.73 ($0.72–0.73) | 335 s (312–369) |
 
-Means over the three runs, with the range in brackets. AISC used 32% fewer commands, 37% fewer tokens and 38% less money than GitButler, and each of its three suite runs cost less and used fewer tokens than any GitButler suite run. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens.
+Means over the three runs, with the range in brackets. AISC v0.1.1 passed as many runs as GitButler and Git (38/39; its one miss was a wrong answer on the review task, not a tool error) and used 36% fewer commands, 39% fewer tokens, 38% less money and 30% less time than GitButler. Each of its suite runs used fewer tokens and cost less than any GitButler or Git suite run. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens.
 
 Where AISC lost:
-- **Four failed runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). v0.1.1 adds `aisc land --delete` and tells agents to use `aisc switch` for this; these runs have not been repeated with it yet.
-- **Tuning.** AISC's agent block and three commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`) were improved during an earlier pilot on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that. Held-out tasks are the next step.
+- **Four failed v0.1.0 runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). v0.1.1 adds `aisc land --delete` and tells agents to use `aisc switch` for this; its three runs had no such failure.
+- **Tuning.** AISC's agent block and several commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`, `land --delete`) were improved after watching AISC's runs on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that. Held-out tasks are the next step.
 
-Per-run metrics, with no transcripts, are in [`benchmarks/results/agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json).
+Per-run metrics, with no transcripts, are in [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) (all three tools) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json) (AISC v0.1.1, same settings).
 
 ### Command benchmark
 
