@@ -613,3 +613,89 @@ fn case_only_rename_ends_with_the_new_name_on_disk() {
     assert!(!names.contains(&"Readme.md".to_owned()), "{names:?}");
     assert_eq!(fixture.read("README.md"), "docs\n");
 }
+
+#[test]
+fn sync_also_takes_new_commits_pushed_to_the_branch_upstream() {
+    let fixture = Fixture::with_files(&[
+        ("README.md", "Service example.\n"),
+        ("config/runtime.json", "{\"timeout\":10}\n"),
+        ("src/formats.ts", "export const formats = [];\n"),
+    ]);
+    fixture.git(&["switch", "-c", "feature-service"]);
+    fixture.write("src/formats.ts", "export const formats = [\"document\"];\n");
+    commit_as(&fixture, "Support document format");
+    let remote = fixture.directory.path().join("origin.git");
+    let remote = remote.to_str().unwrap().to_owned();
+    fixture.git(&["init", "--bare", "-b", "main", &remote]);
+    fixture.git(&["remote", "add", "origin", &remote]);
+    fixture.git(&["push", "-u", "origin", "main", "feature-service"]);
+    fixture.write("src/retry.ts", "export const retryLimit = 3;\n");
+    commit_as(&fixture, "Add local retry setting");
+    // Another clone advances origin/main and pushes to origin/feature-service.
+    let publisher = fixture.directory.path().join("publisher");
+    let publisher = publisher.to_str().unwrap().to_owned();
+    fixture.git(&["clone", "-q", &remote, &publisher]);
+    let in_publisher = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&publisher)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "Main Author")
+            .env("GIT_AUTHOR_EMAIL", "main@example.test")
+            .env("GIT_COMMITTER_NAME", "Main Author")
+            .env("GIT_COMMITTER_EMAIL", "main@example.test")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    std::fs::write(
+        format!("{publisher}/config/runtime.json"),
+        "{\"timeout\":20}\n",
+    )
+    .unwrap();
+    in_publisher(&["commit", "-qam", "Increase default timeout"]);
+    in_publisher(&["push", "-q", "origin", "main"]);
+    in_publisher(&["switch", "-q", "feature-service"]);
+    std::fs::create_dir_all(format!("{publisher}/.agent")).unwrap();
+    std::fs::write(format!("{publisher}/.agent/environment.json"), "{}\n").unwrap();
+    in_publisher(&["add", ".agent/environment.json"]);
+    in_publisher(&["commit", "-qm", "Add agent environment"]);
+    in_publisher(&["push", "-q", "origin", "feature-service"]);
+    fixture.write("README.md", "Service example.\nUnfinished release notes.\n");
+
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(
+        run.stdout.contains("with origin/feature-service"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(
+        fixture.subjects("origin/main..HEAD"),
+        [
+            "Add local retry setting",
+            "Add agent environment",
+            "Support document format"
+        ]
+    );
+    assert_eq!(fixture.read("config/runtime.json"), "{\"timeout\":20}\n");
+    assert_eq!(
+        fixture.read("README.md"),
+        "Service example.\nUnfinished release notes.\n"
+    );
+    assert_no_git_residue(&fixture);
+    assert_eq!(fixture.calls(), 1);
+    // Undo restores the branch exactly.
+    let synced = fixture.git(&["rev-parse", "HEAD"]);
+    fixture.aisc(&["undo"]).ok();
+    assert_ne!(fixture.git(&["rev-parse", "HEAD"]), synced);
+    assert_eq!(
+        fixture.subjects("main..HEAD"),
+        ["Add local retry setting", "Support document format"]
+    );
+}

@@ -38,8 +38,13 @@ pub(crate) struct Pick {
 
 /// Commits reachable from `tip` but not from `exclude`, oldest first. Merges and roots are refused.
 pub(crate) fn load_picks(git: &Git, tip: &str, exclude: &str) -> Result<Vec<Pick>> {
-    let negative = format!("^{exclude}");
-    let output = git.run(&[
+    load_picks_excluding(git, tip, &[exclude])
+}
+
+/// The commits of `tip` that none of `excludes` contain, oldest first.
+pub(crate) fn load_picks_excluding(git: &Git, tip: &str, excludes: &[&str]) -> Result<Vec<Pick>> {
+    let negatives: Vec<String> = excludes.iter().map(|oid| format!("^{oid}")).collect();
+    let mut args = vec![
         "log",
         "--reverse",
         "--topo-order",
@@ -47,9 +52,10 @@ pub(crate) fn load_picks(git: &Git, tip: &str, exclude: &str) -> Result<Vec<Pick
         "--abbrev=4",
         "--format=%H%x1f%h%x1f%T%x1f%P%x1f%s",
         tip,
-        &negative,
-        "--",
-    ])?;
+    ];
+    args.extend(negatives.iter().map(String::as_str));
+    args.push("--");
+    let output = git.run(&args)?;
     let mut picks = Vec::new();
     for record in output.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
         let record = String::from_utf8_lossy(record).into_owned();
@@ -386,6 +392,10 @@ struct State {
     resolutions: Resolutions,
     materialized: Vec<Materialized>,
     restore: Vec<Restore>,
+    /// The branch's upstream (`origin/NAME`) when it has commits the branch lacks: they are
+    /// replayed first, then the branch's own commits.
+    #[serde(default)]
+    upstream: Option<(String, String)>,
 }
 
 impl State {
@@ -595,9 +605,14 @@ fn start(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
             (base.label.clone(), base.oid.clone())
         }
     };
-    if git
-        .probe(&["merge-base", "--is-ancestor", &onto_oid, &old_tip])?
-        .is_some()
+    let upstream = match &branch {
+        Some(name) => new_upstream_commits(git, name, &old_tip, &onto_oid)?,
+        None => None,
+    };
+    if upstream.is_none()
+        && git
+            .probe(&["merge-base", "--is-ancestor", &onto_oid, &old_tip])?
+            .is_some()
     {
         let label = branch
             .clone()
@@ -623,8 +638,44 @@ fn start(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
         resolutions: BTreeMap::new(),
         materialized: Vec::new(),
         restore: Vec::new(),
+        upstream,
     };
     drive(git, session, state, args.opts.quiet)
+}
+
+/// `NAME@{upstream}` as (label, oid) when it holds commits that neither the branch nor ONTO
+/// has, i.e. someone pushed to the branch. `None` without an upstream or with nothing new.
+fn new_upstream_commits(
+    git: &Git,
+    name: &str,
+    tip: &str,
+    onto: &str,
+) -> Result<Option<(String, String)>> {
+    let spec = format!("{name}@{{upstream}}");
+    let Some(refname) =
+        git.probe(&["rev-parse", "--verify", "-q", "--symbolic-full-name", &spec])?
+    else {
+        return Ok(None);
+    };
+    let refname = refname.trim().to_owned();
+    let Some(oid) = git.ref_oid(&refname)? else {
+        return Ok(None);
+    };
+    if oid == onto
+        || git
+            .probe(&["merge-base", "--is-ancestor", &oid, tip])?
+            .is_some()
+        || git
+            .probe(&["merge-base", "--is-ancestor", &oid, onto])?
+            .is_some()
+    {
+        return Ok(None);
+    }
+    let label = refname
+        .strip_prefix("refs/remotes/")
+        .unwrap_or(&refname)
+        .to_owned();
+    Ok(Some((label, oid)))
 }
 
 fn resume(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
@@ -752,7 +803,18 @@ fn abort(repo: &Repo, git: &Git) -> Result<Outcome> {
 
 /// Replays with the current resolutions, then pauses on conflicts or finishes the rewrite.
 fn drive(git: &Git, session: Session, mut state: State, quiet: bool) -> Result<Outcome> {
-    let picks = load_picks(git, &state.old_tip, &state.onto_oid)?;
+    let picks = match &state.upstream {
+        Some((_, upstream)) => {
+            let mut picks = load_picks(git, upstream, &state.onto_oid)?;
+            picks.extend(load_picks_excluding(
+                git,
+                &state.old_tip,
+                &[&state.onto_oid, upstream],
+            )?);
+            picks
+        }
+        None => load_picks(git, &state.old_tip, &state.onto_oid)?,
+    };
     let onto_tree = git.commit_tree_of(&state.onto_oid)?;
     let old_tree = git.commit_tree_of(&state.old_tip)?;
     let opts = ReplayOpts {
@@ -1198,8 +1260,13 @@ fn finish(
     unpin(git);
 
     let after = super::summary::after(git, state.branch.as_deref(), state.is_head)?;
+    let with_upstream = state
+        .upstream
+        .as_ref()
+        .map(|(label, _)| format!(" with {label}"))
+        .unwrap_or_default();
     let mut result = format!(
-        "synced {} onto {onto_label} ({kept} commits, {} dropped); op {}",
+        "synced {}{with_upstream} onto {onto_label} ({kept} commits, {} dropped); op {}",
         state.label(),
         built.dropped.len(),
         applied.op
