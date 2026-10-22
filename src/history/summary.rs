@@ -140,7 +140,18 @@ fn light(
         let _ = write!(format, "%00%(ahead-behind:{refname})");
     }
     let format = format!("--format={format}");
-    let output = git.run(&["for-each-ref", &format, &reference])?;
+    // The uncommitted paths: derived in process, else one `git status` run alongside.
+    let wants_changes = is_head && with_changes;
+    let derived = match plan {
+        Some(plan) if wants_changes => derive_changes(git, &head.oid, plan).ok().flatten(),
+        _ => None,
+    };
+    let (output, read) = std::thread::scope(|scope| {
+        let refs = scope.spawn(|| git.run(&["for-each-ref", &format, &reference]));
+        let read = (wants_changes && derived.is_none()).then(|| status_paths(git));
+        (refs.join(), read)
+    });
+    let output = output.map_err(|_| anyhow::anyhow!("a Git reader panicked"))??;
     let line = String::from_utf8(output)?;
     let mut fields = line.trim_end_matches('\n').split('\0');
     let (Some(oid), Some(upstream), Some(track)) = (fields.next(), fields.next(), fields.next())
@@ -197,14 +208,10 @@ fn light(
     };
     let total = base_info.as_ref().map_or(commits.len(), |base| base.ahead);
     let mut status = None;
-    let changes = if is_head && with_changes {
-        let derived = match plan {
-            Some(plan) => derive_changes(git, &head.oid, plan).ok().flatten(),
-            None => None,
-        };
+    let changes = if wants_changes {
         match derived {
             Some(changes) => Some(changes),
-            None => match status_paths(git)? {
+            None => match read.transpose()?.flatten() {
                 Some(changes) => Some(changes),
                 None => {
                     let (read, changes) = view::read_changes(git)?;
