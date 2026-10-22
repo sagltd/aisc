@@ -1,5 +1,5 @@
-use crate::git::{Lock, Repo, os_bytes, text};
-use crate::process;
+use crate::git::{Lock, Repo, os_bytes, run_git, text};
+use crate::{process, worktree};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -12,11 +12,11 @@ use std::process::Command;
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize)]
-struct Session {
-    name: String,
-    base: String,
-    mode: String,
-    finished: bool,
+pub(crate) struct Session {
+    pub name: String,
+    pub base: String,
+    pub mode: String,
+    pub finished: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -73,7 +73,12 @@ fn environment_digests() -> BTreeMap<String, String> {
         .collect()
 }
 
-pub(crate) fn start(repo: &Repo, name: &str, destination: Option<PathBuf>) -> Result<Value> {
+pub(crate) fn start(
+    repo: &Repo,
+    name: &str,
+    destination: Option<PathBuf>,
+    sparse: &[String],
+) -> Result<Value> {
     if name.is_empty()
         || name.len() > 80
         || !name
@@ -121,17 +126,73 @@ pub(crate) fn start(repo: &Repo, name: &str, destination: Option<PathBuf>) -> Re
             let path_text = path
                 .to_str()
                 .context("non-UTF-8 destination is unsupported")?;
+            let sparse = sparse
+                .iter()
+                .map(|directory| sparse_directory(directory))
+                .collect::<Result<Vec<_>>>()?;
+            let common = repo.common_dir()?;
+            if worktree::registry_path(&common, name).exists() {
+                bail!(
+                    "an AISC worktree named {name} is already registered; finish it, run `aisc gc`, or pick another name"
+                );
+            }
             let branch = format!("aisc/{name}");
-            repo.git(&["worktree", "add", "-b", &branch, "--", path_text, &base])?;
-            let directory = PathBuf::from(
-                text(&git_at(&path, &["rev-parse", "--absolute-git-dir"])?)?.trim_end_matches('\n'),
-            );
+            let mut add = vec!["worktree", "add"];
+            if !sparse.is_empty() {
+                add.push("--no-checkout");
+            }
+            add.extend(["-b", &branch, "--", path_text, &base]);
+            repo.git(&add)?;
             session.mode = "worktree".to_owned();
-            write_json(&directory.join("aisc-session.json"), &session).context(
-                "worktree exists but task metadata could not be written; no cleanup was attempted",
-            )?;
+            let registration = worktree::Registration {
+                name: name.to_owned(),
+                path: path_text.to_owned(),
+                branch: branch.clone(),
+                base: base.clone(),
+                base_branch: repo.branch()?,
+                created_at: worktree::now(),
+                aisc_version: env!("CARGO_PKG_VERSION").to_owned(),
+                command: std::env::args().collect(),
+                sparse: (!sparse.is_empty()).then(|| sparse.clone()),
+            };
+            let prepared = (|| -> Result<()> {
+                let directory = PathBuf::from(
+                    text(&git_at(&path, &["rev-parse", "--absolute-git-dir"])?)?
+                        .trim_end_matches('\n'),
+                );
+                write_json(&directory.join("aisc-session.json"), &session)?;
+                worktree::register(&common, &registration)?;
+                if !sparse.is_empty() {
+                    let mut set = vec!["sparse-checkout", "set", "--cone", "--no-sparse-index"];
+                    set.extend(sparse.iter().map(String::as_str));
+                    run_git(&path, &set, None)?;
+                    run_git(&path, &["checkout"], None)?;
+                }
+                Ok(())
+            })();
+            if let Err(error) = prepared {
+                // Nothing in the new worktree is the user's yet, so forcing its removal is safe.
+                let mut cleanup = Vec::new();
+                for args in [
+                    &["worktree", "remove", "--force", "--", path_text][..],
+                    &["branch", "-D", "--", &branch][..],
+                ] {
+                    if let Err(failure) = repo.git(args) {
+                        cleanup.push(format!("{failure:#}"));
+                    }
+                }
+                if let Err(failure) = worktree::unregister(&common, name) {
+                    cleanup.push(format!("{failure:#}"));
+                }
+                let outcome = if cleanup.is_empty() {
+                    "the new worktree and branch were removed again".to_owned()
+                } else {
+                    format!("cleanup was incomplete: {}", cleanup.join("; "))
+                };
+                return Err(error.context(format!("could not prepare the worktree; {outcome}")));
+            }
             Ok(
-                json!({"task": name, "mode": "worktree", "branch": branch, "head": base, "path": path}),
+                json!({"task": name, "mode": "worktree", "branch": branch, "head": base, "path": path, "sparse": registration.sparse}),
             )
         }
     }
@@ -402,7 +463,7 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     )
 }
 
-pub(crate) fn finish(repo: &Repo) -> Result<Value> {
+pub(crate) fn finish(repo: &Repo, keep: bool) -> Result<Value> {
     let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
     repo.writable()?;
     repo.require_clean()?;
@@ -441,20 +502,30 @@ pub(crate) fn finish(repo: &Repo) -> Result<Value> {
         );
     }
     let state = repo.directory.join("aisc-session.json");
-    let task = if state.exists() {
+    let session = if state.exists() {
         let mut session: Session = read_json(&state)?;
         repo.git(&["merge-base", "--is-ancestor", &session.base, &evidence.head])
             .context("task history diverged from its recorded base")?;
         session.finished = true;
         write_json(&state, &session)?;
-        Some(session.name)
+        Some(session)
     } else {
         None
     };
     let branch = repo.branch()?;
-    Ok(
-        json!({"task": task, "commit": evidence.head, "branch": branch, "ref": branch.map(|branch| format!("refs/heads/{branch}")), "verified": true, "command": evidence.command}),
-    )
+    let mut result = json!({"task": session.as_ref().map(|session| &session.name), "commit": evidence.head, "branch": branch, "ref": branch.map(|branch| format!("refs/heads/{branch}")), "verified": true, "command": evidence.command});
+    if let Some(session) = session.filter(|session| session.mode == "worktree") {
+        let cleanup = if keep {
+            serde_json::Map::from_iter([("removed_worktree".to_owned(), Value::Null)])
+        } else {
+            worktree::remove_after_finish(repo, &session.name)
+        };
+        result
+            .as_object_mut()
+            .context("finish result is an object")?
+            .extend(cleanup);
+    }
+    Ok(result)
 }
 
 fn clear_evidence(repo: &Repo) -> Result<()> {
@@ -481,12 +552,14 @@ fn fingerprint(repo: &Repo) -> Result<String> {
             "--show-scope",
         ])?,
     );
-    // Status alone does not expose assume-unchanged files; hash every tracked file.
-    let paths = repo.git(&["ls-files", "-z"])?;
-    for path in paths
+    // Status alone does not expose assume-unchanged files; hash every tracked file. Entries
+    // outside a sparse cone (`S`, vetted by `writable`) are absent on disk and covered by the index.
+    let records = repo.git(&["ls-files", "-v", "-z"])?;
+    for record in records
         .split(|byte| *byte == 0)
-        .filter(|path| !path.is_empty())
+        .filter(|record| record.len() > 2 && !record.starts_with(b"S "))
     {
+        let path = &record[2..];
         let path_text = text(path)?;
         feed(&mut hash, path);
         let path = repo.root.join(path_text);
@@ -560,7 +633,7 @@ fn feed(hash: &mut Sha256, bytes: &[u8]) {
     hash.update(bytes);
 }
 
-fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
+pub(crate) fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     let temporary = path.with_extension("json.lock");
     let mut lock = Lock::acquire(temporary)?;
     lock.file.write_all(&serde_json::to_vec(value)?)?;
@@ -569,12 +642,36 @@ fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     Ok(())
 }
 
-fn read_json<T: for<'a> Deserialize<'a>>(path: &Path) -> Result<T> {
+pub(crate) fn read_json<T: for<'a> Deserialize<'a>>(path: &Path) -> Result<T> {
     let file = OpenOptions::new().read(true).open(path)?;
     if file.metadata()?.len() > 1_048_576 {
         bail!("AISC metadata exceeds safety limit");
     }
     Ok(serde_json::from_reader(file)?)
+}
+
+/// A cone directory: normal relative components only, joined with `/`.
+fn sparse_directory(directory: &str) -> Result<String> {
+    if directory.contains(['\\', '\0']) {
+        bail!("sparse directories must be plain relative directories: {directory:?}");
+    }
+    let mut parts = Vec::new();
+    for component in Path::new(directory).components() {
+        let std::path::Component::Normal(part) = component else {
+            bail!("sparse directories must be plain relative directories: {directory:?}");
+        };
+        let part = part
+            .to_str()
+            .context("non-UTF-8 sparse directory is unsupported")?;
+        if part.eq_ignore_ascii_case(".git") || part.starts_with('-') {
+            bail!("sparse directories must be plain relative directories: {directory:?}");
+        }
+        parts.push(part);
+    }
+    if parts.is_empty() {
+        bail!("sparse directories must be plain relative directories: {directory:?}");
+    }
+    Ok(parts.join("/"))
 }
 
 fn git_at(path: &Path, args: &[&str]) -> Result<Vec<u8>> {

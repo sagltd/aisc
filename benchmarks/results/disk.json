@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "agents": 4,
+  "tools": {
+    "git": "git version 2.50.1 (Apple Git-155)",
+    "aisc": "aisc 0.1.0",
+    "gitbutler": "but 0.22.3",
+    "jj": "jj 0.42.0-b8f7c455170e3273897aaf94431f8ccfb1afa7ad"
+  },
+  "platform": "darwin",
+  "scenarios": [
+    {
+      "name": "git worktree add",
+      "note": "N full checkouts",
+      "added_apparent_bytes": 207357536,
+      "added_allocated_bytes": 247791616,
+      "per_agent_allocated_bytes": 61947904,
+      "seconds": 3.05
+    },
+    {
+      "name": "aisc start --path",
+      "note": "N full checkouts plus registry",
+      "added_apparent_bytes": 207360800,
+      "added_allocated_bytes": 247824384,
+      "per_agent_allocated_bytes": 61956096,
+      "seconds": 4.17
+    },
+    {
+      "name": "aisc start --path --sparse src",
+      "note": "N checkouts of the src cone only",
+      "added_apparent_bytes": 42995200,
+      "added_allocated_bytes": 51232768,
+      "per_agent_allocated_bytes": 12808192,
+      "seconds": 2.02
+    },
+    {
+      "name": "aisc finish (worktrees removed)",
+      "note": "start, checkpoint, verify, finish; branches kept",
+      "added_apparent_bytes": 19581,
+      "added_allocated_bytes": 114688,
+      "per_agent_allocated_bytes": 28672,
+      "seconds": 11.17
+    },
+    {
+      "name": "aisc gc --apply (after finish --keep)",
+      "note": "finished worktrees reclaimed by gc",
+      "added_apparent_bytes": 19581,
+      "added_allocated_bytes": 114688,
+      "per_agent_allocated_bytes": 28672,
+      "seconds": 12.35
+    },
+    {
+      "name": "aisc in-place commits",
+      "note": "one checkout, N sequential commits; object growth only",
+      "added_apparent_bytes": 24081,
+      "added_allocated_bytes": 172032,
+      "per_agent_allocated_bytes": 43008,
+      "seconds": 3.57
+    },
+    {
+      "name": "gitbutler but branch new",
+      "note": "but setup plus N virtual branches in one workspace; app data included",
+      "added_apparent_bytes": 257208,
+      "added_allocated_bytes": 524288,
+      "per_agent_allocated_bytes": 131072,
+      "seconds": 1.95
+    },
+    {
+      "name": "jj workspace add",
+      "note": "colocated jj plus N workspaces",
+      "added_apparent_bytes": 206551059,
+      "added_allocated_bytes": 247263232,
+      "per_agent_allocated_bytes": 61815808,
+      "seconds": 5.89
+    }
+  ],
+  "repository": {
+    "files": 5000,
+    "apparent_bytes": 71695916,
+    "allocated_bytes": 81850368,
+    "checkout_allocated_bytes": 61440000,
+    "src_share": 0.2
+  }
+}

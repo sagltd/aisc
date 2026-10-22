@@ -91,6 +91,12 @@ fn task_lifecycle_returns_verified_commit_without_touching_source_checkout() {
     let result = success(&task, &["finish"]);
     assert_eq!(result["verified"], true);
     assert_eq!(result["branch"], "aisc/test");
+    // finish removes the worktree it created; the branch keeps the commit.
+    assert!(!task.exists());
+    let canonical = fs::canonicalize(fixture.directory.path())
+        .unwrap()
+        .join("task");
+    assert_eq!(result["removed_worktree"], canonical.to_str().unwrap());
     assert_eq!(source_index, git(&fixture.root, &["diff", "--cached"]));
     assert_eq!(source_head, git(&fixture.root, &["rev-parse", "HEAD"]));
 }

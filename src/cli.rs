@@ -6,7 +6,7 @@ use std::path::PathBuf;
     name = "aisc",
     version,
     about = "Task-oriented source control, backed by Git",
-    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nNo automatic push, merge, or cleanup. Configured Git hooks/signing run normally for checkpoint."
+    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix --sparse src\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nNo automatic push or merge. finish removes the worktree `start --path` created (its branch stays; --keep opts out); aisc gc lists leftovers.\nConfigured Git hooks/signing run normally for checkpoint."
 )]
 pub(crate) struct Cli {
     /// Emit stable, ANSI-free JSON, including errors and help
@@ -64,7 +64,7 @@ pub(crate) enum Operation {
     },
     /// Return the verified commit/ref for review, without pushing or merging
     Finish {
-        /// Keep an isolated worktree after finishing (worktrees are currently always kept)
+        /// Keep the worktree created by `start --path` (by default it is removed; the branch stays)
         #[arg(long)]
         keep: bool,
     },
@@ -317,6 +317,7 @@ pub(crate) struct Gc {
     /// Remove reclaimable worktrees (default is a dry run)
     #[arg(long)]
     pub apply: bool,
+    /// Keep worktrees with Git activity within this many hours
     #[arg(long, default_value = "24", value_name = "HOURS")]
     pub min_age: u64,
 }
