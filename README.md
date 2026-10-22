@@ -24,7 +24,7 @@ One command per history edit, output sized for a context window, every change un
   <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 0.98M tokens, 39 commands and $0.61 per suite; Git 1.43M, 63 and $0.73; GitButler 1.62M, 61 and $0.99. All three passed 38 of 39 runs." width="760">
 </picture>
 
-These are the same 13 tasks AISC was tuned on, so read them as a strong pilot rather than a final verdict; [the details](#real-agents) list every failure and caveat.
+These are the same 13 tasks AISC was tuned on, so read them as a strong pilot rather than a final verdict; [the details](#real-agents) list every failure and caveat, and [`benchmarks/agents`](benchmarks/agents) has every prompt, setup, script and per-run command to check them.
 
 ## Install
 
@@ -176,7 +176,7 @@ Where AISC lost:
 - **Four failed v0.1.0 runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). v0.1.1 adds `aisc land --delete` and tells agents to use `aisc switch` for this; its three runs had no such failure.
 - **Tuning.** AISC's agent block and several commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`, `land --delete`) were improved after watching AISC's runs on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that. Held-out tasks are the next step.
 
-Per-run metrics, with no transcripts, are in [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) (all three tools) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json) (AISC v0.1.1, same settings).
+Everything needed to check or repeat these runs (task prompts, each tool's instructions, the run script and a script that recomputes this table) is in [`benchmarks/agents`](benchmarks/agents). Per-run metrics, including every version-control command each agent ran, are in [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) (all three tools) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json) (AISC v0.1.1, same settings).
 
 ### Command benchmark
 
