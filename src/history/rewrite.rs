@@ -1340,6 +1340,37 @@ pub(crate) fn task_lock(git: &Git) -> Result<OperationLock> {
     Ok(operation)
 }
 
+/// Whether `aisc-operation.lock` in `git.dir` is really held, without taking it: a live flock,
+/// a fresh empty lock (possibly still being written) or a lock with foreign content. A dead
+/// owner's tagged lock, or an empty one past the grace period, is not; `task_lock` takes it over.
+pub(crate) fn operation_lock_held(git: &Git) -> bool {
+    use std::io::Read;
+    let path = git.dir.join("aisc-operation.lock");
+    let file = match fs::File::open(&path) {
+        Ok(file) => file,
+        Err(error) => return error.kind() != std::io::ErrorKind::NotFound,
+    };
+    let mut content = String::new();
+    let _ = (&file).take(64).read_to_string(&mut content);
+    let tagged = content
+        .strip_prefix(LOCK_TAG)
+        .and_then(|rest| rest.trim().parse::<u32>().ok())
+        .is_some();
+    let abandoned = !tagged
+        && content.is_empty()
+        && file
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age >= JOURNAL_GRACE);
+    if !tagged && !abandoned {
+        return true;
+    }
+    // The probe's flock is released when `file` closes.
+    !matches!(try_flock(&file), Ok(true))
+}
+
 pub(crate) fn recover_if_needed(git: &Git) -> Result<Option<String>> {
     let lock = git.dir.join("aisc-operation.lock");
     if !super::plumbing::path_exists(&lock) && !super::plumbing::path_exists(&journal_path(git)) {

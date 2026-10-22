@@ -177,7 +177,10 @@ impl Scan<'_> {
             "locked (`git worktree lock`)".into()
         } else if same_path(&row.registration.path, self.current) {
             "current worktree; run gc from another checkout".into()
-        } else if admin.join("aisc-operation.lock").exists() {
+        } else if crate::history::rewrite::operation_lock_held(&Git {
+            root: path.clone(),
+            dir: admin.clone(),
+        }) {
             "busy: an aisc operation holds the worktree lock".into()
         } else if let Err(error) = status {
             format!("status failed: {error:#}")
