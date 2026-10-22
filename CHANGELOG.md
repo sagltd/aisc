@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-22
+
 ### Added
 
 - `aisc start` begins a task in the current checkout or a new isolated worktree.
@@ -51,4 +53,5 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tag, so the two versions cannot see each other's locks and can both run at
   once. Upgrade all running agents together.
 
-[Unreleased]: https://github.com/sagltd/aisc/commits/dev
+[Unreleased]: https://github.com/sagltd/aisc/compare/v0.1.0...dev
+[0.1.0]: https://github.com/sagltd/aisc/releases/tag/v0.1.0
