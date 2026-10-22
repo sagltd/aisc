@@ -32,7 +32,7 @@ Ten scripted version-control tasks, all four tools in the same run, every end st
 | Transcript tokens (estimate) | **606** | 1,639 | 1,261 | 1,307 |
 | Wall time, all ten tasks | **1,182 ms** | 2,106 ms | 1,370 ms | 1,798 ms |
 | Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
-| Real agent, 13 vcbench tasks: tokens | **1.02M** | 1.64M | 1.38M | — |
+| Real-agent pilot, 13 vcbench tasks, 1 run: tokens | **1.02M** | 1.64M | 1.38M | — |
 
 Default output, no quiet flags. Tokens are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
 
@@ -158,7 +158,7 @@ Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev)
 | GitButler 0.22.3 | 13/13 | 61 | 1.64M | $1.00 | 304 s |
 | Git 2.50 | 13/13 | 59 | 1.38M | $0.73 | 295 s |
 
-That is 36% fewer commands, 38% fewer tokens and 39% lower cost than GitButler, with every task passing. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens. Per-run metrics, with no transcripts, are in [`benchmarks/results/agent-pilot.json`](benchmarks/results/agent-pilot.json). One run per task is a pilot: single tasks vary. Git used fewer commands than AISC on four tasks (review, cold checkpoint, integrating branches, selective copy), and GitButler on one (split with leftovers).
+That is 36% fewer commands, 38% fewer tokens and 39% lower cost than GitButler, with every task passing. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens. Per-run metrics, with no transcripts, are in [`benchmarks/results/agent-pilot.json`](benchmarks/results/agent-pilot.json). This is a pilot, not a verified result: one run per task and tool, and AISC's agent block and three of its commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`) were improved between pilot rounds after watching AISC's runs on these same 13 tasks, while GitButler and Git ran once with their shipped setup. Part of the gap may come from that fitting; single tasks also vary from run to run. Repeated runs on held-out tasks are the next step. Git used fewer commands than AISC on four tasks (review, cold checkpoint, integrating branches, selective copy), and GitButler on one (split with leftovers).
 
 ### Command benchmark
 
