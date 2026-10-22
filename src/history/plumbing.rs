@@ -279,7 +279,9 @@ impl Git {
             if metadata.file_type().is_symlink() {
                 let target = std::fs::read_link(&full)?;
                 oids[index] = self.write_blob(target.as_os_str().as_encoded_bytes(), true)?;
-            } else if path.contains(['\n', '\r']) {
+            } else if path.contains(['\n', '\r']) || path.starts_with('"') {
+                // --stdin-paths C-unquotes lines starting with `"` and splits on newlines, so
+                // such names are passed as an argument, which Git never interprets.
                 oids[index] = self.line(&["hash-object", "-w", "--", path])?;
             } else {
                 regular.push(index);

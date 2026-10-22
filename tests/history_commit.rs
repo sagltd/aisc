@@ -489,3 +489,108 @@ fn a_file_changed_between_read_and_commit_is_a_stale_error() {
     assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
     assert_eq!(before_refs, fixture.git(&["for-each-ref"]));
 }
+
+#[test]
+fn quote_leading_file_names_are_hashed_from_their_own_content() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    let outside = fixture.root.parent().unwrap().join("outside.txt");
+    std::fs::write(&outside, "SECRET\n").unwrap();
+    // `git hash-object --stdin-paths` would C-unquote both names and read other files.
+    let traversal = r#""\056\056\057outside.txt""#;
+    let quoted = r#""x""#;
+    fixture.write("x", "plain x\n");
+    fixture.write(traversal, "own traversal content\n");
+    fixture.write(quoted, "own quoted content\n");
+    fixture.aisc(&["commit", "-m", "Odd names", "--all"]).ok();
+    assert_eq!(
+        fixture.tree_blob("HEAD", traversal).unwrap(),
+        "own traversal content\n"
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD", quoted).unwrap(),
+        "own quoted content\n"
+    );
+    assert_eq!(fixture.tree_blob("HEAD", "x").unwrap(), "plain x\n");
+    assert_eq!(std::fs::read_to_string(&outside).unwrap(), "SECRET\n");
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+#[test]
+fn undo_refuses_after_head_moved_to_another_branch_or_detached() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.write("f.txt", "one\ntwo\n");
+    fixture.aisc(&["commit", "-m", "c1", "f.txt"]).ok();
+    fixture.git(&["switch", "-c", "other"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["undo"]);
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("HEAD"), "{}", run.stderr);
+    assert_eq!(
+        before,
+        fixture.snapshot(),
+        "no staged revert on the other branch"
+    );
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+    // Back on the branch the op ran on, undo works again.
+    fixture.git(&["switch", "main"]);
+    fixture.aisc(&["undo"]).ok();
+    assert!(fixture.git(&["status", "--porcelain"]).contains(" M f.txt"));
+
+    let detached = Fixture::with_files(&[("f.txt", "one\n")]);
+    detached.write("f.txt", "one\ntwo\n");
+    detached.aisc(&["commit", "-m", "c1", "f.txt"]).ok();
+    detached.git(&["checkout", "--detach"]);
+    let before = detached.snapshot();
+    let run = detached.aisc(&["undo"]);
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("HEAD"), "{}", run.stderr);
+    assert_eq!(before, detached.snapshot());
+}
+
+#[test]
+fn intent_to_add_entries_do_not_survive_as_user_staging() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("new.txt", "brand new\n");
+    fixture.git(&["add", "-N", "new.txt"]);
+    fixture.aisc(&["commit", "-m", "Add new", "new.txt"]).ok();
+    assert_eq!(fixture.git(&["status", "--porcelain"]), "");
+    assert!(
+        fixture
+            .git(&["diff", "--cached", "--name-status"])
+            .is_empty()
+    );
+    // The user's next commit must not delete the file.
+    fixture.git(&["commit", "--allow-empty", "-m", "follow-up"]);
+    assert!(fixture.exists("new.txt"));
+    assert_eq!(fixture.tree_blob("HEAD", "new.txt").unwrap(), "brand new\n");
+    assert_eq!(fixture.git(&["ls-files", "new.txt"]), "new.txt");
+}
+
+#[test]
+fn line_ranges_are_validated_for_every_file_state() {
+    let fixture = Fixture::with_files(&[
+        ("gone.txt", "bye\n"),
+        ("data.bin", "AAAA"),
+        ("keep.txt", "k\n"),
+    ]);
+    std::fs::remove_file(fixture.path("gone.txt")).unwrap();
+    fixture.write_bytes("data.bin", &[0, 1, 2]);
+    fixture.write("added.txt", "one\ntwo\n");
+    fixture.git(&["add", "added.txt"]);
+    fixture.write("fresh.txt", "one\ntwo\n");
+    let before = fixture.snapshot();
+    for (token, message) in [
+        ("added.txt:50-60", "added.txt has 2 lines"),
+        ("fresh.txt:50-60", "fresh.txt has 2 lines"),
+        ("gone.txt:1", "gone.txt"),
+        ("data.bin:1-2", "data.bin"),
+    ] {
+        let run = fixture.aisc(&["commit", "-m", "x", token]);
+        assert_eq!(run.code, 1, "{token}: {}", run.stdout);
+        assert!(run.stderr.contains(message), "{token}: {}", run.stderr);
+        assert_eq!(before, fixture.snapshot(), "{token}");
+    }
+    // A valid range on a whole-file item still selects the file.
+    fixture.aisc(&["commit", "-m", "ok", "added.txt:1-2"]).ok();
+    assert_eq!(fixture.commit_files("HEAD"), ["added.txt"]);
+}

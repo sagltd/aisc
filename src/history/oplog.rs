@@ -25,6 +25,13 @@ pub(crate) struct OpHead {
     pub to: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct HeadAfter {
+    /// `refs/heads/NAME`, or `None` when HEAD is detached.
+    pub symbolic: Option<String>,
+    pub oid: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct OpFile {
     pub path: String,
@@ -57,6 +64,9 @@ pub(crate) struct OpData {
     pub worktree: Vec<OpFile>,
     pub index: Vec<OpIndex>,
     pub index_before_tree: Option<String>,
+    /// Where HEAD pointed right after the operation; undo refuses when HEAD is elsewhere.
+    #[serde(default)]
+    pub head_after: Option<HeadAfter>,
     pub undo_of: Option<String>,
 }
 
@@ -117,6 +127,7 @@ impl OpRecord {
                 })
                 .collect(),
             index_before_tree: None,
+            head_after: None,
             undo_of: plan.undo_of.clone(),
         };
         Self { data, files, after }

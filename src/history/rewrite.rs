@@ -127,6 +127,58 @@ impl Session {
         Ok(())
     }
 
+    /// HEAD's symbolic ref and commit as the plan will leave them.
+    fn head_after(&self, plan: &Plan) -> Result<super::oplog::HeadAfter> {
+        let symbolic = match &plan.head {
+            Some(head) => Some(head.to.clone()),
+            None => self.head.symbolic.clone(),
+        };
+        let name = symbolic.clone().unwrap_or_else(|| "HEAD".to_owned());
+        let moved = plan
+            .refs
+            .iter()
+            .find(|movement| movement.name == name)
+            .and_then(|movement| movement.new.clone());
+        let oid = match (moved, &symbolic) {
+            (Some(oid), _) => oid,
+            (None, Some(reference)) => self
+                .git
+                .ref_oid(reference)?
+                .unwrap_or_else(|| self.head.oid.clone()),
+            (None, None) => self.head.oid.clone(),
+        };
+        Ok(super::oplog::HeadAfter { symbolic, oid })
+    }
+
+    /// Paths among `changes` whose index entry is an intent-to-add placeholder (`git add -N`):
+    /// porcelain v2 reports them as index-unchanged (`.`) and worktree-added (`A`).
+    fn intent_to_add(&self, changes: &[IndexChange]) -> Result<std::collections::BTreeSet<String>> {
+        let mut found = std::collections::BTreeSet::new();
+        for chunk in changes.chunks(400) {
+            let mut args = vec![
+                "status",
+                "--porcelain=v2",
+                "-z",
+                "--untracked-files=no",
+                "--",
+            ];
+            args.extend(chunk.iter().map(|change| change.path.as_str()));
+            let output = self.git.run(&args)?;
+            let mut records = output.split(|byte| *byte == 0).filter(|r| !r.is_empty());
+            while let Some(record) = records.next() {
+                let text = String::from_utf8_lossy(record);
+                if text.starts_with("2 ") {
+                    records.next(); // rename: original path follows
+                } else if text.starts_with("1 .A ")
+                    && let Some(path) = text.splitn(9, ' ').nth(8)
+                {
+                    found.insert(path.to_owned());
+                }
+            }
+        }
+        Ok(found)
+    }
+
     /// Index bytes with the rule applied: an entry equal to `from` becomes `to`; others are kept.
     fn prepare_index(&self, changes: &[IndexChange]) -> Result<Option<Vec<u8>>> {
         if changes.is_empty() {
@@ -152,6 +204,7 @@ impl Session {
                 current.entry(path).or_default().push((stage, (mode, oid)));
             }
         }
+        let intent_to_add = self.intent_to_add(changes)?;
         let zero = git.zero_oid(&self.head.oid);
         let mut input = Vec::new();
         for change in changes {
@@ -162,7 +215,12 @@ impl Session {
                     format!("{}: unresolved conflict in the index", change.path),
                 ));
             }
-            let present = entries.first().map(|(_, entry)| entry);
+            // `git add -N` placeholders are not user staging: they count as absent.
+            let present = if intent_to_add.contains(&change.path) {
+                None
+            } else {
+                entries.first().map(|(_, entry)| entry)
+            };
             if present != change.from.as_ref() {
                 continue; // staged differently by the user: preserved
             }
@@ -200,7 +258,8 @@ impl Session {
         let git = self.git.clone();
         preflight_worktree(&git.root, &plan.worktree)?;
         let index_bytes = self.prepare_index(&plan.index)?;
-        let record = OpRecord::from_plan(plan);
+        let mut record = OpRecord::from_plan(plan);
+        record.data.head_after = Some(self.head_after(plan)?);
         let (op_oid, previous) = oplog::build(&git, &record)?;
         self.ensure_unchanged()?;
         let op = oplog::short(&op_oid);

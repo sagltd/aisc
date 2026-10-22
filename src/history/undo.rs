@@ -115,6 +115,22 @@ fn check_current(git: &Git, session: &Session, data: &OpData) -> Result<()> {
     {
         return Err(stale("HEAD moved after that operation"));
     }
+    if let Some(after) = &data.head_after
+        && (session.head.symbolic != after.symbolic || session.head.oid != after.oid)
+    {
+        let now = session
+            .head
+            .symbolic
+            .as_deref()
+            .map_or("a detached HEAD", |name| {
+                name.trim_start_matches("refs/heads/")
+            });
+        return Err(fail_hint(
+            Code::Stale,
+            format!("HEAD is on {now}, not where that operation left it; nothing was changed"),
+            "switch back to the branch the operation ran on, then run aisc undo",
+        ));
+    }
     for file in &data.worktree {
         let path = git.root.join(&file.path);
         let current = std::fs::read(&path).ok();

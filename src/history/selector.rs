@@ -188,8 +188,21 @@ fn resolve_token(
         }
         let file = &changes.files[index];
         if file.whole() || file.kind == Kind::Untracked {
-            let lines = file.lines.max(1);
-            if start > lines && file.kind == Kind::Untracked {
+            let has_lines = matches!(file.kind, Kind::Untracked | Kind::Added) && !file.binary;
+            if !has_lines {
+                let what = if file.binary {
+                    "binary"
+                } else {
+                    file.kind.label()
+                };
+                return Err(fail_hint(
+                    Code::Selector,
+                    format!("{path} is a {what} change; line ranges do not apply"),
+                    "select the whole path instead",
+                ));
+            }
+            let lines = file.lines;
+            if start > lines {
                 return Err(fail(
                     Code::Selector,
                     format!("{path} has {lines} lines; none in {start}-{end}"),
