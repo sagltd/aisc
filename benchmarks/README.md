@@ -187,6 +187,37 @@ Each per-task cell gives calls (`e` = edits) / output bytes / estimated tokens
 | parallel_branch | 3 / 0 B / 34 t / 131 ms | 3 / 336 B / 143 t / 2006 ms | 1 / 71 B / 33 t / 96 ms † | 2 / 0 B / 35 t / 144 ms |
 | inspect_state | 3 / 113 B / 70 t / 116 ms | 1 / 246 B / 86 t / 116 ms | 2 / 274 B / 126 t / 44 ms | 2 / 357 B / 158 t / 115 ms |
 
+### Context cost (agent guidance)
+
+The guidance an agent loads before it runs any command also costs tokens, in
+every session. We counted it with
+[`commands/context_cost.py`](commands/context_cost.py), using `tiktoken`
+`o200k_base` 0.14.0. These are file sizes, not billed usage.
+
+What each tool's guidance contains:
+
+- **AGENTS block**: the tool-specific `## Version control` block that the
+  vcbench harness writes into AGENTS.md/CLAUDE.md. For GitButler that block is
+  `but agent setup --print`.
+- **Skill**: the installed `SKILL.md`. For GitButler this is
+  `but skill install`, 0.22.3. For jj it is the SHA-pinned onevcat-jj skill
+  that vcbench fetches. Git has no skill.
+- **References**: files the skill points to for detail, which are loaded on
+  demand.
+
+| Context cost (tokens) | git | aisc | but | jj |
+|---|---|---|---|---|
+| AGENTS block | 63 | 83 | 475 | 167 |
+| Skill (`SKILL.md`) | – | **469** (was 681) | 5415 | 2591 |
+| Block + skill | 63 | **552** | 5890 | 2758 |
+| References, on demand | – | – | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
+
+The AISC skill is a single page: a task-to-command list, the selector syntax,
+and the rules on exit codes, sync conflicts and undo. To check it,
+[`commands/skill_check.sh`](commands/skill_check.sh) runs every command form in
+the page against a real binary (40 checks). The vcbench reference check
+(`npm run aisc:check`) passes all 13 tasks with this skill.
+
 ### Where AISC loses
 
 - **Wall time.** AISC is the slowest tool in every task. The one exception is
@@ -228,6 +259,8 @@ python3 benchmarks/commands/run.py --but /path/to/but --jj /path/to/jj \
   --output benchmarks/results/commands-v2.json --repetitions 6   # builds aisc --release itself
 python3 benchmarks/commands/report.py benchmarks/results/commands-v2.json
 python3 benchmarks/commands/test_scenarios.py    # graders reject no-ops; Git passes in both modes
+benchmarks/commands/skill_check.sh target/release/aisc   # every command in skills/aisc/SKILL.md
+python3 benchmarks/commands/context_cost.py aisc=skills/aisc/SKILL.md but=/path/to/but-skill/SKILL.md
 ```
 
 Any missing tool is skipped and listed under `skipped`. Without `tiktoken`,
