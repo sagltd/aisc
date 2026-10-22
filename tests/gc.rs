@@ -274,6 +274,29 @@ fn current_and_busy_worktrees_are_kept() {
 }
 
 #[test]
+fn a_dead_owners_lock_does_not_keep_a_worktree_busy() {
+    let fixture = repository();
+    let path = start(&fixture, "orphaned");
+    finish_kept(&path);
+    // Left by a killed aisc process: tagged, but nobody holds its flock.
+    let lock = fixture
+        .root
+        .join(".git/worktrees/orphaned/aisc-operation.lock");
+    fs::write(&lock, "aisc pid 99999\n").unwrap();
+    let dry = gc(&fixture, &[]);
+    let row = entry(&dry, "orphaned");
+    assert_eq!(row["action"], "remove", "{dry}");
+    assert!(!row["reason"].as_str().unwrap().contains("busy"), "{dry}");
+    let applied = gc(&fixture, &["--apply"]);
+    assert_eq!(
+        entry(&applied, "orphaned")["action"],
+        "removed",
+        "{applied}"
+    );
+    assert!(!path.exists());
+}
+
+#[test]
 fn reported_size_matches_bytes_written() {
     let fixture = repository();
     let path = start(&fixture, "sized");

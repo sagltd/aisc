@@ -20,4 +20,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Reproducible source-control benchmark tooling and documentation.
 - Release workflow, dependency audit (`cargo-deny`) and Dependabot configuration.
 
+### Known limitations
+
+- Do not mix an `aisc` binary from before this release with a new one on the
+  same checkout. Old binaries write operation locks with no flock and no owner
+  tag, so the two versions cannot see each other's locks and can both run at
+  once. Upgrade all running agents together.
+
 [Unreleased]: https://github.com/sagltd/aisc/commits/dev
