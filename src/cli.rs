@@ -6,7 +6,7 @@ use std::path::PathBuf;
     name = "aisc",
     version,
     about = "Task-oriented source control, backed by Git",
-    after_help = "Examples:\n  aisc start fix --in-place\n  aisc start fix --path ../fix\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nRedirected output defaults to JSON; terminals get readable text.\nPaths are literal files relative to the repository root.\nNo automatic push, merge, or cleanup. Configured Git hooks/signing run normally."
+    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nNo automatic push, merge, or cleanup. Configured Git hooks/signing run normally for checkpoint."
 )]
 pub(crate) struct Cli {
     /// Emit stable, ANSI-free JSON, including errors and help
@@ -63,7 +63,11 @@ pub(crate) enum Operation {
         command: Vec<String>,
     },
     /// Return the verified commit/ref for review, without pushing or merging
-    Finish,
+    Finish {
+        /// Keep an isolated worktree after finishing (worktrees are currently always kept)
+        #[arg(long)]
+        keep: bool,
+    },
     /// Read a bounded GitHub PR/review/check overview using existing gh auth
     Github {
         #[arg(long, default_value = "10", value_parser = bounded::<100>)]
@@ -74,18 +78,262 @@ pub(crate) enum Operation {
         #[arg(long, default_value = "10", value_parser = bounded::<100>)]
         limit: usize,
     },
+    /// Branch view: commits (hex ids) plus uncommitted hunks (letter ids)
+    Log(Log),
+    /// Show hunks of a commit, a range A..B, or the uncommitted changes
+    Show(Show),
+    /// Commit selected hunks/files/content as one or several new commits
+    Commit(Commit),
+    /// Move uncommitted hunks into existing commits
+    Amend(Amend),
+    /// Revert selected uncommitted changes
+    Discard(Discard),
+    /// Split a commit into several commits
+    Split(Split),
+    /// Move part of a commit back to the working tree
+    Uncommit(Uncommit),
+    /// Squash adjacent commits into groups
+    Squash(Squash),
+    /// Move or reorder commits
+    Move(Move),
+    /// Copy commits onto another branch
+    Pick(Pick),
+    /// Rebase the branch onto its base while keeping uncommitted work
+    Sync(Sync),
+    /// Integrate branches into a target branch
+    Land(Land),
+    /// Switch branches carrying uncommitted work
+    Switch(Switch),
+    /// Undo the latest (or a given) history operation; undoing an undo redoes it
+    Undo {
+        /// Operation id from `aisc oplog`
+        op: Option<String>,
+    },
+    /// List recorded history operations, newest first
+    Oplog {
+        #[arg(long, default_value = "10", value_parser = bounded::<1_000>)]
+        limit: usize,
+    },
+    /// List or remove reclaimable aisc worktrees
+    Gc(Gc),
+}
+
+/// Flags shared by every verb that rewrites history.
+#[derive(Args, Clone, Debug, Default)]
+pub(crate) struct MutationOpts {
+    /// Rewrite this branch without checking it out
+    #[arg(long, value_name = "BRANCH")]
+    pub branch: Option<String>,
+    /// Print only the result line
+    #[arg(short = 'q', long)]
+    pub quiet: bool,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Log {
+    #[arg(long, value_name = "BRANCH")]
+    pub branch: Option<String>,
+    #[arg(long, default_value = "20", value_parser = bounded::<1_000>)]
+    pub limit: usize,
+    /// Omit per-hunk lines of uncommitted changes
+    #[arg(long)]
+    pub no_hunks: bool,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Show {
+    /// Optional commit/range first, then selectors (PATH, hunk id, PATH:L-R, PATH~text)
+    #[arg(value_name = "REV|A..B|SEL")]
+    pub args: Vec<String>,
+    /// Include 3 lines of context and do not cap hunk length
+    #[arg(long)]
+    pub full: bool,
+    #[arg(long, value_name = "BRANCH")]
+    pub branch: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Commit {
+    #[arg(short = 'm', long, value_name = "MESSAGE")]
+    pub message: Option<String>,
+    /// Create this branch at the new commit and switch HEAD to it
+    #[arg(short = 'b', long = "new-branch", value_name = "NEW")]
+    pub new_branch: Option<String>,
+    /// Commit every change, including untracked files that are not ignored
+    #[arg(long, conflicts_with_all = ["into", "selectors"])]
+    pub all: bool,
+    /// Stack: `--into MESSAGE SEL...`, repeatable; each group becomes one commit
+    #[arg(long, num_args = 1.., action = clap::ArgAction::Append, value_parser = clap::value_parser!(String), value_name = "ARG", conflicts_with_all = ["message", "selectors"])]
+    pub into: Vec<String>,
+    /// Occurrences of `--into`, filled from the parsed matches after parsing.
+    #[arg(skip)]
+    pub groups: Vec<Vec<String>>,
+    #[arg(value_name = "SEL")]
+    pub selectors: Vec<String>,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Amend {
+    /// `--into COMMIT SEL...`, repeatable
+    #[arg(long, num_args = 2.., required = true, action = clap::ArgAction::Append, value_parser = clap::value_parser!(String), value_name = "ARG")]
+    pub into: Vec<String>,
+    /// Occurrences of `--into`, filled from the parsed matches after parsing.
+    #[arg(skip)]
+    pub groups: Vec<Vec<String>>,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Discard {
+    #[arg(value_name = "SEL")]
+    pub selectors: Vec<String>,
+    /// Revert only changes that differ by whitespace
+    #[arg(long)]
+    pub whitespace_only: bool,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum, PartialEq, Eq)]
+pub(crate) enum Rest {
+    #[default]
+    Uncommit,
+    Keep,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Split {
+    pub commit: String,
+    /// `--into MESSAGE SEL...`, repeatable
+    #[arg(long, num_args = 2.., required = true, action = clap::ArgAction::Append, value_parser = clap::value_parser!(String), value_name = "ARG")]
+    pub into: Vec<String>,
+    /// Occurrences of `--into`, filled from the parsed matches after parsing.
+    #[arg(skip)]
+    pub groups: Vec<Vec<String>>,
+    #[arg(long, value_enum, default_value = "uncommit")]
+    pub rest: Rest,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Uncommit {
+    pub commit: String,
+    #[arg(value_name = "SEL", required = true)]
+    pub selectors: Vec<String>,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Squash {
+    /// `--into MESSAGE COMMIT COMMIT...`, repeatable
+    #[arg(long, num_args = 3.., required = true, action = clap::ArgAction::Append, value_parser = clap::value_parser!(String), value_name = "ARG")]
+    pub into: Vec<String>,
+    /// Occurrences of `--into`, filled from the parsed matches after parsing.
+    #[arg(skip)]
+    pub groups: Vec<Vec<String>>,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+#[command(group(clap::ArgGroup::new("placement").required(true).multiple(false).args(["before", "after", "order"])))]
+pub(crate) struct Move {
+    #[arg(value_name = "COMMIT", required = true)]
+    pub commits: Vec<String>,
+    #[arg(long, value_name = "COMMIT")]
+    pub before: Option<String>,
+    #[arg(long, value_name = "COMMIT")]
+    pub after: Option<String>,
+    /// COMMITs list the full range, oldest first, in the wanted order
+    #[arg(long)]
+    pub order: bool,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Pick {
+    #[arg(value_name = "COMMIT", required = true)]
+    pub commits: Vec<String>,
+    /// Replay onto this existing branch (not checked out)
+    #[arg(long, value_name = "BRANCH", conflicts_with = "new_branch")]
+    pub to: Option<String>,
+    /// Create this branch (at --onto, default the base) and replay there
+    #[arg(short = 'b', long = "new-branch", value_name = "NEW")]
+    pub new_branch: Option<String>,
+    #[arg(long, value_name = "BASE", requires = "new_branch")]
+    pub onto: Option<String>,
+    /// Resolve COMMIT names against this branch
+    #[arg(long, value_name = "BRANCH")]
+    pub from: Option<String>,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Sync {
+    #[arg(value_name = "ONTO", conflicts_with_all = ["continue_sync", "abort"])]
+    pub onto: Option<String>,
+    #[arg(long, value_name = "PATH")]
+    pub prefer_branch: Vec<String>,
+    #[arg(long, value_name = "PATH")]
+    pub prefer_onto: Vec<String>,
+    #[arg(long)]
+    pub fetch: bool,
+    #[arg(long = "continue", conflicts_with = "abort")]
+    pub continue_sync: bool,
+    #[arg(long)]
+    pub abort: bool,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Land {
+    #[arg(value_name = "BRANCH", required = true)]
+    pub branches: Vec<String>,
+    #[arg(long, value_name = "TARGET")]
+    pub into: Option<String>,
+    #[arg(long)]
+    pub switch: bool,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Switch {
+    pub branch: String,
+    #[arg(short = 'c', long)]
+    pub create: bool,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Gc {
+    /// Remove reclaimable worktrees (default is a dry run)
+    #[arg(long)]
+    pub apply: bool,
+    #[arg(long, default_value = "24", value_name = "HOURS")]
+    pub min_age: u64,
 }
 
 #[derive(Args)]
-#[command(group(clap::ArgGroup::new("location").required(true).multiple(false).args(["path", "in_place"])))]
+#[command(group(clap::ArgGroup::new("location").multiple(false).args(["path", "in_place"])))]
 pub(crate) struct Start {
     pub name: String,
     /// Complete destination path; must not exist and its parent must exist
     #[arg(long, group = "location", value_name = "PATH")]
     pub path: Option<PathBuf>,
-    /// Keep this directory and branch; requires a clean committed checkout
+    /// Keep this directory and branch; requires a clean committed checkout (the default)
     #[arg(long, group = "location")]
     pub in_place: bool,
+    /// Cone-mode sparse directories for a new worktree (requires --path)
+    #[arg(long, requires = "path", num_args = 1.., value_name = "DIR")]
+    pub sparse: Vec<String>,
 }
 
 impl Operation {
@@ -96,10 +344,64 @@ impl Operation {
             Self::Diff { .. } => "diff",
             Self::Checkpoint { .. } => "checkpoint",
             Self::Verify { .. } => "verify",
-            Self::Finish => "finish",
+            Self::Finish { .. } => "finish",
             Self::Github { .. } => "github",
             Self::Gitlab { .. } => "gitlab",
+            Self::Log(_) => "log",
+            Self::Show(_) => "show",
+            Self::Commit(_) => "commit",
+            Self::Amend(_) => "amend",
+            Self::Discard(_) => "discard",
+            Self::Split(_) => "split",
+            Self::Uncommit(_) => "uncommit",
+            Self::Squash(_) => "squash",
+            Self::Move(_) => "move",
+            Self::Pick(_) => "pick",
+            Self::Sync(_) => "sync",
+            Self::Land(_) => "land",
+            Self::Switch(_) => "switch",
+            Self::Undo { .. } => "undo",
+            Self::Oplog { .. } => "oplog",
+            Self::Gc(_) => "gc",
         }
+    }
+
+    /// Fills `groups` (the per-occurrence values of repeatable `--into`) from the parsed matches.
+    pub fn attach_groups(&mut self, matches: &clap::ArgMatches) {
+        let Some((_, sub)) = matches.subcommand() else {
+            return;
+        };
+        let groups = || -> Vec<Vec<String>> {
+            sub.get_occurrences::<String>("into")
+                .map(|occurrences| {
+                    occurrences
+                        .map(|group| group.cloned().collect::<Vec<_>>())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        match self {
+            Self::Commit(args) => args.groups = groups(),
+            Self::Amend(args) => args.groups = groups(),
+            Self::Split(args) => args.groups = groups(),
+            Self::Squash(args) => args.groups = groups(),
+            _ => {}
+        }
+    }
+
+    /// History verbs print compact text by default, even when stdout is redirected.
+    pub fn prefers_text(&self) -> bool {
+        !matches!(
+            self,
+            Self::Start(_)
+                | Self::Context { .. }
+                | Self::Diff { .. }
+                | Self::Checkpoint { .. }
+                | Self::Verify { .. }
+                | Self::Finish { .. }
+                | Self::Github { .. }
+                | Self::Gitlab { .. }
+        )
     }
 }
 
