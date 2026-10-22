@@ -22,12 +22,15 @@ use std::sync::{Mutex, OnceLock};
 
 static FULL: AtomicBool = AtomicBool::new(true);
 static STACK: AtomicBool = AtomicBool::new(false);
+static QUIET: AtomicBool = AtomicBool::new(false);
 
 /// Called once by `main`: `json` output needs the complete view; `stack` (`--stack`/`-v`) asks
-/// for the commit list in text output.
-pub(crate) fn configure(json: bool, stack: bool) {
+/// for the commit list in text output; `quiet` (`-q`, text) prints the result line only, so no
+/// view is read at all.
+pub(crate) fn configure(json: bool, stack: bool, quiet: bool) {
     FULL.store(json || stack, Ordering::SeqCst);
     STACK.store(stack, Ordering::SeqCst);
+    QUIET.store(quiet && !json, Ordering::SeqCst);
 }
 
 /// The change set this process last read, and the HEAD it was read against.
@@ -70,6 +73,23 @@ pub(crate) fn note_applied(git: &Git, plan: &Plan, preserved: bool) {
 
 /// The view to print after a mutation; `branch`/`with_changes` are as for `view::read`.
 pub(crate) fn after(git: &Git, branch: Option<&str>, with_changes: bool) -> Result<View> {
+    if QUIET.load(Ordering::SeqCst) {
+        // Only the result line is printed; the JSON this would feed is not.
+        return Ok(View {
+            branch: branch.map(str::to_owned),
+            tip: String::new(),
+            is_head: branch.is_none(),
+            base: None,
+            upstream: None,
+            commits: Vec::new(),
+            total: 0,
+            status: None,
+            changes: None,
+            sync_paused: None,
+            locals: Vec::new(),
+            created: Default::default(),
+        });
+    }
     if FULL.load(Ordering::SeqCst) {
         return view::read(git, branch, 20, with_changes);
     }

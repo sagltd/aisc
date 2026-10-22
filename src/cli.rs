@@ -422,6 +422,25 @@ impl Operation {
         }
     }
 
+    /// `-q`: a mutation prints only its result line.
+    pub fn quiet(&self) -> bool {
+        match self {
+            Self::Commit(args) => args.opts.quiet,
+            Self::Amend(args) => args.opts.quiet,
+            Self::Discard(args) => args.opts.quiet,
+            Self::Split(args) => args.opts.quiet,
+            Self::Uncommit(args) => args.opts.quiet,
+            Self::Squash(args) => args.opts.quiet,
+            Self::Move(args) => args.opts.quiet,
+            Self::Pick(args) => args.opts.quiet,
+            Self::Sync(args) => args.opts.quiet,
+            Self::Land(args) => args.opts.quiet,
+            Self::Switch(args) => args.quiet,
+            Self::Undo { quiet, .. } => *quiet,
+            _ => false,
+        }
+    }
+
     /// `--stack`/`-v`: the full commit list after a mutation.
     pub fn stack(&self) -> bool {
         match self {
