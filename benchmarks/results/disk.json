@@ -15,7 +15,7 @@
       "added_apparent_bytes": 207357536,
       "added_allocated_bytes": 247791616,
       "per_agent_allocated_bytes": 61947904,
-      "seconds": 3.05
+      "seconds": 4.04
     },
     {
       "name": "aisc start --path",
@@ -23,7 +23,7 @@
       "added_apparent_bytes": 207360800,
       "added_allocated_bytes": 247824384,
       "per_agent_allocated_bytes": 61956096,
-      "seconds": 4.17
+      "seconds": 4.94
     },
     {
       "name": "aisc start --path --sparse src",
@@ -31,7 +31,7 @@
       "added_apparent_bytes": 42995200,
       "added_allocated_bytes": 51232768,
       "per_agent_allocated_bytes": 12808192,
-      "seconds": 2.02
+      "seconds": 3.29
     },
     {
       "name": "aisc finish (worktrees removed)",
@@ -39,7 +39,7 @@
       "added_apparent_bytes": 19581,
       "added_allocated_bytes": 114688,
       "per_agent_allocated_bytes": 28672,
-      "seconds": 11.17
+      "seconds": 16.04
     },
     {
       "name": "aisc gc --apply (after finish --keep)",
@@ -47,23 +47,23 @@
       "added_apparent_bytes": 19581,
       "added_allocated_bytes": 114688,
       "per_agent_allocated_bytes": 28672,
-      "seconds": 12.35
+      "seconds": 19.44
     },
     {
       "name": "aisc in-place commits",
       "note": "one checkout, N sequential commits; object growth only",
-      "added_apparent_bytes": 24081,
+      "added_apparent_bytes": 23986,
       "added_allocated_bytes": 172032,
       "per_agent_allocated_bytes": 43008,
-      "seconds": 3.57
+      "seconds": 5.31
     },
     {
       "name": "gitbutler but branch new",
       "note": "but setup plus N virtual branches in one workspace; app data included",
-      "added_apparent_bytes": 257208,
+      "added_apparent_bytes": 257303,
       "added_allocated_bytes": 524288,
       "per_agent_allocated_bytes": 131072,
-      "seconds": 1.95
+      "seconds": 1.74
     },
     {
       "name": "jj workspace add",
@@ -71,7 +71,7 @@
       "added_apparent_bytes": 206551059,
       "added_allocated_bytes": 247263232,
       "per_agent_allocated_bytes": 61815808,
-      "seconds": 5.89
+      "seconds": 7.4
     }
   ],
   "repository": {
