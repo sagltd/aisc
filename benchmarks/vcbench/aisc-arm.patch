@@ -1,0 +1,1400 @@
+diff --git a/package.json b/package.json
+index f8f986d..8fc39fe 100644
+--- a/package.json
++++ b/package.json
+@@ -24,6 +24,7 @@
+     "pilot6:fixture": "node scripts/create-pilot6-fixture.mjs",
+     "pilot6:verify": "node scripts/verify-pilot6.mjs",
+     "pilot6:check": "node scripts/run-pilot6-checks.mjs",
++    "aisc:check": "node scripts/run-aisc-checks.mjs",
+     "matrix:run": "node scripts/run-full-matrix.mjs",
+     "comparison:run": "node scripts/run-paired-comparison.mjs",
+     "comparison:check": "node scripts/check-paired-comparison.mjs",
+@@ -33,7 +34,7 @@
+     "scenario": "node scripts/run-scenario.mjs",
+     "scenario:check": "node scripts/check-review-adoption.mjs && node scripts/check-cleanup-recovery.mjs && node scripts/check-sync-integration-copy.mjs",
+     "scenario:check-runner": "node scripts/check-scenario-runner.mjs",
+-    "runner:check": "node scripts/check-runner-guards.mjs && node scripts/run-pilot-agent.mjs --self-test-metrics true && node scripts/check-runner-infra.mjs && node scripts/check-scenario-cli.mjs && node scripts/check-matrix-setup.mjs && node scripts/check-agent-events.mjs && node scripts/check-performance.mjs && node scripts/check-paired-comparison.mjs",
++    "runner:check": "node scripts/check-runner-guards.mjs && node scripts/check-disk.mjs && node scripts/run-pilot-agent.mjs --self-test-metrics true && node scripts/check-runner-infra.mjs && node scripts/check-scenario-cli.mjs && node scripts/check-matrix-setup.mjs && node scripts/check-agent-events.mjs && node scripts/check-performance.mjs && node scripts/check-paired-comparison.mjs",
+     "scenario:smoke": "node scripts/check-scenario-runner.mjs --quick true",
+     "performance:report": "node scripts/report-performance.mjs"
+   },
+diff --git a/scripts/check-disk.mjs b/scripts/check-disk.mjs
+new file mode 100644
+index 0000000..d9ba0b5
+--- /dev/null
++++ b/scripts/check-disk.mjs
+@@ -0,0 +1,49 @@
++#!/usr/bin/env node
++import assert from 'node:assert/strict';
++import { linkSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import path from 'node:path';
++import { spawnSync } from 'node:child_process';
++import { diskDelta, linkedWorktrees, measurePaths, snapshotDisk } from './lib/disk.mjs';
++
++const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'vcb-disk-')));
++try {
++  const dir = path.join(root, 'plain');
++  mkdirSync(dir);
++  writeFileSync(path.join(dir, 'a.txt'), 'x'.repeat(1000));
++  writeFileSync(path.join(dir, 'empty'), '');
++  linkSync(path.join(dir, 'a.txt'), path.join(dir, 'hard.txt'));
++  symlinkSync(root, path.join(dir, 'loop'));
++  const plain = measurePaths([dir]);
++  assert.equal(plain.apparent_bytes, 1000 + lstatSync(path.join(dir, 'loop')).size, 'hard links count once; a symlink counts as itself, never its target');
++  assert.equal(plain.file_count, 3);
++  assert.ok(plain.allocated_bytes >= 1000, 'allocated bytes cover at least the content');
++
++  const git = (cwd, ...args) => {
++    const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
++    assert.equal(result.status, 0, result.stderr);
++  };
++  const repo = path.join(root, 'repo');
++  mkdirSync(repo);
++  git(repo, 'init', '-b', 'main');
++  writeFileSync(path.join(repo, 'f.txt'), 'content\n');
++  git(repo, 'add', 'f.txt');
++  git(repo, '-c', 'user.name=T', '-c', 'user.email=t@example.test', 'commit', '-m', 'init');
++  assert.deepEqual(linkedWorktrees(repo), []);
++  const before = snapshotDisk({ workspace: repo });
++  const sibling = path.join(root, 'sibling');
++  git(repo, 'worktree', 'add', '-b', 'topic', sibling);
++  const appData = path.join(root, 'app-data');
++  mkdirSync(appData);
++  writeFileSync(path.join(appData, 'state'), 'y'.repeat(5000));
++  assert.deepEqual(linkedWorktrees(repo), [sibling]);
++  const after = snapshotDisk({ workspace: repo, extraDirs: [appData, null] });
++  const delta = diskDelta(before, after);
++  for (const key of ['before', 'after', 'delta']) for (const kind of ['apparent', 'allocated']) {
++    assert.ok(Number.isFinite(delta[`${key}_${kind}_bytes`]), `${key}_${kind}_bytes`);
++  }
++  assert.ok(delta.delta_apparent_bytes >= 5000 + 'content\n'.length, 'sibling worktree and tool data are counted');
++  assert.equal(delta.linked_worktrees_before, 0);
++  assert.equal(delta.linked_worktrees_after, 1);
++  console.log(JSON.stringify({ passed: true, delta_apparent_bytes: delta.delta_apparent_bytes }, null, 2));
++} finally { rmSync(root, { recursive: true, force: true }); }
+diff --git a/scripts/check-runner-guards.mjs b/scripts/check-runner-guards.mjs
+index 9c22113..88569a3 100644
+--- a/scripts/check-runner-guards.mjs
++++ b/scripts/check-runner-guards.mjs
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env node
+ import assert from 'node:assert/strict';
+-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { symlinkSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import path from 'node:path';
+ import { spawn, spawnSync } from 'node:child_process';
+@@ -115,5 +115,37 @@ else process.stdout.write(mode);
+   assert.match(readFileSync(missingTrace.stderr_path, 'utf8'), /ENOENT/);
+   const publication=createCommandGuards(path.join(root,'publication'),'git',{git:'/usr/bin/true',but:'/usr/bin/true',jj:'/usr/bin/true'},'pilot-11-dual-source-sync');
+   assert.equal(spawnSync(path.join(publication.binDir,'git'),['push']).status,42);
+-  console.log(JSON.stringify({passed:true, classification_cases:reads.length+writes.length+14, wrapper_cases:trace.length+9},null,2));
++  // AISC arm: aisc is allowed only there, raw Git writes are blocked, reads stay open.
++  const aiscReads=[['log'],['show','main'],['oplog'],['context'],['diff'],['github'],['gitlab'],['help'],['version'],['--version'],['--color','never','log'],['--branch','topic','log'],['gc'],['gc','--min-age','2']];
++  const aiscWrites=[['commit','-m','x','--all'],['amend','--into','abc','f'],['split','abc'],['squash','a','b'],['move','a','--before','b'],['sync'],['pick','a'],['land','b','--into','main'],['discard','f'],['undo'],['uncommit','a','f'],['start','x'],['finish'],['gc','--apply'],['checkpoint']];
++  for (const argv of aiscReads) assert.equal(classifyCommand('aisc',argv),'inspection',JSON.stringify(argv));
++  for (const argv of aiscWrites) assert.equal(classifyCommand('aisc',argv),'mutation',JSON.stringify(argv));
++  assert.deepEqual(subcommand('aisc',['--color','never','--branch','b','log','x']),{command:'log',args:['x']});
++  for (const arm of ['git','but+skill','jj+skill']) assert.equal(policyBlocked(arm,'aisc',['log']),true,arm);
++  assert.equal(policyBlocked('aisc+skill','aisc',['commit','-m','x']),false);
++  assert.equal(policyBlocked('aisc+skill','but',['status']),true);
++  assert.equal(policyBlocked('aisc+skill','jj',['status']),true);
++  assert.equal(policyBlocked('aisc+skill','git',['commit','-m','x']),true);
++  assert.equal(policyBlocked('aisc+skill','git',['status']),false);
++  assert.equal(policyBlocked('aisc+skill','git',['commit','-m','x'],true),false,'git spawned by aisc is internal');
++  for (const task of ['pilot-8-cold-checkpoint','pilot-11-dual-source-sync','pilot-12-integrate-topics']) assert.equal(taskPolicyBlocked(task,'aisc',['land','a']),false);
++  const aiscGuards=createCommandGuards(path.join(root,'aisc-arm'),'aisc+skill',{git:'/usr/bin/true',but:'/usr/bin/true',jj:'/usr/bin/true',aisc:'/usr/bin/true'});
++  assert.equal(spawnSync(path.join(aiscGuards.binDir,'aisc'),['commit','-m','x']).status,0);
++  assert.equal(spawnSync(path.join(aiscGuards.binDir,'git'),['commit','-m','x']).status,42,'raw git write blocked in the aisc arm');
++  assert.equal(spawnSync(path.join(aiscGuards.binDir,'git'),['log']).status,0);
++  assert.equal(spawnSync(path.join(aiscGuards.binDir,'but'),['status']).status,42);
++  assert.equal(spawnSync(path.join(aiscGuards.binDir,'jj'),['status']).status,42);
++  const otherArm=createCommandGuards(path.join(root,'aisc-in-git'),'git',{git:'/usr/bin/true',but:'/usr/bin/true',jj:'/usr/bin/true',aisc:'/usr/bin/true'});
++  assert.equal(spawnSync(path.join(otherArm.binDir,'aisc'),['log']).status,42,'aisc blocked in the git arm');
++  // Git spawned by a process named like the aisc binary is internal and allowed to write.
++  const nativeAisc=path.join(root,'aisc');
++  symlinkSync('/bin/sh',nativeAisc); // a symlink keeps the platform signature; ps reports the invoked name
++  const internalArm=createCommandGuards(path.join(root,'aisc-internal'),'aisc+skill',{git:'/usr/bin/true',but:'/usr/bin/true',jj:'/usr/bin/true',aisc:nativeAisc});
++  const spawned=spawnSync(path.join(internalArm.binDir,'aisc'),['-c','git commit -m x; :'],{env:{...process.env,PATH:internalArm.binDir+path.delimiter+process.env.PATH}});
++  assert.equal(spawned.status,0,String(spawned.stderr));
++  const internalTrace=readFileSync(internalArm.tracePath,'utf8').trim().split('\n').map(line=>JSON.parse(line.slice(3)));
++  const spawnedGit=internalTrace.find(entry=>entry.tool==='git');
++  assert.ok(spawnedGit?.internal&&!spawnedGit.blocked,'git spawned by aisc counts as internal');
++  assert.ok(internalTrace.find(entry=>entry.tool==='aisc')&&!internalTrace.find(entry=>entry.tool==='aisc').internal);
++  console.log(JSON.stringify({passed:true, classification_cases:reads.length+writes.length+aiscReads.length+aiscWrites.length+14, wrapper_cases:trace.length+9},null,2));
+ } finally { rmSync(root,{recursive:true,force:true}); }
+diff --git a/scripts/export-batch-artifacts.mjs b/scripts/export-batch-artifacts.mjs
+index 3a79ad2..19076b6 100644
+--- a/scripts/export-batch-artifacts.mjs
++++ b/scripts/export-batch-artifacts.mjs
+@@ -6,6 +6,7 @@
+ // can be attached to a release.
+ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+ import path from "node:path";
++import { homedir } from "node:os";
+ import { fileURLToPath } from "node:url";
+ import { createHash } from "node:crypto";
+ import { spawnSync } from "node:child_process";
+@@ -89,10 +90,28 @@ mkdirSync(outDir, { recursive: true });
+ const findings = [];
+ const copied = [];
+ 
++// Machine-specific absolute paths (run, batch, harness and home directories) never leave the host.
++const scrubPrefixes = [[path.resolve(batchDir), "<batch>"], [repoRoot, "<vcbench>"], [homedir(), "<home>"]]
++  .filter(([prefix]) => prefix && prefix !== "/").sort((a, b) => b[0].length - a[0].length);
++const extraPrefixes = [];
++function scrub(text) {
++  let out = text;
++  for (const prefix of extraPrefixes) out = out.split(prefix).join("<run>");
++  out = out.replace(/\/(?:Users|home)\/[^/\s"']+/g, "<home>");
++  for (const [prefix, label] of scrubPrefixes) out = out.split(prefix).join(label);
++  return out;
++}
++
+ function exportFile(src, dest) {
+   if (!existsSync(src)) return false;
+   mkdirSync(path.dirname(dest), { recursive: true });
+   copyFileSync(src, dest);
++  if (/\.(json|tsv|txt|log|md|stdout|stderr)$/.test(dest) || !path.extname(dest)) {
++    let text = scrub(readFileSync(dest, "utf8"));
++    // result.json keeps tool and pin locations only as file names, never host paths.
++    if (path.basename(dest) === "result.json") text = text.replace(/"\/[^"\s]*\/([^"\/\s]*)"/g, '"<abs>/$1"');
++    writeFileSync(dest, text);
++  }
+   const hits = scanForSecrets(dest);
+   if (hits.length > 0) findings.push({ file: path.relative(outDir, dest), patterns: hits });
+   copied.push(dest);
+@@ -111,6 +130,9 @@ const runDirs = readdirSync(batchDir).filter((entry) => {
+ const index = [];
+ for (const runName of runDirs.sort()) {
+   const runDir = path.join(batchDir, runName);
++  // The recorded workspace is <original run dir>/workspace; the run may have been moved since.
++  extraPrefixes.length = 0;
++  try { extraPrefixes.push(path.dirname(JSON.parse(readFileSync(path.join(runDir, "result.json"), "utf8")).workspace)); } catch { /* no workspace recorded */ }
+   const destDir = path.join(outDir, "runs", runName);
+   for (const name of RUN_FILES) {
+     exportFile(path.join(runDir, name), path.join(destDir, name));
+diff --git a/scripts/lib/arms.mjs b/scripts/lib/arms.mjs
+new file mode 100644
+index 0000000..7fd66c7
+--- /dev/null
++++ b/scripts/lib/arms.mjs
+@@ -0,0 +1,3 @@
++// Arms whose Git-visible state is judged exactly like plain Git: AISC keeps Git
++// as its storage backend and needs no tool-specific repository preparation.
++export const gitLike = arm => arm === 'git' || arm === 'aisc+skill';
+diff --git a/scripts/lib/command-guards.mjs b/scripts/lib/command-guards.mjs
+index e68dbb2..d31ba9d 100644
+--- a/scripts/lib/command-guards.mjs
++++ b/scripts/lib/command-guards.mjs
+@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
+ 
+ // These are observability guards, not an OS sandbox. Absolute binaries and
+ // direct metadata edits require a container/VM for hostile-agent enforcement.
++// `binaries.aisc` is optional so callers without an AISC arm keep working; git
++// spawned by a native tool (but, jj, aisc) is accounted as `internal`.
+ export function createCommandGuards(runDir, arm, binaries, taskId = null) {
+   const binDir = path.join(runDir, 'bin');
+   const tracePath = path.join(runDir, 'command-trace.tsv');
+@@ -13,7 +15,7 @@ export function createCommandGuards(runDir, arm, binaries, taskId = null) {
+   writeFileSync(path.join(binDir, 'package.json'), '{"type":"commonjs"}\n');
+   writeFileSync(tracePath, '');
+   cpSync(fileURLToPath(new URL('./tool-policy.mjs', import.meta.url)), path.join(binDir, 'tool-policy.mjs'));
+-  for (const tool of ['git', 'but', 'jj']) {
++  for (const tool of ['git', 'but', 'jj', 'aisc']) {
+     writeFileSync(path.join(binDir, tool), `#!${process.execPath}
+ const { spawn, spawnSync } = require('node:child_process');
+ const { appendFileSync, createWriteStream } = require('node:fs');
+@@ -28,7 +30,7 @@ const path = require('node:path');
+   function ps(pid, field) { return spawnSync('/bin/ps', ['-p', String(pid), '-o', field + '='], {encoding:'utf8'}).stdout?.trim() ?? ''; }
+   const parent = ps(process.ppid, 'comm');
+   const grandparent = ps(ps(process.ppid, 'ppid'), 'comm');
+-  const nativeNames = ${JSON.stringify([path.basename(binaries.but), path.basename(binaries.jj)])};
++  const nativeNames = ${JSON.stringify([binaries.but, binaries.jj, binaries.aisc].filter(Boolean).map(bin => path.basename(bin)))};
+   const internal = tool === 'git' && [parent, grandparent].some(p => nativeNames.includes(path.basename(p)));
+   const blocked = policyBlocked(arm, tool, argv, internal) || taskPolicyBlocked(${JSON.stringify(taskId)}, tool, argv, internal);
+   const command_id = randomUUID();
+@@ -63,7 +65,7 @@ const path = require('node:path');
+   let status = 42;
+   if (blocked) diagnostic('version-control-bench policy blocked: ' + tool + ' ' + argv.join(' ') + '\\n');
+   else {
+-    child = spawn(${JSON.stringify(binaries[tool])}, argv, {stdio:['inherit','pipe','pipe'], env:process.env});
++    child = spawn(${JSON.stringify(binaries[tool] ?? path.join(runDir, 'unavailable-tools', tool))}, argv, {stdio:['inherit','pipe','pipe'], env:process.env});
+     tee(child.stdout, stdoutFile, process.stdout, n => stdout_bytes += n);
+     tee(child.stderr, stderrFile, process.stderr, n => stderr_bytes += n);
+     child.on('error', e => { error = String(e); diagnostic(error + '\\n'); });
+diff --git a/scripts/lib/disk.mjs b/scripts/lib/disk.mjs
+new file mode 100644
+index 0000000..d40d43d
+--- /dev/null
++++ b/scripts/lib/disk.mjs
+@@ -0,0 +1,66 @@
++import { lstatSync, readdirSync, realpathSync } from 'node:fs';
++import path from 'node:path';
++import { spawnSync } from 'node:child_process';
++
++// Disk footprint of a trial: bytes a user pays to have the workspace (including
++// .git/.jj), every linked Git worktree outside it, and tool data directories
++// such as GitButler's app data. Symlinks are never followed; hard-linked files
++// are counted once. `allocated` is st_blocks * 512, `apparent` is st_size.
++export function measurePaths(paths) {
++  const seen = new Set();
++  let apparent = 0, allocated = 0, files = 0;
++  const visit = target => {
++    let stat;
++    try { stat = lstatSync(target); } catch { return; }
++    if (stat.isDirectory()) {
++      allocated += (stat.blocks ?? 0) * 512;
++      let names = [];
++      try { names = readdirSync(target); } catch { /* unreadable directory counts as empty */ }
++      for (const name of names) visit(path.join(target, name));
++      return;
++    }
++    const key = `${stat.dev}:${stat.ino}`;
++    if (stat.nlink > 1) {
++      if (seen.has(key)) return;
++      seen.add(key);
++    }
++    files++;
++    apparent += stat.size;
++    allocated += (stat.blocks ?? 0) * 512;
++  };
++  for (const target of paths) visit(target);
++  return { apparent_bytes: apparent, allocated_bytes: allocated, file_count: files };
++}
++
++// Linked worktrees outside the workspace, from `git worktree list --porcelain`.
++export function linkedWorktrees(workspace, gitBin = 'git', env = process.env) {
++  const listed = spawnSync(gitBin, ['-C', workspace, 'worktree', 'list', '--porcelain'], { encoding: 'utf8', env });
++  if (listed.status !== 0) return [];
++  const root = realpathSync(workspace);
++  return listed.stdout.split('\n').filter(line => line.startsWith('worktree ')).map(line => line.slice(9))
++    .filter(dir => {
++      try { return realpathSync(dir) !== root && !realpathSync(dir).startsWith(root + path.sep); } catch { return false; }
++    });
++}
++
++export function snapshotDisk({ workspace, gitBin = 'git', env = process.env, extraDirs = [] }) {
++  const worktrees = linkedWorktrees(workspace, gitBin, env);
++  const targets = [workspace, ...worktrees, ...extraDirs.filter(Boolean)];
++  return { ...measurePaths(targets), worktree_count: worktrees.length };
++}
++
++// Result block: disk.{before,after,delta}_{apparent,allocated}_bytes.
++export function diskDelta(before, after) {
++  return {
++    before_apparent_bytes: before.apparent_bytes,
++    after_apparent_bytes: after.apparent_bytes,
++    delta_apparent_bytes: after.apparent_bytes - before.apparent_bytes,
++    before_allocated_bytes: before.allocated_bytes,
++    after_allocated_bytes: after.allocated_bytes,
++    delta_allocated_bytes: after.allocated_bytes - before.allocated_bytes,
++    before_file_count: before.file_count,
++    after_file_count: after.file_count,
++    linked_worktrees_before: before.worktree_count,
++    linked_worktrees_after: after.worktree_count,
++  };
++}
+diff --git a/scripts/lib/performance.mjs b/scripts/lib/performance.mjs
+index 2b525ea..e2b3d24 100644
+--- a/scripts/lib/performance.mjs
++++ b/scripts/lib/performance.mjs
+@@ -23,7 +23,7 @@ function repeatedQueries(calls) {
+     const text = shellCommand(call);
+     const words = typeof text === 'string' && !/[\n;&|<>`$\\'"(){}]/.test(text) ? text.trim().split(/\s+/) : [];
+     const tool = words[0]?.split('/').at(-1);
+-    const key = ['git', 'but', 'jj'].includes(tool) && classifyCommand(tool, words.slice(1)) === 'inspection'
++    const key = ['git', 'but', 'jj', 'aisc'].includes(tool) && classifyCommand(tool, words.slice(1)) === 'inspection'
+       ? JSON.stringify([tool, words.slice(1), call.input?.cwd ?? call.input?.workdir ?? null]) : null;
+     if (key !== null && key === previous) repeated++;
+     previous = key;
+@@ -43,7 +43,7 @@ export function buildPerformance(result, { events = null, taskTrace = null } = {
+   const protectedNames = verifier.minefields?.checks ?? [];
+   const protectedChecks = checks.filter(([name]) => protectedNames.includes(name));
+   const violations = verifier.protocol_violations ?? (result.agent_result && result.metrics ? [] : null);
+-  const trace = taskTrace?.filter(entry => !entry.internal && ['git', 'but', 'jj'].includes(entry.tool)) ?? null;
++  const trace = taskTrace?.filter(entry => !entry.internal && ['git', 'but', 'jj', 'aisc'].includes(entry.tool)) ?? null;
+   const classified = trace?.every(entry => Array.isArray(entry.argv_array)) ?? false;
+   const failures = trace?.filter(entry => Number.isFinite(entry.status) && entry.status !== 0) ?? null;
+   const errors = failures?.map(errorOutput) ?? null;
+diff --git a/scripts/lib/scenario-adoption.mjs b/scripts/lib/scenario-adoption.mjs
+index c775c23..38be73c 100644
+--- a/scripts/lib/scenario-adoption.mjs
++++ b/scripts/lib/scenario-adoption.mjs
+@@ -1,11 +1,12 @@
+ import { existsSync, mkdirSync, readFileSync, readdirSync, lstatSync, realpathSync, writeFileSync } from 'node:fs';
+ import path from 'node:path';
+ import { run } from './process.mjs';
++import { gitLike } from './arms.mjs';
+ import { noOperationInProgress, noStashLeftBehind, minefieldReport } from './verifier.mjs';
+ 
+ // Shared only by the two review/adoption tasks. All fixture Git writes happen in repoDir.
+ export function command(options, tool, args, { check = true } = {}) {
+-  const bin = tool === 'but' ? options.butBin ?? 'but' : tool === 'jj' ? options.jjBin ?? 'jj' : tool;
++  const bin = tool === 'but' ? options.butBin ?? 'but' : tool === 'jj' ? options.jjBin ?? 'jj' : tool === 'aisc' ? options.aiscBin ?? 'aisc' : tool;
+   const result = run(bin, args, { cwd: options.repoDir, env: options.env, check: false });
+   options.commandLog?.push({ tool, args, ...result });
+   if (check && result.status !== 0) throw new Error(`${tool} ${args.join(' ')} failed (${result.status})\n${result.stdout}${result.stderr}`);
+@@ -106,7 +107,7 @@ function verify(options) {
+   });
+   const jjConflicts = arm === 'jj+skill' ? command(options, 'jj', ['--no-pager', 'log', '-r', 'conflicts()', '--no-graph', '-T', 'commit_id'], { check: false }) : null;
+   const checks = {
+-    tool_adopted: arm === 'git' || existsSync(path.join(repoDir, arm === 'jj+skill' ? '.jj/repo/store' : '.git/gitbutler/virtual_branches.toml')),
++    tool_adopted: gitLike(arm) || existsSync(path.join(repoDir, arm === 'jj+skill' ? '.jj/repo/store' : '.git/gitbutler/virtual_branches.toml')),
+     checkpoint_exists: exists,
+     tree_correct: exists && equal(tree(options, tip), m.expectedTree),
+     baseline_preserved: exists && command(options, 'git', ['merge-base', '--is-ancestor', m.baseline, tip], { check: false }).status === 0,
+@@ -127,6 +128,8 @@ function solve(options) {
+     command(options, 'jj', ['git', 'init', '--colocate']);
+     command(options, 'jj', ['commit', '-m', 'Checkpoint app']);
+     command(options, 'jj', ['bookmark', 'create', 'app-checkpoint', '-r', '@-']);
++  } else if (options.arm === 'aisc+skill') {
++    command(options, 'aisc', ['commit', '-b', 'app-checkpoint', '-m', 'Checkpoint app', '--all']);
+   } else {
+     g(options, ['switch', '-c', 'app-checkpoint']);
+     g(options, ['add', '-A']);
+diff --git a/scripts/lib/scenario-cleanup.mjs b/scripts/lib/scenario-cleanup.mjs
+index 266e36a..8a21fc4 100644
+--- a/scripts/lib/scenario-cleanup.mjs
++++ b/scripts/lib/scenario-cleanup.mjs
+@@ -1,14 +1,16 @@
+ import { existsSync, mkdirSync, readFileSync, readdirSync, lstatSync, writeFileSync } from 'node:fs';
+ import path from 'node:path';
+ import { run } from './process.mjs';
++import { gitLike } from './arms.mjs';
+ import { noOperationInProgress, noStashLeftBehind } from './verifier.mjs';
+ 
+ export const ID = 'pilot-9-cleanup-noise';
+-export function commands({repoDir, butBin = 'but', jjBin = 'jj', env = process.env}) {
++export function commands({repoDir, butBin = 'but', jjBin = 'jj', aiscBin = 'aisc', env = process.env}) {
+   const execute = (bin, args, check = true) => run(bin, args, {cwd: repoDir, env, check});
+   return {g: (...args) => execute('git', args).stdout.trimEnd(),
+     b: (...args) => execute(butBin, args).stdout.trimEnd(),
+-    j: (...args) => execute(jjBin, ['--no-pager', ...args]).stdout.trimEnd(), execute};
++    j: (...args) => execute(jjBin, ['--no-pager', ...args]).stdout.trimEnd(),
++    a: (...args) => execute(aiscBin, args).stdout.trimEnd(), execute};
+ }
+ export function write(repoDir, files) {
+   for (const [p, text] of Object.entries(files)) {
+@@ -85,8 +87,9 @@ function verify(ctx) {
+   return result({exact_live_files:same(disk(ctx.repoDir),m.expectedDisk),saved_refs_unchanged:same(refs(ctx),m.refs),saved_tree_unchanged:same(exactTree(ctx,'fix-retry'),m.baseline),no_pending_noise:pending,same_context:active(ctx,'fix-retry'),no_residue:residue(ctx)},diagnostics);
+ }
+ function solve(ctx) {
+-  const {g,b,j}=commands(ctx);
+-  if(ctx.arm==='git')g('restore','--source=fix-retry','--staged','--worktree','--',...NOISE);
++  const {g,b,j,a}=commands(ctx);
++  if(ctx.arm==='aisc+skill')a('discard',...NOISE);
++  else if(gitLike(ctx.arm))g('restore','--source=fix-retry','--staged','--worktree','--',...NOISE);
+   else if(ctx.arm==='but+skill'){const files=JSON.parse(b('status','--json')).uncommittedChanges.filter(f=>NOISE.includes(f.filePath));b('discard',...files.map(f=>f.cliId));}
+   else j('restore','--from','fix-retry',...NOISE);
+ }
+diff --git a/scripts/lib/scenario-copy.mjs b/scripts/lib/scenario-copy.mjs
+index cc2bcb1..9e3c13b 100644
+--- a/scripts/lib/scenario-copy.mjs
++++ b/scripts/lib/scenario-copy.mjs
+@@ -16,5 +16,5 @@ prepare(o){const c=init(o);const M=commit(c,base,'Initialize commands');c.git('s
+ // Scored: the destination sits on main, carries exactly the revival, and never touches graph
+ // files. Observed only: one commit, original message and author (what a pick gives for free).
+ verify(o){const c=context(o),m=o.metadata,tip=ref(c,destination);const commits=tip&&ancestor(c,m.M,tip)?c.git('rev-list',tip,`^${m.M}`).split('\n').filter(Boolean):[];const linear=commits.length>0&&commits.every(h=>parents(c,h).length===1);const touched=new Set(commits.flatMap(h=>Object.keys(contribution(c,h).delta)));const checks={destination:linear&&[...touched].every(p=>p in selected),exact_tree:!!tip&&eq(tree(c,tip),m.expected),source_intact:ref(c,source)===m.S&&eq(parents(c,m.S),[m.U]),main_intact:ref(c,'main')===m.M,ui_intact:ref(c,'ui-note')===m.T&&available(c,o.arm,['ui-note']),draft:pending(c,o.arm,'scratch-note.txt',draft),draft_unsaved:['main',source,destination,'ui-note'].every(n=>!ref(c,n)||!tree(c,ref(c,n))['scratch-note.txt']),remote_refs:eq(refs(c).filter(l=>l.startsWith('refs/remotes/')),m.remoteRefs),remote_config:(c.maybe('config','--get-regexp','^remote\\.')??'')===m.remoteConfig,unfinished_only:unfinishedOnly(c,o.arm,'scratch-note.txt'),no_residue:cleanResidue(c,o.arm)};checks.independent_test=checks.exact_tree&&testIndependent(c,tip);const id=tip&&identity(c,tip);return result(checks,{single_commit:commits.length===1,original_message:!!id&&id[0]===m.identity[0],original_author:!!id&&id[1]===m.identity[1]&&id[2]===m.identity[2]});},
+-solve(o){const c=context(o),m=o.metadata;if(o.arm==='but+skill'){c.but('pick',m.S,'--branch',destination);}else if(o.arm==='jj+skill'){c.jj('duplicate',m.S,'-d','main');const copy=c.jj('log','-r',`children(main) & description(substring:"Revive worktree command")`,'--no-graph','-T','commit_id').trim();c.jj('bookmark','create',destination,'-r',copy);c.jj('git','export');}else{c.git('switch','-c',destination,'main');c.git('cherry-pick',m.S);}return 'Copied the independent command revival with its original attribution; source, UI work and scratch note are intact.';}
++solve(o){const c=context(o),m=o.metadata;if(o.arm==='aisc+skill'){c.aisc('pick','--from','revive-worktree-command','Revive worktree command','-b',destination,'--onto','main');}else if(o.arm==='but+skill'){c.but('pick',m.S,'--branch',destination);}else if(o.arm==='jj+skill'){c.jj('duplicate',m.S,'-d','main');const copy=c.jj('log','-r',`children(main) & description(substring:"Revive worktree command")`,'--no-graph','-T','commit_id').trim();c.jj('bookmark','create',destination,'-r',copy);c.jj('git','export');}else{c.git('switch','-c',destination,'main');c.git('cherry-pick',m.S);}return 'Copied the independent command revival with its original attribution; source, UI work and scratch note are intact.';}
+ };
+diff --git a/scripts/lib/scenario-integration.mjs b/scripts/lib/scenario-integration.mjs
+index dd80987..19973f2 100644
+--- a/scripts/lib/scenario-integration.mjs
++++ b/scripts/lib/scenario-integration.mjs
+@@ -2,6 +2,7 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+ import { run } from './process.mjs';
++import { gitLike } from './arms.mjs';
+ import { context,init,commit,ref,tree,parents,contribution,ancestor,adopt,cleanResidue,result,history,metadata,eq,write,noTaskPending,cleanIndex,nativeRef } from './scenario-topics.mjs';
+ const id='pilot-12-integrate-topics';
+ const baseFiles={'package.json':'{"type":"module","scripts":{"test":"node --test"}}\n','README.md':'Small greeting example.\n','test/baseline.test.js':'import test from "node:test";\nimport assert from "node:assert/strict";\ntest("baseline", () => assert.equal(2 + 2, 4));\n'};
+@@ -15,10 +16,10 @@ prepare(o){const c=init(o);const M=commit(c,baseFiles,'Initialize greeting examp
+ // new base) or in Git's (HEAD on main after `but teardown`). Leaving GitButler mode is a native,
+ // reversible choice the user did not rule out, so it is observed as a diagnostic, not scored.
+ verify(o){const c=context(o),m=o.metadata,tip=ref(c,'main');if(!tip)return result({main_ref:false});const ws=o.arm==='but+skill'?c.butStatus():null;const h=history(c,tip,m.M,m.atoms,{empty:true});const checks={main_tree:!!tip&&eq(Object.entries(tree(c,tip)).sort(),Object.entries(m.expected).sort()),base_retained:!!tip&&ancestor(c,m.M,tip),contributions:h.ok,dependency:!!h.matches.A&&!!h.matches.B&&ancestor(c,h.matches.A,h.matches.B),working_tree:Object.entries(m.files).every(([p,s])=>fs.existsSync(path.join(c.repo,p))&&fs.readFileSync(path.join(c.repo,p),'utf8')===s&&fs.lstatSync(path.join(c.repo,p)).isFile()&&(fs.statSync(path.join(c.repo,p)).mode&0o111)===0),clean_index:cleanIndex(c,o.arm),no_residue:cleanResidue(c,o.arm),remote_config:(c.maybe('config','--get-regexp','^remote\\.')??'')===m.remotes};
+-  checks.active_main=o.arm==='git'?c.maybe('symbolic-ref','--short','HEAD')==='main':o.arm==='jj+skill'?c.jj('diff','-r','@','--name-only').trim()===''&&ancestor(c,tip,c.jj('log','-r','@','--no-graph','-T','commit_id').trim()):c.git('rev-parse','refs/remotes/gb-local/main')===tip&&c.git('symbolic-ref','refs/remotes/gb-local/HEAD')===m.mirror&&(!!ws||c.maybe('symbolic-ref','--short','HEAD')==='main');
++  checks.active_main=gitLike(o.arm)?c.maybe('symbolic-ref','--short','HEAD')==='main':o.arm==='jj+skill'?c.jj('diff','-r','@','--name-only').trim()===''&&ancestor(c,tip,c.jj('log','-r','@','--no-graph','-T','commit_id').trim()):c.git('rev-parse','refs/remotes/gb-local/main')===tip&&c.git('symbolic-ref','refs/remotes/gb-local/HEAD')===m.mirror&&(!!ws||c.maybe('symbolic-ref','--short','HEAD')==='main');
+   checks.no_extra_pending=noTaskPending(c,o.arm);
+   for(const line of c.git('for-each-ref','--format=%(refname:short) %(objectname)','refs/heads').split('\n')){const [name,hash]=line.split(' ');if(name==='main'||nativeRef(o.arm,name)||ancestor(c,hash,tip))continue;const commits=c.git('rev-list',hash,`^${m.M}`).split('\n').filter(Boolean);if(!['normalize','greeting','docs'].includes(name)||commits.some(r=>parents(c,r).length!==1||!Object.values(m.atoms).some(a=>eq(a,contribution(c,r)))))checks.no_extra_pending=false;}
+   if(ws)checks.no_extra_pending&&=!(ws.stacks??[]).some(s=>(s.branches??[]).some(b=>(b.commits??[]).length));
+   checks.destination_tests=checks.main_tree&&testDestination(c,tip);return result(checks,o.arm==='but+skill'?{but_workspace_retained:!!ws}:{});},
+-solve(o){const c=context(o);if(o.arm==='but+skill'){c.but('land','greeting','--whole-stack','--yes');c.but('land','docs','--yes');}else if(o.arm==='jj+skill'){c.jj('new','greeting','docs','-m','Integrate completed topics');c.jj('bookmark','set','main','-r','@');c.jj('new','main');c.jj('git','export');}else{c.git('switch','main');c.git('merge','--no-ff','greeting','-m','Integrate greeting stack');c.git('merge','--no-ff','docs','-m','Integrate docs');}return 'Integrated the greeting stack and docs into local main with separate original contributions.';}
++solve(o){const c=context(o);if(o.arm==='but+skill'){c.but('land','greeting','--whole-stack','--yes');c.but('land','docs','--yes');}else if(o.arm==='aisc+skill'){c.aisc('land','greeting','docs','--into','main','--switch');}else if(o.arm==='jj+skill'){c.jj('new','greeting','docs','-m','Integrate completed topics');c.jj('bookmark','set','main','-r','@');c.jj('new','main');c.jj('git','export');}else{c.git('switch','main');c.git('merge','--no-ff','greeting','-m','Integrate greeting stack');c.git('merge','--no-ff','docs','-m','Integrate docs');}return 'Integrated the greeting stack and docs into local main with separate original contributions.';}
+ };
+diff --git a/scripts/lib/scenario-recovery.mjs b/scripts/lib/scenario-recovery.mjs
+index bff4483..15a3b35 100644
+--- a/scripts/lib/scenario-recovery.mjs
++++ b/scripts/lib/scenario-recovery.mjs
+@@ -1,4 +1,5 @@
+ import { writeFileSync } from 'node:fs';
++import { gitLike } from './arms.mjs';
+ import path from 'node:path';
+ import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, indexEntry, butChanges } from './scenario-cleanup.mjs';
+ export const ID='pilot-10-recover-amend';
+@@ -13,7 +14,7 @@ function prepare(ctx) {
+   adopt(ctx,'review-fix',['other-topic']);ctx.beforeMistake?.({repoDir:ctx.repoDir,arm:ctx.arm});
+   write(ctx.repoDir,{...FIXES,'notes/private.md':DRAFT});
+   let operation,command;
+-  if(ctx.arm==='git') {g('add','src/retry.ts','src/log.ts','notes/private.md');command='git add src/retry.ts src/log.ts notes/private.md && git commit --amend --no-edit';operation=g('commit','--amend','--no-edit');}
++  if(gitLike(ctx.arm)) {g('add','src/retry.ts','src/log.ts','notes/private.md');command='git add src/retry.ts src/log.ts notes/private.md && git commit --amend --no-edit';operation=g('commit','--amend','--no-edit');}
+   else if(ctx.arm==='but+skill'){const state=JSON.parse(b('status','--json'));const ids=state.uncommittedChanges.filter(f=>['src/retry.ts','src/log.ts','notes/private.md'].includes(f.filePath)).map(f=>f.cliId);if(ids.length!==3)throw Error('Recovery preparation expected three dirty task paths');command=`but amend -t review-fix ${ids.join(' ')}`;operation=b('amend','-t','review-fix',...ids);}
+   else {command='jj squash --into review-fix --use-destination-message';operation=j('squash','--into','review-fix','--use-destination-message');}
+   metadata.bad=g('rev-parse','review-fix');metadata.badTree=exactTree(ctx,'review-fix');metadata.expectedTree={...metadata.originalTree};
+@@ -46,8 +47,9 @@ function verify(ctx) {
+     exact_unfinished_draft_and_live_files:same(disk(ctx.repoDir),m.expectedDisk),protected_refs_unchanged:same(protectedRefs,originalProtected),correct_pending_state:pending,same_context_and_sibling:active(ctx,'review-fix',['other-topic']),no_residue:residue(ctx)},diagnostics);
+ }
+ function solve(ctx) {
+-  const {g,b,j}=commands(ctx);
+-  if(ctx.arm==='git'){g('rm','--cached','--','notes/private.md');g('commit','--amend','--no-edit');}
++  const {g,b,j,a}=commands(ctx);
++  if(ctx.arm==='aisc+skill')a('uncommit','review-fix','notes/private.md');
++  else if(ctx.arm==='git'){g('rm','--cached','--','notes/private.md');g('commit','--amend','--no-edit');}
+   else if(ctx.arm==='but+skill') {
+     const state=JSON.parse(b('status','-fv','--json'));const commit=state.stacks.flatMap(s=>s.branches).find(b=>b.name==='review-fix').commits[0];
+     const file=commit.changes.find(c=>c.filePath==='notes/private.md');b('uncommit',file.cliId.includes(':')?file.cliId:`${commit.cliId}:${file.cliId}`);
+diff --git a/scripts/lib/scenario-review.mjs b/scripts/lib/scenario-review.mjs
+index 456993f..d3e3c96 100644
+--- a/scripts/lib/scenario-review.mjs
++++ b/scripts/lib/scenario-review.mjs
+@@ -100,6 +100,7 @@ function verify(options) {
+ function solve(options) {
+   if (options.arm === 'but+skill') command(options, 'but', ['show', 'seed-rewrite']);
+   if (options.arm === 'jj+skill') command(options, 'jj', ['--no-pager', 'log', '-r', 'seed-rewrite | data-update', '--no-graph']);
++  if (options.arm === 'aisc+skill') command(options, 'aisc', ['show', 'seed-rewrite']);
+   const topic = 'seed-rewrite';
+   // Derive the immediate parent from the public topic graph; never use hidden expected data.
+   const parent = g(options, ['rev-parse', `${topic}^`]);
+diff --git a/scripts/lib/scenario-sync.mjs b/scripts/lib/scenario-sync.mjs
+index 07a66e0..987a4db 100644
+--- a/scripts/lib/scenario-sync.mjs
++++ b/scripts/lib/scenario-sync.mjs
+@@ -20,5 +20,5 @@ prepare(o){const c=init(o);const B=commit(c,{'README.md':'Service example.\n','c
+ // `active_context` is the feature still being the user's working context. They are independent checks.
+ verify(o){const c=context(o),m=o.metadata,tip=ref(c,'feature-service'),u=ref(c,'other-topic');if(!tip)return result({feature_ref:false});const h=history(c,tip,m.M1,m.atoms,{mergeBase:m.B,empty:true});const uParents=u&&parents(c,u);const s=context({...o,repoDir:m.server});const checks={feature_tree:!!tip&&eq(Object.entries(tree(c,tip)).sort(),Object.entries(m.expected).sort()),main_ancestry:!!tip&&ancestor(c,m.M1,tip),contributions:h.ok,shared_precedes_imports:!!h.matches.C&&['L','R'].every(k=>h.matches[k]&&ancestor(c,h.matches.C,h.matches[k])),other_topic:!!u&&(eq(uParents,[m.B])||eq(uParents,[m.M1]))&&eq(contribution(c,u),m.Uatom)&&!!tip&&!ancestor(c,u,tip),availability:available(c,o.arm,['other-topic']),main_preserved:[m.B,m.M1].includes(ref(c,'main')),remote_refs:eq(refs(s),m.serverRefs)&&!fs.existsSync(m.receiveLog),remote_config:fs.readFileSync(path.join(m.server,'config'),'utf8')===m.serverConfig&&fs.readFileSync(path.join(m.server,'HEAD'),'utf8')===m.serverHead,origin_config:protectConfig(c)===m.config,dirty_readme:pending(c,o.arm,'README.md',draft),unfinished_only:unfinishedOnly(c,o.arm,'README.md'),no_residue:cleanResidue(c,o.arm)};
+   checks.active_context=o.arm==='but+skill'?available(c,o.arm,['feature-service']):o.arm==='jj+skill'?!!tip&&ancestor(c,tip,c.jj('log','-r','@','--no-graph','-T','commit_id').trim()):c.git('symbolic-ref','--short','HEAD')==='feature-service';return result(checks,{redundant_empty_commits:h.empty,content_bearing_merges:h.payloadMerges});},
+-solve(o){const c=context(o),m=o.metadata;if(o.arm==='but+skill'){c.but('pull');c.but('pick',c.git('rev-parse','origin/feature-service'),'--branch','feature-service');}else if(o.arm==='jj+skill'){c.jj('git','fetch','--remote','origin');c.jj('duplicate',m.C,m.L,'-d','main@origin');const local=c.jj('log','-r',`description(substring:"Add local retry setting") ~ ${m.L}`,'--no-graph','-T','commit_id').trim();c.jj('duplicate','feature-service@origin','-d',local);const copy=c.jj('log','-r',`children(${local}) & description(substring:"Add agent environment")`,'--no-graph','-T','commit_id').trim();c.jj('rebase','-r','@','-d',copy);c.jj('bookmark','set','feature-service','-r',copy,'--allow-backwards');c.jj('git','export');}else{c.git('fetch','origin');c.git('rebase','--autostash','origin/main');c.git('cherry-pick','origin/feature-service');}return 'Reconciled current main and the remote environment change, retaining the local retry and unfinished README.';}
++solve(o){const c=context(o),m=o.metadata;if(o.arm==='aisc+skill'){c.aisc('sync','origin/main','--fetch');c.aisc('pick','origin/feature-service');}else if(o.arm==='but+skill'){c.but('pull');c.but('pick',c.git('rev-parse','origin/feature-service'),'--branch','feature-service');}else if(o.arm==='jj+skill'){c.jj('git','fetch','--remote','origin');c.jj('duplicate',m.C,m.L,'-d','main@origin');const local=c.jj('log','-r',`description(substring:"Add local retry setting") ~ ${m.L}`,'--no-graph','-T','commit_id').trim();c.jj('duplicate','feature-service@origin','-d',local);const copy=c.jj('log','-r',`children(${local}) & description(substring:"Add agent environment")`,'--no-graph','-T','commit_id').trim();c.jj('rebase','-r','@','-d',copy);c.jj('bookmark','set','feature-service','-r',copy,'--allow-backwards');c.jj('git','export');}else{c.git('fetch','origin');c.git('rebase','--autostash','origin/main');c.git('cherry-pick','origin/feature-service');}return 'Reconciled current main and the remote environment change, retaining the local retry and unfinished README.';}
+ };
+diff --git a/scripts/lib/scenario-topics.mjs b/scripts/lib/scenario-topics.mjs
+index cc9f6e1..043fe1e 100644
+--- a/scripts/lib/scenario-topics.mjs
++++ b/scripts/lib/scenario-topics.mjs
+@@ -8,9 +8,10 @@ export function context(o) {
+   const env={...process.env,...o.metadata?.env,...o.env};
+   const repo=o.repoDir;
+   const butBin=o.butBin??o.metadata?.butBin??'but';
++  const aiscBin=o.aiscBin??o.metadata?.aiscBin??'aisc';
+   // butStatus is null when the repository is not in a GitButler workspace (for example after
+   // `but teardown`): the tool then has no model of its own, so callers judge the state in Git's.
+-  return {repo, env, git:(...a)=>run('git',a,{cwd:repo,env}).stdout.trimEnd(), but:(...a)=>run(butBin,a,{cwd:repo,env}).stdout, jj:(...a)=>run(o.jjBin??o.metadata?.jjBin??'jj',['--no-pager',...a],{cwd:repo,env}).stdout, maybe:(...a)=>{const r=run('git',a,{cwd:repo,env,check:false});return r.status===0?r.stdout.trimEnd():null;},
++  return {repo, env, git:(...a)=>run('git',a,{cwd:repo,env}).stdout.trimEnd(), but:(...a)=>run(butBin,a,{cwd:repo,env}).stdout, aisc:(...a)=>run(aiscBin,a,{cwd:repo,env}).stdout, jj:(...a)=>run(o.jjBin??o.metadata?.jjBin??'jj',['--no-pager',...a],{cwd:repo,env}).stdout, maybe:(...a)=>{const r=run('git',a,{cwd:repo,env,check:false});return r.status===0?r.stdout.trimEnd():null;},
+     butStatus:()=>{const r=run(butBin,['status','--json'],{cwd:repo,env,check:false});if(r.status===0)return JSON.parse(r.stdout);let e=null;try{e=JSON.parse(r.stdout||r.stderr);}catch{}if(e?.error==='setup_required')return null;throw new Error(`but status --json failed (${r.status}): ${r.stdout}${r.stderr}`);}};
+ }
+ export function write(repo,files){for(const [p,s] of Object.entries(files)){fs.mkdirSync(path.dirname(path.join(repo,p)),{recursive:true});fs.writeFileSync(path.join(repo,p),s);}}
+diff --git a/scripts/lib/tool-policy.mjs b/scripts/lib/tool-policy.mjs
+index 7fe8f7b..bbf7c97 100644
+--- a/scripts/lib/tool-policy.mjs
++++ b/scripts/lib/tool-policy.mjs
+@@ -2,6 +2,7 @@
+ // are denied in strict arms, including user aliases and external subcommands.
+ const gitReads = new Set('status diff show log rev-parse rev-list for-each-ref ls-remote ls-files ls-tree cat-file diff-tree diff-files diff-index merge-base describe name-rev show-ref blame annotate grep shortlog count-objects fsck verify-commit verify-tag check-ignore check-attr check-ref-format version help'.split(' '));
+ const butReads = new Set(['status', 'diff', 'show', 'log', 'help', 'version']);
++const aiscReads = new Set('log show oplog context diff github gitlab help version'.split(' '));
+ const jjReads = new Set(['diff', 'log', 'show', 'status', 'st', 'evolog', 'help', 'version']);
+ 
+ export function subcommand(tool, argv) {
+@@ -9,6 +10,7 @@ export function subcommand(tool, argv) {
+   const values = tool === 'git'
+     ? ['-c', '-C', '--git-dir', '--work-tree', '--namespace', '--config-env']
+     : tool === 'but' ? ['-C', '--current-dir', '--format']
++      : tool === 'aisc' ? ['--color', '--branch']
+       : ['-R', '--repository', '--config', '--config-file', '--at-operation', '--at-op', '--color'];
+   while (i < argv.length && argv[i].startsWith('-')) {
+     if (values.includes(argv[i])) i += 2;
+@@ -70,6 +72,8 @@ export function classifyCommand(tool, argv) {
+       || (command === 'alias' && (!args.length || args[0] === 'list'))
+       || (command === 'pull' && args.includes('--check'));
+   }
++  // `gc` lists reclaimable worktrees unless --apply is given.
++  if (tool === 'aisc') read = aiscReads.has(command) || command === 'gc' && !args.includes('--apply');
+   if (tool === 'jj') {
+     read = jjReads.has(command)
+       || (command === 'bookmark' && args[0] === 'list')
+@@ -84,6 +88,7 @@ export function classifyCommand(tool, argv) {
+ export function policyBlocked(arm, tool, argv, internal = false) {
+   if (tool === 'but') return arm !== 'but+skill';
+   if (tool === 'jj') return arm !== 'jj+skill';
++  if (tool === 'aisc') return arm !== 'aisc+skill';
+   return tool === 'git' && arm !== 'git' && !internal && classifyCommand(tool, argv) !== 'inspection';
+ }
+ 
+@@ -95,6 +100,7 @@ export function taskPolicyBlocked(taskId, tool, argv, internal = false) {
+   if (command === 'help' || ['--help','-h'].includes(args[0])) return false;
+   if (tool === 'git') return command === 'push' || command === 'send-pack';
+   if (tool === 'jj') return command === 'git' && args[0] === 'push';
++  // aisc has no publish verbs.
+   if (tool === 'but') return command === 'push'
+     || command === 'pr' && !['list','show','status'].includes(args[0])
+     || command === 'merge' && taskId !== 'pilot-12-integrate-topics';
+diff --git a/scripts/run-aisc-checks.mjs b/scripts/run-aisc-checks.mjs
+new file mode 100644
+index 0000000..6eb7a15
+--- /dev/null
++++ b/scripts/run-aisc-checks.mjs
+@@ -0,0 +1,41 @@
++#!/usr/bin/env node
++// Runs the AISC reference solutions: pilot checks 1-6 (verifier accepts solve-aisc.sh,
++// rejects the wrong states) and the deterministic references for expansion tasks 7-13.
++// Usage: npm run aisc:check -- --aisc-bin <aisc> --aisc-skill-dir <skills/aisc> [--but-bin <but>] [--version-pins <file>]
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import { parseArgs } from "./lib/args.mjs";
++import { run } from "./lib/process.mjs";
++import { SCENARIO_TASKS } from "./lib/scenarios.mjs";
++
++const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const args = parseArgs(process.argv.slice(2));
++if (!args.has("aisc-bin") || !args.has("aisc-skill-dir")) {
++  console.error("Usage: npm run aisc:check -- --aisc-bin <aisc> --aisc-skill-dir <dir> [--but-bin <but>] [--version-pins <file>] [--tasks pilot,scenario]");
++  process.exit(2);
++}
++const aiscBin = path.resolve(args.get("aisc-bin"));
++const skillDir = path.resolve(args.get("aisc-skill-dir"));
++const phases = new Set((args.get("tasks") ?? "pilot,scenario").split(","));
++const butArgs = args.has("but-bin") ? ["--but-bin", path.resolve(args.get("but-bin"))] : [];
++const passthrough = ["but-bin", "jj-bin", "version-pins"].filter(name => args.has(name)).flatMap(name => [`--${name}`, path.resolve(args.get(name))]);
++
++if (phases.has("pilot")) {
++  for (const suffix of ["", "2", "3", "4", "5", "6"]) {
++    console.log(`pilot${suffix}:check (aisc)`);
++    run("node", [`scripts/run-pilot${suffix}-checks.mjs`, "--aisc-bin", aiscBin, ...butArgs], { cwd: repoRoot, stdio: "inherit", timeoutMs: 600000 });
++  }
++}
++if (phases.has("scenario")) {
++  const out = mkdtempSync(path.join(tmpdir(), "vcb-aisc-ref-"));
++  try {
++    for (const task of SCENARIO_TASKS) {
++      console.log(`${task.id} reference (aisc+skill)`);
++      run("node", ["scripts/run-pilot-agent.mjs", "--task", task.id, "--arm", "aisc+skill", "--reference", "true",
++        "--aisc-bin", aiscBin, "--aisc-skill-dir", skillDir, ...passthrough, "--out", path.join(out, task.id)], { cwd: repoRoot, stdio: "inherit", timeoutMs: 600000 });
++    }
++  } finally { rmSync(out, { recursive: true, force: true }); }
++}
++console.log(JSON.stringify({ passed: true }));
+diff --git a/scripts/run-full-matrix.mjs b/scripts/run-full-matrix.mjs
+index fb0f3af..b4f2d47 100644
+--- a/scripts/run-full-matrix.mjs
++++ b/scripts/run-full-matrix.mjs
+@@ -23,7 +23,9 @@ const TASKS = [
+   { id: "pilot-6-update-dirty-branch", label: "Update dirty branch" },
+ ];
+ const AGENTS = ["codex", "claude"];
+-const ARMS = ["git", "but+skill", "jj+skill"];
++// aisc+skill is opt-in (--arms ...,aisc+skill); the default matrix stays the upstream three arms.
++const DEFAULT_ARMS = ["git", "but+skill", "jj+skill"];
++const ARMS = [...DEFAULT_ARMS, "aisc+skill"];
+ 
+ function timestamp() {
+   const d = new Date();
+@@ -734,7 +736,7 @@ Run repeated agent/tool trials. Help exits without writing files or starting wor
+ Common options:
+   --tasks <ids>                 Comma-separated task IDs; default: original six
+   --agents <names>              codex,claude (default: both)
+-  --arms <names>                git,but+skill,jj+skill (default: all)
++  --arms <names>                git,but+skill,jj+skill,aisc+skill (default: git,but+skill,jj+skill)
+   --k <count>                   Repetitions per cell (default: 5)
+   --codex-model <id>            Explicit Codex model
+   --claude-model <id>           Explicit Claude model
+@@ -746,6 +748,9 @@ Common options:
+   --skill-dir <path>            Explicit But skill override
+   --jj-bin <path>               Selected jj executable
+   --jj-skill-dir <path>         Frozen jj skill directory
++  --aisc-bin <path>             Selected aisc executable (aisc+skill arm)
++  --aisc-skill-dir <path>       Frozen aisc skill directory (aisc+skill arm)
++  --agent-sandbox false         Upstream bypass of approvals/sandbox (default: sandboxed, allowlisted)
+   --version-pins <file>         Expected executable versions as JSON
+   --timeout-ms <ms>             Agent limit (default: 900000)
+   --trial-timeout-ms <ms>       Whole-trial limit (default: agent limit + 120000)
+@@ -772,7 +777,7 @@ if (!Number.isInteger(k) || k < 1) {
+ 
+ const tasks = taskListArg(args.get("tasks"));
+ const agents = listArg(args.get("agents"), AGENTS, "agent");
+-const arms = listArg(args.get("arms"), ARMS, "arm");
++const arms = args.has("arms") ? listArg(args.get("arms"), ARMS, "arm") : DEFAULT_ARMS;
+ const rotateArms = args.get("rotate-arms") === "true";
+ const dryRun = args.get("dry-run") === "true";
+ const resume = args.get("resume") !== "false";
+@@ -799,6 +804,9 @@ const butBin = args.has("but-bin") ? path.resolve(args.get("but-bin"))
+ const skillDir = args.has("skill-dir") ? path.resolve(args.get("skill-dir")) : null;
+ const jjBin = args.get("jj-bin") ? path.resolve(args.get("jj-bin")) : null;
+ const jjSkillDir = args.get("jj-skill-dir") ? path.resolve(args.get("jj-skill-dir")) : null;
++const aiscBin = args.get("aisc-bin") ? path.resolve(args.get("aisc-bin")) : null;
++const aiscSkillDir = args.get("aisc-skill-dir") ? path.resolve(args.get("aisc-skill-dir")) : null;
++const agentSandbox = args.get("agent-sandbox") !== "false";
+ const jjSkillPackage = args.get("jj-skill-package") ?? null;
+ const jjSkillName = args.get("jj-skill-name") ?? null;
+ const jjSkillUrl = args.get("jj-skill-url") ?? null;
+@@ -815,6 +823,9 @@ const config = {
+   claudeEffort: args.get("claude-effort-level") ?? null, buildBut,
+   gitbutlerRoot: buildBut ? gitbutlerRoot : null,
+   butBin, skillDir, jjBin, jjSkillDir, jjSkillPackage, jjSkillName, jjSkillUrl, versionPinsPath,
++  // Added only when set, so conditions of existing batches still compare equal.
++  ...(arms.includes("aisc+skill") ? {aiscBin, aiscSkillDir} : {}),
++  ...(agentSandbox ? {agentSandbox} : {}),
+ };
+ const digest = value => createHash("sha256").update(value).digest("hex");
+ function hashPath(file) {
+@@ -831,6 +842,7 @@ function inputHashes() {
+   const files = [path.join(repoRoot,"scripts"), path.join(repoRoot,"tasks"), path.join(repoRoot,"package.json"), installed("git"), versionPinsPath];
+   if (arms.includes("but+skill")) files.push(butBin ?? installed("but"), skillDir);
+   if (arms.includes("jj+skill")) files.push(jjBin ?? installed("jj"), jjSkillDir);
++  if (arms.includes("aisc+skill")) files.push(aiscBin ?? installed("aisc"), aiscSkillDir);
+   return Object.fromEntries([...new Set(files.filter(Boolean))].sort().map(file => [file, hashPath(file)]));
+ }
+ let conditions = readJsonIfExists(conditionsPath);
+@@ -902,6 +914,9 @@ for (const plan of plans) {
+   if (jjSkillPackage) runArgs.push("--jj-skill-package", jjSkillPackage);
+   if (jjSkillName) runArgs.push("--jj-skill-name", jjSkillName);
+   if (jjSkillUrl) runArgs.push("--jj-skill-url", jjSkillUrl);
++  if (aiscBin) runArgs.push("--aisc-bin", aiscBin);
++  if (aiscSkillDir) runArgs.push("--aisc-skill-dir", aiscSkillDir);
++  if (!agentSandbox) runArgs.push("--agent-sandbox", "false");
+ 
+   console.log(`[${plan.idx}/${plans.length}] ${plan.task} ${plan.agent} ${plan.arm} r${plan.rep}`);
+   const started = Date.now();
+diff --git a/scripts/run-pilot-agent.mjs b/scripts/run-pilot-agent.mjs
+index 8b5150d..e5d3a27 100755
+--- a/scripts/run-pilot-agent.mjs
++++ b/scripts/run-pilot-agent.mjs
+@@ -14,17 +14,19 @@ import { SCENARIO_TASKS, loadScenario } from "./lib/scenarios.mjs";
+ import { runBounded } from "./lib/bounded-process.mjs";
+ import { normalizeAgentEvents } from "./lib/agent-events.mjs";
+ import { buildPerformance } from "./lib/performance.mjs";
++import { gitLike } from "./lib/arms.mjs";
++import { snapshotDisk, diskDelta } from "./lib/disk.mjs";
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ const repoRoot = path.resolve(__dirname, "..");
+ const DEFAULT_CODEX_MODEL = "gpt-5.6-sol";
+-const DEFAULT_VERSION_PINS = {git: "git version 2.44.0", but: "but 0.5.2189", jj: "jj 0.42.0"};
++const DEFAULT_VERSION_PINS = {git: "git version 2.44.0", but: "but 0.5.2189", jj: "jj 0.42.0", aisc: "aisc 0.1.0"};
+ 
+ function loadVersionPins(profilePath) {
+   const overrides = profilePath ? JSON.parse(readFileSync(profilePath, "utf8")) : {};
+   if (!overrides || Array.isArray(overrides) || typeof overrides !== "object"
+       || Object.entries(overrides).some(([key, value]) => !Object.hasOwn(DEFAULT_VERSION_PINS, key) || typeof value !== "string" || !value.trim() || value !== value.trim())) {
+-    throw new Error("--version-pins must contain an object with only git/but/jj nonempty version strings");
++    throw new Error("--version-pins must contain an object with only git/but/jj/aisc nonempty version strings");
+   }
+   return {profile_path: profilePath, expected: {...DEFAULT_VERSION_PINS, ...overrides}, observed: {}};
+ }
+@@ -221,14 +223,14 @@ function prepareCodexHome(runDir, enabled) {
+   };
+ }
+ 
+-function prepareClaudeSettings(runDir, enabled, effortLevel) {
++function prepareClaudeSettings(runDir, enabled, effortLevel, sandboxed = false, allowedTools = []) {
+   if (!enabled) return null;
+ 
+   const settingsPath = path.join(runDir, "claude-settings.json");
+   const settings = {
+-    permissions: {
+-      defaultMode: "bypassPermissions",
+-    },
++    permissions: sandboxed
++      ? {defaultMode: "acceptEdits", allow: allowedTools}
++      : {defaultMode: "bypassPermissions"},
+     enabledPlugins: {},
+   };
+   if (effortLevel) {
+@@ -288,8 +290,8 @@ function prepareClaudeConfig(enabled) {
+   };
+ }
+ 
+-function createWrappers(runDir, arm, realBut, realJj, realGit) {
+-  return createCommandGuards(runDir, arm, {git: realGit, but: realBut, jj: realJj}, taskConfig.id);
++function createWrappers(runDir, arm, realBut, realJj, realGit, realAisc) {
++  return createCommandGuards(runDir, arm, {git: realGit, but: realBut, jj: realJj, aisc: realAisc}, taskConfig.id);
+ }
+ 
+ function prepareShellConfig(runDir, binDir) {
+@@ -423,6 +425,60 @@ function installPlainGitInstructions(workspace) {
+   };
+ }
+ 
++function installAiscSkill(workspace, skillDir, realAisc, aiscEnv) {
++  if (!skillDir) throw new Error("The aisc+skill arm requires --aisc-skill-dir (a frozen copy of skills/aisc)");
++  const skillFile = path.join(skillDir, "SKILL.md");
++  if (!existsSync(skillFile)) throw new Error(`AISC skill file not found: ${skillFile}`);
++  const aiscVersion = run(realAisc, ["--human", "--version"], { cwd: workspace, env: aiscEnv }).stdout.trim();
++  const installed = [];
++  for (const root of [".codex/skills/aisc", ".claude/skills/aisc"]) {
++    const dest = path.join(workspace, root);
++    mkdirSync(path.dirname(dest), { recursive: true });
++    cpSync(skillDir, dest, { recursive: true });
++    installed.push(dest);
++  }
++  // Same shape as the but and jj blocks; tool-specific guidance lives only in the skill.
++  const setupBlock = [
++    "## Version control",
++    "",
++    "- Use AISC (`aisc`) for version-control write operations in this benchmark trial.",
++    "- The repository was not given any tool-specific preparation. Git-visible refs still matter to the verifier.",
++    "- Do not use raw `git` writes, GitButler (`but`) or `jj` in this benchmark trial.",
++    "- Read-only Git inspection is allowed if it helps you verify Git-visible state.",
++  ].join("\n") + "\n";
++  writeAgentInstructionFiles(workspace, `# AGENTS.md
++
++## Benchmark boundary
++
++Work only in the current repository and its configured local remotes. Do not inspect parent benchmark directories, hidden oracle files, reference solutions, or research documents. Temporary comparison files outside the repository are allowed.
++
++## Local skill
++
++The local AISC CLI skill is installed for this benchmark trial at:
++
++- ${path.join(workspace, ".codex/skills/aisc/SKILL.md")}
++- ${path.join(workspace, ".claude/skills/aisc/SKILL.md")}
++
++Use the installed skill if your agent runtime loads local skills or you need AISC command details.
++
++${setupBlock}`);
++  appendHarnessExclude(workspace);
++  return {
++    name: parseSkillName(skillFile) ?? "aisc",
++    install_name: "aisc",
++    source_dir: skillDir,
++    version: aiscVersion,
++    aisc_version: aiscVersion,
++    installed,
++    instructions: {
++      installed_codex: path.join(workspace, "AGENTS.md"),
++      installed_claude: path.join(workspace, "CLAUDE.md"),
++      setup_block_sha256: sha256Text(setupBlock),
++      tool_version: aiscVersion,
++    },
++  };
++}
++
+ function installGitButlerSkill(workspace, skillDir, realBut, butEnv) {
+   const skillFile = path.join(skillDir, "SKILL.md");
+   if (!existsSync(skillFile)) {
+@@ -572,7 +628,7 @@ function installJjSkill(workspace, skillDir, realJj, sourceMetadata) {
+   };
+ }
+ 
+-function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, butEnv) {
++function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, butEnv, aisc) {
+   const workspace = path.join(runDir, "workspace");
+   if (scenario) {
+     let setup;
+@@ -580,7 +636,8 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
+       if (setup) return;
+       setup = arm === "but+skill" ? installGitButlerSkill(workspace, butSkillDir, realBut, butEnv)
+         : arm === "jj+skill" ? installJjSkill(workspace, jjSkill.dir, realJj, jjSkill.source)
+-          : { instructions: installPlainGitInstructions(workspace) };
++          : arm === "aisc+skill" ? installAiscSkill(workspace, aisc.skillDir, aisc.bin, butEnv)
++            : { instructions: installPlainGitInstructions(workspace) };
+       const localPolicy = "\n## Local task policy\n\nDo not attempt publication with Git push/send-pack, jj git push, or But push/PR commands. "
+         + (taskConfig.id === "pilot-12-integrate-topics" ? "But land/merge is allowed only against this disposable repository's configured self-remote local main.\n" : "But land/merge is outside this task.\n")
+         + "Git/jj retain unrelated work through named refs/bookmarks; only But must retain any initially applied sibling branches. Harness AGENTS.md, CLAUDE.md, .codex/ and .claude/ files are excluded from project changes.\n";
+@@ -588,12 +645,13 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
+       setup.instructions.installed_instruction_sha256 = sha256File(path.join(workspace, "AGENTS.md"));
+     };
+     scenarioMetadata = scenario.prepare({repoDir: workspace, arm, butBin: realBut, jjBin: realJj, env: butEnv,
+-      variant: args.get("variant"), beforeTask: install, beforeMistake: install});
++      aiscBin: aisc.bin, variant: args.get("variant"), beforeTask: install, beforeMistake: install});
+     install();
+     writeFileSync(path.join(runDir, "scenario-metadata.json"), JSON.stringify(scenarioMetadata, null, 2));
+     return { workspace, setup };
+   }
+-  const dirty = arm === "git" && taskConfig.fixtureDirty !== false;
++  // AISC keeps Git as its backing store: the dirty fixture is created directly, as for plain Git.
++  const dirty = gitLike(arm) && taskConfig.fixtureDirty !== false;
+   run("node", [path.join(repoRoot, taskConfig.createFixtureScript), "--out", workspace, "--force", "true", "--dirty", String(dirty)], {
+     cwd: repoRoot, env: butEnv,
+   });
+@@ -623,6 +681,7 @@ function prepareWorkspace(runDir, arm, realBut, butSkillDir, realJj, jjSkill, bu
+     return { workspace, setup };
+   }
+ 
++  if (arm === "aisc+skill") return { workspace, setup: installAiscSkill(workspace, aisc.skillDir, aisc.bin, butEnv) };
+   return { workspace, setup: { instructions: installPlainGitInstructions(workspace) } };
+ }
+ 
+@@ -647,6 +706,20 @@ function agentCliVersion(agent) {
+   return `${probe.stdout}${probe.stderr}`.trim().split("\n")[0] || null;
+ }
+ 
++// Directories the sandboxed agent must write besides the workspace: the fixture's Git
++// metadata (read-only under workspace-write) and the run directory, which holds the
++// policy-shim trace and, for But, its isolated app data.
++function sandboxWritableDirs(workspace) {
++  // Every arm gets the same kinds of allowances; a dir is added only if the arm's tool made it.
++  const dirs = new Set([runDir]);
++  for (const state of [path.join(workspace, ".jj"), butAppDataDir]) if (state && existsSync(state)) dirs.add(state);
++  for (const flag of ["--absolute-git-dir", "--git-common-dir"]) {
++    const probe = spawnSync(realGit, ["-C", workspace, "rev-parse", flag], {encoding: "utf8"});
++    if (probe.status === 0 && probe.stdout.trim()) dirs.add(path.resolve(workspace, probe.stdout.trim()));
++  }
++  return [...dirs];
++}
++
+ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
+   const start = Date.now();
+   let cmd;
+@@ -659,7 +732,9 @@ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
+       "--json",
+       "-C",
+       workspace,
+-      "--dangerously-bypass-approvals-and-sandbox",
++      ...(agentSandbox
++        ? ["--sandbox", "workspace-write", ...sandboxWritableDirs(workspace).flatMap(dir => ["--add-dir", dir])]
++        : ["--dangerously-bypass-approvals-and-sandbox"]),
+     ];
+     if (env.VCB_CODEX_CLEAN_CONFIG === "true") {
+       args.push("--ignore-user-config", "--ignore-rules", "--ephemeral");
+@@ -672,7 +747,7 @@ async function runAgent(agent, workspace, prompt, env, model, timeoutMs) {
+     args.push(prompt);
+   } else if (agent === "claude") {
+     cmd = "claude";
+-    args = ["-p", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose"];
++    args = ["-p", "--permission-mode", agentSandbox ? "acceptEdits" : "bypassPermissions", "--output-format", "stream-json", "--verbose"];
+     if (env.VCB_CLAUDE_CLEAN_CONFIG === "true" && env.VCB_CLAUDE_SETTINGS) {
+       args.push(
+         "--settings",
+@@ -910,7 +985,7 @@ function isShellParent(parent) {
+ }
+ 
+ function isVcEntry(entry) {
+-  return entry.tool === "git" || entry.tool === "but" || entry.tool === "jj";
++  return ["git", "but", "jj", "aisc"].includes(entry.tool);
+ }
+ 
+ function isNumber(value) {
+@@ -975,6 +1050,7 @@ function isInspection(entry) {
+   if (entry.tool === "git") return isGitInspection(entry);
+   if (entry.tool === "but") return isButInspection(entry);
+   if (entry.tool === "jj") return isJjInspection(entry);
++  if (entry.tool === "aisc") return entryClassification(entry) === "inspection";
+   return false;
+ }
+ 
+@@ -982,6 +1058,7 @@ function isMutation(entry) {
+   if (entry.tool === "git") return isGitMutation(entry);
+   if (entry.tool === "but") return isButMutation(entry);
+   if (entry.tool === "jj") return isJjMutation(entry);
++  if (entry.tool === "aisc") return entryClassification(entry) === "mutation";
+   return false;
+ }
+ 
+@@ -1133,6 +1210,7 @@ function summarizeCommands(entries) {
+     git_command_count: vc.filter((entry) => entry.tool === "git").length,
+     but_command_count: vc.filter((entry) => entry.tool === "but").length,
+     jj_command_count: vc.filter((entry) => entry.tool === "jj").length,
++    aisc_command_count: vc.filter((entry) => entry.tool === "aisc").length,
+     inspection_count: inspections.length,
+     mutation_count: mutations.length,
+     failed_vc_command_count: failed.length,
+@@ -1344,6 +1422,7 @@ if (agent === "claude" && !/\d/.test(model)) {
+ const timeoutMs = Number(args.get("timeout-ms") ?? 900000);
+ const configuredButSkillDir = args.has("skill-dir") ? path.resolve(args.get("skill-dir")) : null;
+ let skillDir = configuredButSkillDir;
++const aiscSkillDir = args.get("aisc-skill-dir") ? path.resolve(args.get("aisc-skill-dir")) : null;
+ const configuredJjSkillDir = args.get("jj-skill-dir") ? path.resolve(args.get("jj-skill-dir")) : null;
+ const jjSkillUrlArg = args.get("jj-skill-url") ?? null;
+ const jjSkillSha256Arg = args.get("jj-skill-sha256") ?? null;
+@@ -1367,6 +1446,17 @@ const codexIsolatedHome = agent === "codex" && codexCleanConfig && args.get("cod
+ const codexDisablePlugins = agent === "codex" && codexCleanConfig && args.get("codex-disable-plugins") !== "false";
+ const claudeCleanConfig = agent === "claude" ? args.get("claude-clean-config") !== "false" : false;
+ const claudeEffortLevel = agent === "claude" && claudeCleanConfig ? (args.get("claude-effort-level") ?? "medium") : null;
++// Upstream runs both agents with approvals and sandbox bypassed. This fork defaults to a
++// sandboxed, allowlisted configuration applied identically to every arm; --agent-sandbox false
++// restores the upstream bypass.
++const agentSandbox = args.get("agent-sandbox") !== "false";
++const DEFAULT_CLAUDE_ALLOWED_TOOLS = ["Read", "Edit", "MultiEdit", "Write", "Glob", "Grep",
++  "Bash(git:*)", "Bash(but:*)", "Bash(jj:*)", "Bash(aisc:*)",
++  "Bash(cat:*)", "Bash(ls:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(echo:*)", "Bash(printf:*)", "Bash(pwd:*)",
++  "Bash(diff:*)", "Bash(sort:*)", "Bash(grep:*)", "Bash(rg:*)", "Bash(sed:*)", "Bash(node:*)", "Bash(python3:*)",
++  "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)", "Bash(rm:*)", "Bash(touch:*)", "Bash(chmod:*)", "Bash(find:*)",
++  "Bash(awk:*)", "Bash(cut:*)", "Bash(tr:*)", "Bash(uniq:*)", "Bash(tee:*)", "Bash(basename:*)", "Bash(dirname:*)", "Bash(test:*)", "Bash(cd:*)"];
++const claudeAllowedTools = args.has("claude-allowed-tools") ? args.get("claude-allowed-tools").split(",").map(item => item.trim()).filter(Boolean) : DEFAULT_CLAUDE_ALLOWED_TOOLS;
+ const codexEffortLevel = agent === "codex" ? args.get("codex-effort-level") ?? null : null;
+ const runId = args.get("run-id") ?? `${Date.now()}-${agent}-${arm.replaceAll("+", "-")}`;
+ const runDir = path.resolve(args.get("out") ?? path.join("tmp/pilot-runs", runId));
+@@ -1374,6 +1464,7 @@ const runDir = path.resolve(args.get("out") ?? path.join("tmp/pilot-runs", runId
+ let realGit = null, gitBinaryMetadata = null;
+ let realBut = path.join(runDir, "unavailable-tools", "but");
+ let realJj = path.join(runDir, "unavailable-tools", "jj");
++let realAisc = path.join(runDir, "unavailable-tools", "aisc");
+ let versionPins = null;
+ 
+ taskConfig = TASK_CONFIGS[taskId];
+@@ -1385,8 +1476,8 @@ if (!taskConfig) {
+ taskDir = path.join(repoRoot, taskConfig.taskDir);
+ scenario = taskConfig.module ? await loadScenario(taskId) : null;
+ 
+-if (!["git", "but+skill", "jj+skill"].includes(arm)) {
+-  console.error("Usage: node scripts/run-pilot-agent.mjs --task <task-id> --agent <codex|claude> --arm <git|but+skill|jj+skill>");
++if (!["git", "but+skill", "jj+skill", "aisc+skill"].includes(arm)) {
++  console.error("Usage: node scripts/run-pilot-agent.mjs --task <task-id> --agent <codex|claude> --arm <git|but+skill|jj+skill|aisc+skill>");
+   process.exit(2);
+ }
+ 
+@@ -1415,10 +1506,11 @@ try {
+   gitBinaryMetadata = {path:realGit, sha256:sha256File(realGit), version:null};
+   if (arm === "but+skill") realBut = executablePath(args.get("but-bin"), "but");
+   if (arm === "jj+skill") realJj = executablePath(args.get("jj-bin"), "jj");
++  if (arm === "aisc+skill") realAisc = executablePath(args.get("aisc-bin"), "aisc");
+   {
+-    const required = [["git", realGit], ...(arm === "but+skill" ? [["but", realBut]] : arm === "jj+skill" ? [["jj", realJj]] : [])];
++    const required = [["git", realGit], ...(arm === "but+skill" ? [["but", realBut]] : arm === "jj+skill" ? [["jj", realJj]] : arm === "aisc+skill" ? [["aisc", realAisc]] : [])];
+     for (const [name, binary] of required) {
+-      const probe = run(binary, ["--version"], {env: butEnv, check: false});
++      const probe = run(binary, name === "aisc" ? ["--human", "--version"] : ["--version"], {env: butEnv, check: false});
+       const observed = probe.status === 0 ? probe.stdout.trim() : null;
+       if (name === "git") {
+         gitBinaryMetadata.version = observed;
+@@ -1439,7 +1531,7 @@ try {
+     run(realBut, ["skill", "install", "--path", skillDir], {cwd: runDir, env: butEnv, timeoutMs: 15000});
+   }
+   resolvedJjSkill = arm === "jj+skill" ? resolveJjSkillSource(runDir, configuredJjSkillDir, jjSkillSource) : null;
+-  ({workspace, setup} = prepareWorkspace(runDir, arm, realBut, skillDir, realJj, resolvedJjSkill, butEnv));
++  ({workspace, setup} = prepareWorkspace(runDir, arm, realBut, skillDir, realJj, resolvedJjSkill, butEnv, {bin: realAisc, skillDir: aiscSkillDir}));
+ } catch (error) {
+   const failure = {task: taskId, agent, arm, git_binary: gitBinaryMetadata, version_pins: versionPins, run_failure_class: "ENV_FAILURE", phase: "preparation", agent_result: null, verifier: {passed:false, score:0, failure_class:"ENV_FAILURE"}, error: String(error)};
+   writeFileSync(path.join(runDir, "result.json"), JSON.stringify(failure, null, 2));
+@@ -1450,10 +1542,10 @@ if (prepareOnly) {
+   console.log(JSON.stringify({task: taskId, arm, workspace, prepared:true, cold:!!taskConfig.cold}, null, 2));
+   process.exit(0);
+ }
+-const { binDir, tracePath } = createWrappers(runDir, arm, realBut, realJj, realGit);
++const { binDir, tracePath } = createWrappers(runDir, arm, realBut, realJj, realGit, realAisc);
+ const shellConfig = prepareShellConfig(runDir, binDir);
+ const codexHome = prepareCodexHome(runDir, codexIsolatedHome && !referenceMode);
+-const claudeSettings = prepareClaudeSettings(runDir, claudeCleanConfig && !referenceMode, claudeEffortLevel);
++const claudeSettings = prepareClaudeSettings(runDir, claudeCleanConfig && !referenceMode, claudeEffortLevel, agentSandbox, claudeAllowedTools);
+ let claudeConfig;
+ try { claudeConfig = prepareClaudeConfig(claudeCleanConfig && !referenceMode); }
+ catch (error) {
+@@ -1490,6 +1582,10 @@ if (butAppDataDir) {
+   env.E2E_TEST_APP_DATA_DIR = butAppDataDir;
+ }
+ 
++// Disk footprint is measured around the agent phase only (fixture and tool setup are excluded).
++const diskOptions = {workspace, gitBin: realGit, env: trialEnv, extraDirs: [butAppDataDir]};
++const diskBefore = snapshotDisk(diskOptions);
++
+ // Capture the CLI used to start this trial, outside the measured agent phase.
+ const agentCliVersionAtStart = referenceMode ? null : agentCliVersion(agent);
+ let agentResult;
+@@ -1499,7 +1595,7 @@ try {
+     if (!scenario) throw new Error("--reference is supported by expansion tasks only");
+     const start = Date.now();
+     try {
+-      const response = scenario.solve({repoDir:workspace, arm, butBin:path.join(binDir,"but"), jjBin:path.join(binDir,"jj"), env, metadata:scenarioMetadata}) ?? "";
++      const response = scenario.solve({repoDir:workspace, arm, butBin:path.join(binDir,"but"), jjBin:path.join(binDir,"jj"), aiscBin:path.join(binDir,"aisc"), env, metadata:scenarioMetadata}) ?? "";
+       agentResult = {status:0, signal:null, timed_out:false, start_ms:start, end_ms:Date.now(), duration_ms:Date.now()-start, stdout:response, stderr:"", error:null, cmd:"native-reference", args:[]};
+     } catch (error) {
+       agentResult = {status:1, signal:null, timed_out:false, start_ms:start, end_ms:Date.now(), duration_ms:Date.now()-start, stdout:"", stderr:String(error), error:String(error), cmd:"native-reference", args:[]};
+@@ -1511,6 +1607,7 @@ try {
+     process.off("exit", claudeConfig.cleanup);
+   }
+ }
++const diskResult = diskDelta(diskBefore, snapshotDisk(diskOptions));
+ writeFileSync(path.join(runDir, "agent-result.json"), JSON.stringify(agentResult, null, 2));
+ writeFileSync(path.join(runDir, "agent-stdout.txt"), agentResult.stdout);
+ writeFileSync(path.join(runDir, "agent-stderr.txt"), agentResult.stderr);
+@@ -1539,7 +1636,7 @@ if (violations.length) {
+   verifierResult.protocol_violations = violations;
+ }
+ const metrics = traceMetrics(trace);
+-const activeSkillDir = arm === "but+skill" ? skillDir : arm === "jj+skill" ? resolvedJjSkill.dir : null;
++const activeSkillDir = arm === "but+skill" ? skillDir : arm === "jj+skill" ? resolvedJjSkill.dir : arm === "aisc+skill" ? aiscSkillDir : null;
+ const activeSkillName = arm.endsWith("+skill") ? setup.name : null;
+ const activeSkillInstallName = arm.endsWith("+skill") ? (setup.install_name ?? activeSkillName) : null;
+ const measurement = measurementBreakdown(trace, prompt, agentResult, activeSkillDir, activeSkillInstallName, eventData);
+@@ -1565,7 +1662,14 @@ const jjBinaryMetadata = arm === "jj+skill"
+       version: run(realJj, ["--version"], { cwd: workspace }).stdout.trimEnd(),
+     }
+   : null;
+-const toolBinaryMetadata = arm === "but+skill" ? butBinaryMetadata : arm === "jj+skill" ? jjBinaryMetadata : gitBinaryMetadata;
++const aiscBinaryMetadata = arm === "aisc+skill"
++  ? {
++      path: realAisc,
++      sha256: sha256File(realAisc),
++      version: run(realAisc, ["--human", "--version"], { cwd: workspace }).stdout.trimEnd(),
++    }
++  : null;
++const toolBinaryMetadata = arm === "but+skill" ? butBinaryMetadata : arm === "jj+skill" ? jjBinaryMetadata : arm === "aisc+skill" ? aiscBinaryMetadata : gitBinaryMetadata;
+ const skillSourceGit = activeSkillDir
+   ? (arm === "but+skill" && !configuredButSkillDir || arm === "jj+skill" && !setup.source?.configured_dir ? null : gitSourceInfo(activeSkillDir))
+   : null;
+@@ -1573,7 +1677,8 @@ const skillMetadata = activeSkillDir
+   ? {
+       name: activeSkillName,
+       source_dir: activeSkillDir,
+-      selection: arm === "but+skill" ? (configuredButSkillDir ? "explicit-override" : "binary-embedded") : null,
++      selection: arm === "but+skill" ? (configuredButSkillDir ? "explicit-override" : "binary-embedded") : arm === "aisc+skill" ? "explicit-dir" : null,
++      aisc_version: setup.aisc_version ?? null,
+       embedded_binary_sha256: arm === "but+skill" && !configuredButSkillDir ? butBinaryMetadata.sha256 : null,
+       source_package: setup.source?.package ?? null,
+       source_url: setup.source?.source_url ?? null,
+@@ -1629,6 +1734,11 @@ const result = {
+     claude_effort_level: claudeSettings?.settings.effortLevel ?? null,
+     claude_strict_mcp_config: agent === "claude" ? claudeCleanConfig : null,
+     claude_setting_sources: agent === "claude" && claudeCleanConfig ? ["project", "local"] : null,
++    agent_sandbox: agentSandbox,
++    codex_sandbox_mode: agent === "codex" ? (agentSandbox ? "workspace-write" : "danger-full-access") : null,
++    codex_add_dirs: agent === "codex" && agentSandbox ? sandboxWritableDirs(workspace).map(dir => path.relative(runDir, dir) || ".") : null,
++    claude_permission_mode: agent === "claude" ? (agentSandbox ? "acceptEdits" : "bypassPermissions") : null,
++    claude_allowed_tools: agent === "claude" && agentSandbox ? claudeAllowedTools : null,
+     claude_config_dir: claudeConfig?.path ?? null,
+     claude_auth_source: claudeConfig?.auth_source ?? null,
+   },
+@@ -1637,13 +1747,14 @@ const result = {
+   research_rank: taskConfig.researchRank ?? null,
+   workload_temperature: taskConfig.cold ? "cold-adoption" : "warm",
+   pre_run_setup: {
+-    fixture_created_clean: !taskConfig.cold && arm !== "git",
++    fixture_created_clean: !taskConfig.cold && !gitLike(arm),
+     gitbutler_setup_before_agent: arm === "but+skill" && !taskConfig.cold,
+     gitbutler_branch_applied_before_agent: arm === "but+skill" && taskConfig.gitbutlerPrep === "setup-and-apply-branch"
+       ? taskConfig.applyBranch
+       : null,
+     jj_setup_before_agent: arm === "jj+skill" && !taskConfig.cold,
+     jj_colocated_before_agent: arm === "jj+skill" && !taskConfig.cold,
++    aisc_setup_before_agent: false,
+     skill_installed_before_agent: arm.endsWith("+skill"),
+     agent_instructions_before_agent: true,
+     but_app_data_dir: butAppDataDir,
+@@ -1655,6 +1766,8 @@ const result = {
+   git_binary: gitBinaryMetadata,
+   but_binary: butBinaryMetadata,
+   jj_binary: jjBinaryMetadata,
++  aisc_binary: aiscBinaryMetadata,
++  disk: diskResult,
+   skill: skillMetadata,
+   agent_result: {
+     status: agentResult.status,
+diff --git a/scripts/run-pilot-checks.mjs b/scripts/run-pilot-checks.mjs
+index 8c68532..4042493 100755
+--- a/scripts/run-pilot-checks.mjs
++++ b/scripts/run-pilot-checks.mjs
+@@ -29,6 +29,17 @@ function expect(name, repoDir, expectedPass, options = {}) {
+ 
+ resetCheckDir(tmpRoot);
+ 
++// AISC reference solution: runs only when an aisc binary is supplied (--aisc-bin or AISC_BIN).
++const aiscBin = args.get("aisc-bin") ?? process.env.AISC_BIN ?? null;
++if (aiscBin) {
++  const repo = fixture("solve-aisc");
++  run(path.join(taskDir, "solution/solve-aisc.sh"), [], {
++    cwd: repo,
++    env: { ...process.env, BENCH_ROOT: repoRoot, AISC_BIN: path.resolve(aiscBin) },
++  });
++  expect("solve-aisc", repo, true);
++}
++
+ {
+   const repo = fixture("noop");
+   expect("noop", repo, false);
+diff --git a/scripts/run-pilot2-checks.mjs b/scripts/run-pilot2-checks.mjs
+index 540fceb..ff0288c 100644
+--- a/scripts/run-pilot2-checks.mjs
++++ b/scripts/run-pilot2-checks.mjs
+@@ -35,6 +35,17 @@ function expect(name, repoDir, expectedPass, options = {}) {
+ 
+ resetCheckDir(tmpRoot);
+ 
++// AISC reference solution: runs only when an aisc binary is supplied (--aisc-bin or AISC_BIN).
++const aiscBin = args.get("aisc-bin") ?? process.env.AISC_BIN ?? null;
++if (aiscBin) {
++  const repo = fixture("solve-aisc");
++  run(path.join(taskDir, "solution/solve-aisc.sh"), [], {
++    cwd: repo,
++    env: { ...process.env, BENCH_ROOT: repoRoot, AISC_BIN: path.resolve(aiscBin) },
++  });
++  expect("solve-aisc", repo, true);
++}
++
+ {
+   const repo = fixture("noop");
+   expect("noop", repo, false);
+diff --git a/scripts/run-pilot3-checks.mjs b/scripts/run-pilot3-checks.mjs
+index fcd8e66..f8e5c93 100755
+--- a/scripts/run-pilot3-checks.mjs
++++ b/scripts/run-pilot3-checks.mjs
+@@ -33,6 +33,17 @@ function expect(name, repoDir, expectedPass, options = {}) {
+ 
+ resetCheckDir(tmpRoot);
+ 
++// AISC reference solution: runs only when an aisc binary is supplied (--aisc-bin or AISC_BIN).
++const aiscBin = args.get("aisc-bin") ?? process.env.AISC_BIN ?? null;
++if (aiscBin) {
++  const repo = fixture("solve-aisc");
++  run(path.join(taskDir, "solution/solve-aisc.sh"), [], {
++    cwd: repo,
++    env: { ...process.env, BENCH_ROOT: repoRoot, AISC_BIN: path.resolve(aiscBin) },
++  });
++  expect("solve-aisc", repo, true);
++}
++
+ {
+   const repo = fixture("noop");
+   expect("noop", repo, false);
+diff --git a/scripts/run-pilot4-checks.mjs b/scripts/run-pilot4-checks.mjs
+index b797e00..2564fb8 100644
+--- a/scripts/run-pilot4-checks.mjs
++++ b/scripts/run-pilot4-checks.mjs
+@@ -52,6 +52,17 @@ function commitExpectedFiles(repoDir, subject, filePaths, options = {}) {
+ 
+ resetCheckDir(tmpRoot);
+ 
++// AISC reference solution: runs only when an aisc binary is supplied (--aisc-bin or AISC_BIN).
++const aiscBin = args.get("aisc-bin") ?? process.env.AISC_BIN ?? null;
++if (aiscBin) {
++  const repo = fixture("solve-aisc");
++  run(path.join(taskDir, "solution/solve-aisc.sh"), [], {
++    cwd: repo,
++    env: { ...process.env, BENCH_ROOT: repoRoot, AISC_BIN: path.resolve(aiscBin) },
++  });
++  expect("solve-aisc", repo, true);
++}
++
+ {
+   const repo = fixture("noop");
+   expect("noop", repo, false, { failureClass: "GRAPH_WRONG" });
+diff --git a/scripts/run-pilot5-checks.mjs b/scripts/run-pilot5-checks.mjs
+index efbc04a..9691348 100755
+--- a/scripts/run-pilot5-checks.mjs
++++ b/scripts/run-pilot5-checks.mjs
+@@ -49,6 +49,17 @@ function rewriteWithStates(repoDir, states) {
+ 
+ resetCheckDir(tmpRoot);
+ 
++// AISC reference solution: runs only when an aisc binary is supplied (--aisc-bin or AISC_BIN).
++const aiscBin = args.get("aisc-bin") ?? process.env.AISC_BIN ?? null;
++if (aiscBin) {
++  const repo = fixture("solve-aisc");
++  run(path.join(taskDir, "solution/solve-aisc.sh"), [], {
++    cwd: repo,
++    env: { ...process.env, BENCH_ROOT: repoRoot, AISC_BIN: path.resolve(aiscBin) },
++  });
++  expect("solve-aisc", repo, true);
++}
++
+ {
+   const repo = fixture("noop");
+   expect("noop", repo, false, { failureClass: "GRAPH_WRONG" });
+diff --git a/scripts/run-pilot6-checks.mjs b/scripts/run-pilot6-checks.mjs
+index 8370765..40f420f 100644
+--- a/scripts/run-pilot6-checks.mjs
++++ b/scripts/run-pilot6-checks.mjs
+@@ -35,6 +35,17 @@ function expect(name, repoDir, expectedPass, options = {}) {
+ 
+ resetCheckDir(tmpRoot);
+ 
++// AISC reference solution: runs only when an aisc binary is supplied (--aisc-bin or AISC_BIN).
++const aiscBin = args.get("aisc-bin") ?? process.env.AISC_BIN ?? null;
++if (aiscBin) {
++  const repo = fixture("solve-aisc");
++  run(path.join(taskDir, "solution/solve-aisc.sh"), [], {
++    cwd: repo,
++    env: { ...process.env, BENCH_ROOT: repoRoot, AISC_BIN: path.resolve(aiscBin) },
++  });
++  expect("solve-aisc", repo, true);
++}
++
+ {
+   const repo = fixture("noop");
+   expect("noop", repo, false);
+diff --git a/tasks/pilot-1-selective-validation/solution/solve-aisc.sh b/tasks/pilot-1-selective-validation/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..3e0483f
+--- /dev/null
++++ b/tasks/pilot-1-selective-validation/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" commit -b input-validation -m "Add input validation" README.md tests/handler.test.ts "src/handler.ts~validateLeadInput"
+diff --git a/tasks/pilot-10-recover-amend/solution/solve-aisc.sh b/tasks/pilot-10-recover-amend/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..dfe748d
+--- /dev/null
++++ b/tasks/pilot-10-recover-amend/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" uncommit review-fix notes/private.md
+diff --git a/tasks/pilot-11-dual-source-sync/solution/solve-aisc.sh b/tasks/pilot-11-dual-source-sync/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..de1aadb
+--- /dev/null
++++ b/tasks/pilot-11-dual-source-sync/solution/solve-aisc.sh
+@@ -0,0 +1,8 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" sync origin/main --fetch
++"$AISC_BIN" pick origin/feature-service
+diff --git a/tasks/pilot-12-integrate-topics/solution/solve-aisc.sh b/tasks/pilot-12-integrate-topics/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..2c79333
+--- /dev/null
++++ b/tasks/pilot-12-integrate-topics/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" land greeting docs --into main --switch
+diff --git a/tasks/pilot-13-selective-copy/solution/solve-aisc.sh b/tasks/pilot-13-selective-copy/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..87c6ca4
+--- /dev/null
++++ b/tasks/pilot-13-selective-copy/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" pick --from revive-worktree-command "Revive worktree command" -b revive-worktree-no-graph --onto main
+diff --git a/tasks/pilot-2-multi-amend/solution/solve-aisc.sh b/tasks/pilot-2-multi-amend/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..2813fe6
+--- /dev/null
++++ b/tasks/pilot-2-multi-amend/solution/solve-aisc.sh
+@@ -0,0 +1,10 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" amend \
++  --into "refactor validation helpers" "README.md~likely email" "src/lead.ts~isLikelyEmail" "tests/lead.test.ts~MalformedEmail" \
++  --into "add lead scoring" "src/lead.ts~@enterprise.example" "tests/lead.test.ts~EnterpriseDomain" \
++  --into "document response behavior" "README.md~reason that can be shown" docs/response.md
+diff --git a/tasks/pilot-3-split-commit/solution/solve-aisc.sh b/tasks/pilot-3-split-commit/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..b5c9407
+--- /dev/null
++++ b/tasks/pilot-3-split-commit/solution/solve-aisc.sh
+@@ -0,0 +1,10 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" split "add lead workflow" \
++  --into "refactor validation helpers" "src/lead.ts~isLikelyEmail" "tests/lead.test.ts~MalformedEmail" \
++  --into "tune lead scoring" "src/lead.ts~@enterprise.example" "tests/lead.test.ts~EnterpriseDomain" \
++  --into "document lead workflow" README.md docs/lead-workflow.md
+diff --git a/tasks/pilot-4-reorder-commits/solution/solve-aisc.sh b/tasks/pilot-4-reorder-commits/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..16d4a27
+--- /dev/null
++++ b/tasks/pilot-4-reorder-commits/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" move "add retry policy" "add notification sender" --before "add customer model"
+diff --git a/tasks/pilot-5-squash-commits/solution/solve-aisc.sh b/tasks/pilot-5-squash-commits/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..6a3f2f1
+--- /dev/null
++++ b/tasks/pilot-5-squash-commits/solution/solve-aisc.sh
+@@ -0,0 +1,9 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" squash \
++  --into "add parser pipeline" "extract parser helpers" "wire parser helpers" \
++  --into "add retry support" "add retry option" "test retry option" "document retry option"
+diff --git a/tasks/pilot-6-update-dirty-branch/solution/solve-aisc.sh b/tasks/pilot-6-update-dirty-branch/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..2efbf3d
+--- /dev/null
++++ b/tasks/pilot-6-update-dirty-branch/solution/solve-aisc.sh
+@@ -0,0 +1,11 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++# A paused sync exits 0 with status conflicts: resolve the notify channels by hand, then
++# continue. --prefer-branch keeps the branch's retry limit in src/config.ts.
++"$AISC_BIN" sync main --prefer-branch src/config.ts
++node "$BENCH_ROOT/scripts/apply-pilot6-state.mjs" resolved-notify "$PWD"
++"$AISC_BIN" sync --continue
+diff --git a/tasks/pilot-7-scoped-review/solution/solve-aisc.sh b/tasks/pilot-7-scoped-review/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..35d2019
+--- /dev/null
++++ b/tasks/pilot-7-scoped-review/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" show seed-rewrite
+diff --git a/tasks/pilot-8-cold-checkpoint/solution/solve-aisc.sh b/tasks/pilot-8-cold-checkpoint/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..5cc256e
+--- /dev/null
++++ b/tasks/pilot-8-cold-checkpoint/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" commit -b app-checkpoint -m "Checkpoint app" --all
+diff --git a/tasks/pilot-9-cleanup-noise/solution/solve-aisc.sh b/tasks/pilot-9-cleanup-noise/solution/solve-aisc.sh
+new file mode 100755
+index 0000000..9a547c9
+--- /dev/null
++++ b/tasks/pilot-9-cleanup-noise/solution/solve-aisc.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
++AISC_BIN="${AISC_BIN:-aisc}"
++
++"$AISC_BIN" discard src/catalog.ts src/format.ts test/catalog.test.ts
