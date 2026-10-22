@@ -28,9 +28,9 @@ Ten scripted version-control tasks, all four tools in the same run, every end st
 | | **AISC** | GitButler | Git | Jujutsu |
 | --- | ---: | ---: | ---: | ---: |
 | Commands an agent runs | **12** | 22 | 28 | 21 |
-| Output the agent reads | **1.7 KB** | 5.9 KB | 3.8 KB | 3.7 KB |
-| Transcript tokens (estimate) | **575** | 1,639 | 1,261 | 1,307 |
-| Wall time, all ten tasks | **733 ms** | 1,579 ms | 1,555 ms | 1,415 ms |
+| Output the agent reads | **1.8 KB** | 5.9 KB | 3.8 KB | 3.7 KB |
+| Transcript tokens (estimate) | **606** | 1,639 | 1,261 | 1,307 |
+| Wall time, all ten tasks | **1,182 ms** | 2,106 ms | 1,370 ms | 1,798 ms |
 | Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
 | Real agent, 13 vcbench tasks: tokens | **1.02M** | 1.64M | 1.38M | — |
 
@@ -162,27 +162,27 @@ That is 36% fewer commands, 38% fewer tokens and 39% lower cost than GitButler, 
 
 ### Command benchmark
 
-[`benchmarks/commands`](benchmarks/commands) runs ten tasks modelled on [vcbench](https://vcbench.dev): select hunks, amend an older commit, split, reorder, squash, uncommit, undo a rewrite, sync with a conflict, branch off in parallel, and inspect state. Each tool runs the shortest correct sequence an expert would type, every end state is graded the same way, and the tools run in alternating order on the same fixtures. The run below used 5 repetitions plus a warm-up, at load average about 22 (a busy 14-core laptop).
+[`benchmarks/commands`](benchmarks/commands) runs ten tasks modelled on [vcbench](https://vcbench.dev): select hunks, amend an older commit, split, reorder, squash, uncommit, undo a rewrite, sync with a conflict, branch off in parallel, and inspect state. Each tool runs the shortest correct sequence an expert would type, every end state is graded the same way, and the tools run in alternating order on the same fixtures. The run below measured the v0.1.0 release binary with 10 repetitions plus a warm-up, on a busy 11-core laptop (one-minute load average 19 to 26); results are in [`benchmarks/results/commands-v3.json`](benchmarks/results/commands-v3.json).
 
 Each cell is commands · output bytes · median wall time (default output, Apple Git 2.50.1, GitButler 0.22.3, Jujutsu 0.42.0, macOS arm64):
 
 | Task | **AISC** | GitButler | Git | Jujutsu |
 | --- | ---: | ---: | ---: | ---: |
-| Commit selected hunks | **1 · 170 B · 100 ms** | 2 · 1,801 B · 165 ms | 3 · 904 B · 135 ms | 5 · 494 B · 166 ms |
-| Amend fixes into older commits | **1 · 141 B · 101 ms** | 2 · 379 B · 111 ms | 2 · 212 B · 172 ms | 1 · 156 B · 78 ms |
-| Split a commit | **1 · 129 B · 50 ms** | 4 · 937 B · 255 ms | 5 · 451 B · 204 ms | 2 · 428 B · 106 ms |
-| Reorder commits | **1 · 173 B · 44 ms** | 2 · 319 B · 80 ms | 1 · 98 B · 105 ms | 2 · 251 B · 100 ms |
-| Squash commits | **1 · 136 B · 52 ms** | 2 · 317 B · 112 ms | 1 · 293 B · 181 ms | 1 · 164 B · 63 ms |
-| Uncommit a file | **1 · 153 B · 105 ms** | 2 · 380 B · 103 ms | 4 · 396 B · 154 ms | 1 · 128 B · 75 ms |
-| Undo the last operation | **1 · 42 B · 37 ms** | 1 · 53 B · 43 ms | 2 · 272 B · 55 ms | 1 · 320 B · 44 ms |
-| Sync a dirty branch, resolve a conflict | **3 · 481 B · 246 ms** | 4 · 1,294 B · 514 ms | 4 · 842 B · 278 ms | 4 · 1,077 B · 518 ms |
-| Branch off in parallel | **1 · 37 B · 51 ms** | 1 · 71 B · 111 ms | 3 · 170 B · 167 ms | 2 · 357 B · 171 ms |
-| Inspect status, log and diff | **1 · 246 B · 16 ms** | 2 · 385 B · 44 ms | 3 · 113 B · 115 ms | 2 · 357 B · 74 ms |
-| **Total** | **12 · 1.7 KB · 733 ms** | 22 · 5.9 KB · 1,579 ms | 28 · 3.8 KB · 1,555 ms | 21 · 3.7 KB · 1,415 ms |
+| Commit selected hunks | **1 · 170 B · 116 ms** | 2 · 1,801 B · 196 ms | 3 · 904 B · 119 ms | 5 · 494 B · 192 ms |
+| Amend fixes into older commits | **1 · 141 B · 127 ms** | 2 · 379 B · 170 ms | 2 · 212 B · 149 ms | 1 · 156 B · 171 ms |
+| Split a commit | **1 · 172 B · 81 ms** | 4 · 937 B · 403 ms | 5 · 451 B · 191 ms | 2 · 428 B · 188 ms |
+| Reorder commits | **1 · 216 B · 79 ms** | 2 · 319 B · 194 ms | 1 · 98 B · 97 ms | 2 · 251 B · 170 ms |
+| Squash commits | **1 · 179 B · 62 ms** | 2 · 317 B · 174 ms | 1 · 293 B · 103 ms | 1 · 164 B · 76 ms |
+| Uncommit a file | **1 · 153 B · 123 ms** | 2 · 380 B · 142 ms | 4 · 396 B · 147 ms | 1 · 128 B · 71 ms |
+| Undo the last operation | **1 · 42 B · 27 ms** | 1 · 53 B · 51 ms | 2 · 272 B · 33 ms | 1 · 320 B · 61 ms |
+| Sync a dirty branch, resolve a conflict | **3 · 481 B · 301 ms** | 4 · 1,294 B · 424 ms | 4 · 842 B · 259 ms | 4 · 1,077 B · 373 ms |
+| Branch off in parallel | **1 · 37 B · 63 ms** | 1 · 71 B · 142 ms | 3 · 170 B · 72 ms | 2 · 357 B · 221 ms |
+| Inspect status, log and diff | **1 · 246 B · 21 ms** | 2 · 385 B · 63 ms | 3 · 113 B · 60 ms | 2 · 357 B · 133 ms |
+| **Total** | **12 · 1.8 KB · 1,182 ms** | 22 · 5.9 KB · 2,106 ms | 28 · 3.8 KB · 1,370 ms | 21 · 3.7 KB · 1,798 ms |
 
-Against GitButler, AISC uses fewer commands, less output and less time on every task. The exceptions are ties at one command (undo, parallel branch) and the uncommit timing, which is within noise. Against the others, it is not best on every cell:
-- **Jujutsu** is faster on amend and uncommit, and prints slightly less on uncommit. With `--quiet` it prints nothing on success, so in quiet mode it reads fewer bytes than AISC's one-line `-q` results.
-- **Git** prints less when reordering or inspecting, because a bare `git log --oneline` says less than AISC's hunk listing.
+Against GitButler, AISC uses fewer commands, less output and less time on every task; undo and the parallel branch tie at one command. Against the others, it is not best on every cell:
+- **Jujutsu** is faster on uncommit and prints slightly less on uncommit and squash. With `--quiet` it prints nothing on success, so in quiet mode it reads fewer bytes than AISC's one-line `-q` results.
+- **Git** is faster at syncing with a conflict, and prints less when reordering or inspecting, because a bare `git log --oneline` says less than AISC's hunk listing.
 - **Scope.** These are scripted sequences, not live agents. They count the commands and text an agent would handle, but not model reasoning. Real-agent runs on vcbench are the next step.
 
 ### Agent guidance
