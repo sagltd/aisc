@@ -217,13 +217,77 @@ fn an_index_lock_aisc_did_not_create_is_never_taken_over() {
 
 #[test]
 fn a_foreign_operation_lock_is_never_removed() {
-    // An empty lock (a task verb, or a manual one) carries no owner: always refused.
+    // A fresh empty lock may be one that is still being written: refused.
     let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
     fixture.write("f.txt", "one\ntwo\n");
     fixture.write(".git/aisc-operation.lock", "");
     let refused = fixture.aisc(&["commit", "-m", "two", "f.txt"]);
     assert_eq!(refused.code, 1, "{}", all(&refused));
     assert!(fixture.exists(".git/aisc-operation.lock"));
+    let refused = fixture.aisc(&["checkpoint", "-m", "two", "--", "f.txt"]);
+    assert_eq!(refused.code, 1, "{}", all(&refused));
+    // A lock with content that is not an aisc tag is never taken over, however old.
+    fixture.write(".git/aisc-operation.lock", "held by a script\n");
+    age(&fixture, ".git/aisc-operation.lock");
+    let refused = fixture.aisc(&["checkpoint", "-m", "two", "--", "f.txt"]);
+    assert_eq!(refused.code, 1, "{}", all(&refused));
+    assert_eq!(
+        fixture.read(".git/aisc-operation.lock"),
+        "held by a script\n"
+    );
+}
+
+/// Backdates a file so it is past the grace period for abandoned locks.
+fn age(fixture: &Fixture, relative: &str) {
+    let file = std::fs::File::options()
+        .write(true)
+        .open(fixture.path(relative))
+        .unwrap();
+    file.set_modified(std::time::SystemTime::now() - Duration::from_secs(120))
+        .unwrap();
+}
+
+#[test]
+fn an_old_empty_operation_lock_with_no_flock_holder_is_recovered() {
+    // `: > .git/aisc-operation.lock` (an older task verb killed mid-way, or by hand).
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.write("f.txt", "one\ntwo\n");
+    fixture.write(".git/aisc-operation.lock", "");
+    age(&fixture, ".git/aisc-operation.lock");
+    fixture
+        .aisc(&["checkpoint", "-m", "two", "--", "f.txt"])
+        .ok();
+    assert_eq!(fixture.subjects("HEAD"), ["two", "base"]);
+    assert!(residue(&fixture).is_empty(), "{:?}", residue(&fixture));
+}
+
+#[test]
+fn task_verbs_recover_after_a_killed_history_verb() {
+    // Killed before its reference transaction: nothing changed, so the task verb just proceeds.
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.write("f.txt", "one\ntwo\n");
+    let env = fixture.fake_git("update-ref", KILL_BEFORE);
+    assert_killed(&fixture.aisc_env(&["commit", "-m", "two", "f.txt"], &env_refs(&env)));
+    assert!(
+        fixture.exists(".git/aisc-operation.lock"),
+        "crash reproduced"
+    );
+    fixture
+        .aisc(&["checkpoint", "-m", "task", "--", "f.txt"])
+        .ok();
+    assert_eq!(fixture.subjects("HEAD"), ["task", "base"]);
+    assert!(residue(&fixture).is_empty(), "{:?}", residue(&fixture));
+
+    // Killed after it: the task verb completes the operation, reports it (exit 4) and the next
+    // call runs normally.
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    crash_after_commit_transaction(&fixture);
+    let next = fixture.aisc(&["verify", "--", "true"]);
+    assert_eq!(next.code, 4, "{}", all(&next));
+    assert!(all(&next).contains("interrupted"), "{}", all(&next));
+    assert!(residue(&fixture).is_empty(), "{:?}", residue(&fixture));
+    fixture.aisc(&["verify", "--", "true"]).ok();
+    assert_eq!(fixture.subjects("HEAD"), ["two", "base"]);
 }
 
 /// A sync of `topic` onto `main` paused on `f.txt`, whose markers are in `f.txt.aisc-conflict`

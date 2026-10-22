@@ -10,18 +10,30 @@ fn invoke(arguments: &[&str]) -> std::process::Output {
 }
 
 #[test]
-fn clap_help_and_version_have_success_exit_codes_and_ansi_free_json() {
-    let output = invoke(&["--json", "--color", "always", "--help"]);
-    assert!(output.status.success());
-    assert!(!output.stdout.contains(&0x1b));
-    assert!(output.stderr.is_empty());
-    let data: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(data["help"].as_str().unwrap().contains("--in-place"));
-    let version = invoke(&["--version"]);
-    assert_eq!(
-        serde_json::from_slice::<Value>(&version.stdout).unwrap()["version"],
-        "0.1.0"
-    );
+fn help_and_version_are_plain_text_even_when_redirected_or_json_is_requested() {
+    for arguments in [
+        vec!["--help"],
+        vec!["--json", "--color", "always", "--help"],
+        vec!["log", "--help"],
+        vec!["finish", "--json", "--help"],
+        vec![],
+    ] {
+        let output = invoke(&arguments);
+        assert!(output.status.success(), "{arguments:?}");
+        assert!(output.stderr.is_empty(), "{arguments:?}");
+        assert!(!output.stdout.contains(&0x1b), "{arguments:?}");
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("Usage: aisc"), "{arguments:?}: {text}");
+        assert!(
+            serde_json::from_str::<Value>(&text).is_err(),
+            "{arguments:?}"
+        );
+    }
+    for arguments in [vec!["--version"], vec!["--json", "--version"]] {
+        let version = invoke(&arguments);
+        assert!(version.status.success());
+        assert_eq!(String::from_utf8(version.stdout).unwrap(), "aisc 0.1.0\n");
+    }
 }
 
 #[test]

@@ -15,7 +15,7 @@ use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Operation};
 use history::{HistoryError, Outcome};
 use output::Presentation;
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::io::Write;
 
 /// Prints a line to stdout; a closed pipe (`aisc log | head -1`) ends the process quietly.
@@ -48,10 +48,10 @@ fn main() {
                     &error.render().to_string(),
                     &error.render().ansi().to_string(),
                 )),
-                clap::error::ErrorKind::DisplayVersion => emit(
-                    &presentation
-                        .success("version", &json!({"version": env!("CARGO_PKG_VERSION")})),
-                ),
+                // Help and version are for people (and agents reading them): always plain text.
+                clap::error::ErrorKind::DisplayVersion => {
+                    emit(&format!("aisc {}", env!("CARGO_PKG_VERSION")))
+                }
                 _ => emit_error(&presentation.error(&error.render().to_string())),
             }
             std::process::exit(code);

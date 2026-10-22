@@ -1,4 +1,5 @@
 use crate::git::{Lock, Repo, os_bytes, run_git, text};
+use crate::history::{plumbing::Git, rewrite};
 use crate::{process, worktree};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -100,7 +101,7 @@ pub(crate) fn start(
             "task name must be 1–80 ASCII letters, digits, hyphens or underscores, starting with a letter or digit"
         );
     }
-    let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
+    let _guard = operation_lock(repo)?;
     repo.writable()?;
     let base = repo.head()?;
     let mut session = Session {
@@ -233,7 +234,7 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
     if message.trim().is_empty() || message.len() > 4_096 || message.contains('\0') {
         bail!("commit message must contain 1–4096 bytes without NUL");
     }
-    let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
+    let _guard = operation_lock(repo)?;
     clear_evidence(repo)?;
     repo.writable()?;
     repo.paths(paths)?;
@@ -355,6 +356,12 @@ pub(crate) fn checkpoint(repo: &Repo, message: &str, paths: &[String]) -> Result
     Ok(result)
 }
 
+/// The history engine's flock-tagged operation lock, after recovering whatever a killed aisc
+/// process left behind, so task and history verbs share one lock and one recovery path.
+fn operation_lock(repo: &Repo) -> Result<rewrite::OperationLock> {
+    rewrite::task_lock(&Git::from_repo(repo))
+}
+
 fn quote(path: &str) -> String {
     if !path.is_empty()
         && path
@@ -438,7 +445,7 @@ fn rebuild_index(
 }
 
 pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<Value> {
-    let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
+    let _guard = operation_lock(repo)?;
     clear_evidence(repo)?;
     repo.writable()?;
     repo.require_clean()?;
@@ -495,7 +502,7 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
 }
 
 pub(crate) fn finish(repo: &Repo, keep: bool, delete_ignored: bool) -> Result<Value> {
-    let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
+    let _guard = operation_lock(repo)?;
     repo.writable()?;
     repo.require_clean()?;
     let evidence: Evidence = read_json(&repo.directory.join("aisc-evidence.json"))

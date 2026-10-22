@@ -365,9 +365,10 @@ const TOOL_DIRS: &[&str] = &[
 ];
 /// Common names that are build output only at the worktree root or next to a project manifest;
 /// elsewhere (`src/build/`, `docs/dist/`) they may hold the user's own files.
-const GENERIC_DIRS: &[&str] = &[
-    "build", "dist", "out", "target", "coverage", ".cache", "bin", "obj",
-];
+const GENERIC_DIRS: &[&str] = &["build", "dist", "out", "target", "coverage", ".cache"];
+/// .NET output dirs; elsewhere `bin/` often holds personal scripts, so they count only beside a
+/// .NET project or solution, never just for being at the root.
+const DOTNET_DIRS: &[&str] = &["bin", "obj"];
 const MANIFESTS: &[&str] = &[
     "Cargo.toml",
     "package.json",
@@ -386,7 +387,7 @@ const MANIFESTS: &[&str] = &[
     "mix.exs",
     "CMakeLists.txt",
 ];
-const MANIFEST_SUFFIXES: &[&str] = &[".csproj", ".sln"];
+const DOTNET_MANIFEST_SUFFIXES: &[&str] = &[".csproj", ".fsproj", ".sln"];
 const REGENERABLE_SUFFIXES: &[&str] = &[".pyc", ".pyo", ".o"];
 /// OS and package-manager junk, regenerable anywhere. Other `*.log` files are not.
 const JUNK_FILES: &[&str] = &[".DS_Store", "Thumbs.db", "desktop.ini"];
@@ -438,33 +439,47 @@ struct Ignored {
     truncated: bool,
 }
 
-/// Whether worktree directories hold a project manifest, cached per directory.
+/// Which project manifests a worktree directory holds, cached per directory.
+#[derive(Clone, Copy)]
+struct Found {
+    any: bool,
+    dotnet: bool,
+}
+
 struct Manifests<'a> {
     worktree: &'a Path,
-    known: HashMap<String, bool>,
+    known: HashMap<String, Found>,
 }
 
 impl Manifests<'_> {
-    fn beside(&mut self, directory: &str) -> bool {
-        if directory.is_empty() {
-            return true;
-        }
-        if let Some(known) = self.known.get(directory) {
-            return *known;
+    fn found(&mut self, directory: &str) -> Found {
+        if let Some(found) = self.known.get(directory) {
+            return *found;
         }
         let path = self.worktree.join(directory);
-        let found = MANIFESTS.iter().any(|name| path.join(name).is_file())
-            || fs::read_dir(&path).is_ok_and(|entries| {
-                entries.filter_map(|entry| entry.ok()).any(|entry| {
-                    let name = entry.file_name();
-                    let name = name.to_string_lossy();
-                    MANIFEST_SUFFIXES
-                        .iter()
-                        .any(|suffix| name.ends_with(suffix))
-                })
-            });
+        let dotnet = fs::read_dir(&path).is_ok_and(|entries| {
+            entries.filter_map(|entry| entry.ok()).any(|entry| {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                DOTNET_MANIFEST_SUFFIXES
+                    .iter()
+                    .any(|suffix| name.ends_with(suffix))
+            })
+        });
+        let found = Found {
+            any: dotnet || MANIFESTS.iter().any(|name| path.join(name).is_file()),
+            dotnet,
+        };
         self.known.insert(directory.to_owned(), found);
         found
+    }
+
+    /// Whether directory `name` inside `parent` is a build-output dir by position.
+    fn anchors(&mut self, parent: &str, name: &str) -> bool {
+        if GENERIC_DIRS.contains(&name) {
+            return parent.is_empty() || self.found(parent).any;
+        }
+        DOTNET_DIRS.contains(&name) && self.found(parent).dotnet
     }
 }
 
@@ -482,10 +497,11 @@ struct Lineage {
 impl Lineage {
     /// The lineage of directory `name` inside `parent` (relative to the worktree root).
     fn enter(self, parent: &str, name: &str, manifests: &mut Manifests) -> Self {
-        let anchored = GENERIC_DIRS.contains(&name) && manifests.beside(parent);
+        let anchored = manifests.anchors(parent, name);
+        // Only installed packages skip secret-name checks; a project's own build output
+        // (`target/`, `build/`) is still checked.
         let third_party = self.third_party
             || matches!(name, "node_modules" | ".gradle" | ".dart_tool")
-            || (name == "target" && anchored)
             || (name == "site-packages" && self.venv);
         Self {
             regenerable: self.regenerable || TOOL_DIRS.contains(&name) || anchored,

@@ -924,7 +924,7 @@ fn link_into_place(staged: &Path, path: &Path) -> Result<Option<Option<fs::File>
 /// `aisc-operation.lock`, holding `aisc pid N` and an exclusive flock for as long as its owner
 /// lives. The kernel drops the flock when the owner dies, so a stale lock is told apart from a
 /// live one without trusting the pid, which may have been reused.
-struct OperationLock {
+pub(crate) struct OperationLock {
     path: PathBuf,
     _file: fs::File,
 }
@@ -979,20 +979,30 @@ impl OperationLock {
             };
             let mut content = String::new();
             let _ = (&held).take(64).read_to_string(&mut content);
-            let Some(owner) = content
+            let owner = content
                 .strip_prefix(LOCK_TAG)
-                .and_then(|rest| rest.trim().parse::<u32>().ok())
-            else {
+                .and_then(|rest| rest.trim().parse::<u32>().ok());
+            // An empty lock past the grace period was abandoned before any tag was written
+            // (an older task verb killed mid-way, or `: > lock`); the flock still decides.
+            let abandoned = owner.is_none()
+                && content.is_empty()
+                && held
+                    .metadata()?
+                    .modified()?
+                    .elapsed()
+                    .is_ok_and(|age| age >= JOURNAL_GRACE);
+            if owner.is_none() && !abandoned {
                 return Err(locked(
                     "aisc-operation.lock",
                     "inspect owner before removing a stale lock",
                 ));
-            };
+            }
             if !try_flock(&held)? {
-                return Err(locked(
-                    "aisc-operation.lock",
-                    &format!("aisc process {owner} is running"),
-                ));
+                let holder = owner.map_or_else(
+                    || "another process holds it".to_owned(),
+                    |owner| format!("aisc process {owner} is running"),
+                );
+                return Err(locked("aisc-operation.lock", &holder));
             }
             // The owner is dead; take over only if this is still the file at `path`.
             let current = held.metadata()?;
@@ -1006,7 +1016,7 @@ impl OperationLock {
             held.set_len(0)?;
             held.seek(std::io::SeekFrom::Start(0))?;
             held.write_all(tag.as_bytes())?;
-            return Ok((Self { path, _file: held }, Some(owner)));
+            return Ok((Self { path, _file: held }, owner));
         }
         Err(locked(
             "aisc-operation.lock",
@@ -1319,6 +1329,17 @@ const JOURNAL_GRACE: Duration = Duration::from_secs(5);
 /// entry point for commands that do not open a `Session` (history reads, and task verbs once
 /// they adopt it). A live or foreign lock is left alone. Returns a note when an interrupted
 /// operation was completed.
+/// The operation lock for task verbs (start, checkpoint, verify, finish): the same flock-tagged
+/// lock history verbs take, with the same recovery first, so a killed history verb never leaves
+/// task verbs refusing. A completed interrupted operation is reported as stale (exit 4).
+pub(crate) fn task_lock(git: &Git) -> Result<OperationLock> {
+    let (operation, dead_owner) = OperationLock::acquire(git)?;
+    if let Some(finished) = recover(git, dead_owner)? {
+        return Err(finished.into_error());
+    }
+    Ok(operation)
+}
+
 pub(crate) fn recover_if_needed(git: &Git) -> Result<Option<String>> {
     let lock = git.dir.join("aisc-operation.lock");
     if !super::plumbing::path_exists(&lock) && !super::plumbing::path_exists(&journal_path(git)) {
