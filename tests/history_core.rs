@@ -491,3 +491,25 @@ fn hostile_characters_are_escaped_in_text_output() {
     assert!(log.stdout.contains("\\u{202e}"), "{}", log.stdout);
     assert!(log.stdout.contains("\\u{85}"), "{}", log.stdout);
 }
+
+#[test]
+fn one_plan_can_replace_a_file_with_a_directory_and_back() {
+    let fixture = Fixture::with_files(&[("a", "file\n"), ("keep.txt", "k\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.git(&["rm", "-q", "a"]);
+    fixture.write("a/b", "nested\n");
+    fixture.commit_all("a becomes a directory");
+    fixture.git(&["switch", "main"]);
+    // file -> dir: the plan deletes `a` before it writes `a/b`.
+    fixture.aisc(&["switch", "topic"]).ok();
+    assert_eq!(fixture.read("a/b"), "nested\n");
+    // dir -> file: deleting `a/b` empties `a`, so the file can take its place.
+    fixture.aisc(&["switch", "main"]).ok();
+    assert_eq!(fixture.read("a"), "file\n");
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+    // Undo replays the recorded writes, whose order is the reverse of what it needs.
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.read("a/b"), "nested\n");
+    assert_eq!(fixture.git(&["symbolic-ref", "HEAD"]), "refs/heads/topic");
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}

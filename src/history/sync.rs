@@ -1,11 +1,12 @@
 //! `aisc sync`: replay the branch onto a moved base (algorithm 6.6 of docs/design/history.md),
 //! keeping uncommitted edits. Conflicts pause the sync with marker files and
 //! `$GIT_DIR/aisc/sync.json`; refs, the index and unrelated files are untouched until `--continue`.
-//! This module also hosts the replay and worktree-carry helpers that `land` and `switch` reuse.
+//! This module also hosts the replay helpers that `land` reuses; the worktree carry is in rewrite.
 use super::plumbing::{CommitMeta, Entry, Favor, Git, MergeConflict, TreeEdit};
 use super::render;
 use super::rewrite::{
-    IndexChange, Plan, RefMove, Session, WorktreeWrite, dependent_moves, stale, write_file,
+    Plan, RefMove, Session, WorktreeWrite, carry, dependent_moves, read_work, regular, stale,
+    work_matches, write_file,
 };
 use super::view::{self, BranchRef};
 use super::{Code, Outcome, fail, fail_hint};
@@ -17,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------------------------
@@ -127,10 +127,6 @@ fn matches_prefer(list: &[String], path: &str) -> bool {
                 .strip_prefix(candidate)
                 .is_some_and(|rest| rest.starts_with('/'))
     })
-}
-
-fn regular(mode: &str) -> bool {
-    matches!(mode, "100644" | "100755")
 }
 
 fn stage_mode(stages: &[Option<Entry>; 3]) -> String {
@@ -345,284 +341,6 @@ pub(crate) fn build_commits(
         rewritten,
         dropped,
     })
-}
-
-// ---------------------------------------------------------------------------------------------
-// Worktree carry (shared with land and switch)
-// ---------------------------------------------------------------------------------------------
-
-pub(crate) struct Carry {
-    pub writes: Vec<WorktreeWrite>,
-    pub index: Vec<IndexChange>,
-}
-
-struct TreeChange {
-    path: String,
-    from: Option<Entry>,
-    to: Option<Entry>,
-}
-
-fn tree_changes(git: &Git, from_tree: &str, to_tree: &str) -> Result<Vec<TreeChange>> {
-    if from_tree == to_tree {
-        return Ok(Vec::new());
-    }
-    let output = git.run(&[
-        "diff-tree",
-        "-r",
-        "-z",
-        "--no-renames",
-        "--no-abbrev",
-        from_tree,
-        to_tree,
-    ])?;
-    let mut fields = output.split(|byte| *byte == 0).filter(|f| !f.is_empty());
-    let mut changes = Vec::new();
-    while let Some(meta) = fields.next() {
-        let path = fields.next().context("diff-tree record without a path")?;
-        let path = String::from_utf8(path.to_vec())
-            .map_err(|_| fail(Code::Unsupported, "non-UTF-8 paths are unsupported"))?;
-        let meta = String::from_utf8_lossy(meta).into_owned();
-        let mut parts = meta.trim_start_matches(':').split(' ');
-        let (old_mode, new_mode, old_oid, new_oid) = (
-            parts.next().context("diff-tree mode")?,
-            parts.next().context("diff-tree mode")?,
-            parts.next().context("diff-tree oid")?,
-            parts.next().context("diff-tree oid")?,
-        );
-        if old_mode == "160000" || new_mode == "160000" {
-            return Err(fail(
-                Code::Unsupported,
-                format!("{path}: submodules are unsupported"),
-            ));
-        }
-        let entry = |mode: &str, oid: &str| {
-            (!oid.bytes().all(|byte| byte == b'0')).then(|| (mode.to_owned(), oid.to_owned()))
-        };
-        changes.push(TreeChange {
-            path,
-            from: entry(old_mode, old_oid),
-            to: entry(new_mode, new_oid),
-        });
-    }
-    Ok(changes)
-}
-
-enum Work {
-    Absent,
-    File { bytes: Vec<u8>, exec: bool },
-    Link { target: Vec<u8> },
-}
-
-impl Work {
-    fn bytes(&self) -> Option<Vec<u8>> {
-        match self {
-            Self::Absent => None,
-            Self::File { bytes, .. } => Some(bytes.clone()),
-            Self::Link { target } => Some(target.clone()),
-        }
-    }
-    fn mode(&self) -> Option<String> {
-        match self {
-            Self::Absent => None,
-            Self::File { exec, .. } => Some(if *exec { "100755" } else { "100644" }.to_owned()),
-            Self::Link { .. } => Some("120000".to_owned()),
-        }
-    }
-    fn is_file(&self) -> bool {
-        matches!(self, Self::File { .. })
-    }
-    fn is_absent(&self) -> bool {
-        matches!(self, Self::Absent)
-    }
-}
-
-fn read_work(root: &std::path::Path, path: &str) -> Result<Work> {
-    let full = root.join(path);
-    let Ok(metadata) = fs::symlink_metadata(&full) else {
-        return Ok(Work::Absent);
-    };
-    if metadata.file_type().is_symlink() {
-        let target = fs::read_link(&full)?;
-        return Ok(Work::Link {
-            target: target.as_os_str().as_encoded_bytes().to_vec(),
-        });
-    }
-    if metadata.is_file() {
-        return Ok(Work::File {
-            bytes: fs::read(&full)?,
-            exec: metadata.permissions().mode() & 0o111 != 0,
-        });
-    }
-    // A directory (or special file) where a file is expected never matches anything.
-    Err(fail(
-        Code::Dirty,
-        format!("{path}: a directory or special file is in the way"),
-    ))
-}
-
-fn work_matches(work: &Work, hash: Option<&String>, entry: Option<&Entry>) -> bool {
-    match (work, entry) {
-        (Work::Absent, None) => true,
-        (Work::Absent, Some(_)) | (_, None) => false,
-        (Work::Link { .. }, Some((mode, oid))) => mode == "120000" && hash == Some(oid),
-        (Work::File { exec, .. }, Some((mode, oid))) => {
-            ((mode == "100644" && !exec) || (mode == "100755" && *exec)) && hash == Some(oid)
-        }
-    }
-}
-
-/// Moves the worktree from `from_tree` to `to_tree`: per path, a file equal to the old tree takes
-/// the new content, a file already equal to the new tree is kept, anything else is merged
-/// three-way. A real conflict (or an untracked collision) refuses with `dirty` before any change.
-/// Paths in `skip` get index changes only. Also returns the index rule changes for every path.
-pub(crate) fn carry(
-    git: &Git,
-    from_tree: &str,
-    to_tree: &str,
-    skip: &BTreeSet<String>,
-) -> Result<Carry> {
-    let changes = tree_changes(git, from_tree, to_tree)?;
-    let index = changes
-        .iter()
-        .map(|change| IndexChange {
-            path: change.path.clone(),
-            from: change.from.clone(),
-            to: change.to.clone(),
-        })
-        .collect();
-    let active: Vec<&TreeChange> = changes.iter().filter(|c| !skip.contains(&c.path)).collect();
-    let mut works = Vec::new();
-    for change in &active {
-        works.push(read_work(&git.root, &change.path)?);
-    }
-    let present: Vec<String> = active
-        .iter()
-        .zip(&works)
-        .filter(|(_, work)| !work.is_absent())
-        .map(|(change, _)| change.path.clone())
-        .collect();
-    let mut hashes = git.hash_worktree(&present)?.into_iter();
-    let mut hashed = Vec::new();
-    for work in &works {
-        hashed.push(if work.is_absent() {
-            None
-        } else {
-            hashes.next()
-        });
-    }
-
-    enum Action {
-        Write(Option<Entry>),
-        Merged(Vec<u8>, String),
-        Skip,
-    }
-    // On a case-insensitive filesystem a case-only rename adds a path that already "exists".
-    let ignorecase = git
-        .probe(&["config", "--bool", "--get", "core.ignorecase"])?
-        .is_some_and(|value| value == "true");
-    let removed_lower: BTreeSet<String> = active
-        .iter()
-        .filter(|change| change.to.is_none())
-        .map(|change| change.path.to_lowercase())
-        .collect();
-    let mut actions = Vec::new();
-    let mut conflicts = Vec::new();
-    for ((change, work), hash) in active.iter().zip(&works).zip(&hashed) {
-        let case_rename = ignorecase
-            && change.from.is_none()
-            && change.to.is_some()
-            && !work.is_absent()
-            && removed_lower.contains(&change.path.to_lowercase());
-        let action = if case_rename {
-            // The old name is deleted first (below), then the new name is written fresh.
-            Action::Write(change.to.clone())
-        } else if work_matches(work, hash.as_ref(), change.from.as_ref()) {
-            Action::Write(change.to.clone())
-        } else if work_matches(work, hash.as_ref(), change.to.as_ref()) {
-            Action::Skip
-        } else if let (Some(from), Some(to), true, Some(hash)) =
-            (&change.from, &change.to, work.is_file(), hash)
-            && regular(&from.0)
-            && regular(&to.0)
-        {
-            match git.merge_file(
-                &from.1,
-                hash,
-                &to.1,
-                ["current", "base", "incoming"],
-                Favor::None,
-                false,
-            ) {
-                Ok((bytes, 0)) => Action::Merged(bytes, to.0.clone()),
-                _ => {
-                    conflicts.push(change.path.clone());
-                    Action::Skip
-                }
-            }
-        } else {
-            conflicts.push(change.path.clone());
-            Action::Skip
-        };
-        actions.push(action);
-    }
-    if !conflicts.is_empty() {
-        let shown: Vec<String> = conflicts.iter().take(5).map(|p| escape_line(p)).collect();
-        let more = conflicts.len().saturating_sub(5);
-        return Err(fail_hint(
-            Code::Dirty,
-            format!(
-                "uncommitted changes in {}{} conflict with incoming changes; nothing was changed",
-                shown.join(", "),
-                if more > 0 {
-                    format!(" (+{more} more)")
-                } else {
-                    String::new()
-                }
-            ),
-            "commit or discard those edits (aisc commit, aisc discard), then retry",
-        ));
-    }
-    let oids: Vec<String> = actions
-        .iter()
-        .filter_map(|action| match action {
-            Action::Write(Some((_, oid))) => Some(oid.clone()),
-            _ => None,
-        })
-        .collect();
-    let mut blobs = git.read_blobs(&oids)?.into_iter();
-    let mut writes = Vec::new();
-    for ((change, work), action) in active.iter().zip(&works).zip(actions) {
-        match action {
-            Action::Skip => {}
-            Action::Write(Some((mode, _))) => writes.push(WorktreeWrite {
-                path: change.path.clone(),
-                before: work.bytes(),
-                before_mode: work.mode(),
-                after: blobs.next(),
-                mode,
-            }),
-            Action::Write(None) => writes.push(WorktreeWrite {
-                path: change.path.clone(),
-                before: work.bytes(),
-                before_mode: work.mode(),
-                after: None,
-                mode: change
-                    .from
-                    .as_ref()
-                    .map_or_else(|| "100644".to_owned(), |e| e.0.clone()),
-            }),
-            Action::Merged(bytes, mode) => writes.push(WorktreeWrite {
-                path: change.path.clone(),
-                before: work.bytes(),
-                before_mode: work.mode(),
-                after: Some(bytes),
-                mode,
-            }),
-        }
-    }
-    // Deletions first: a case-only rename must remove the old name before writing the new one.
-    writes.sort_by_key(|write| write.after.is_some());
-    Ok(Carry { writes, index })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -947,6 +665,7 @@ fn resume(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
 
 fn has_markers(bytes: &[u8]) -> bool {
     bytes.split(|byte| *byte == b'\n').any(|line| {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
         line.starts_with(b"<<<<<<< ") || line.starts_with(b">>>>>>> ") || line == b"======="
     })
 }
@@ -1379,7 +1098,8 @@ fn finish(
     }
     plan.refs.extend(dependents.clone());
 
-    let mut remove_after: Vec<String> = Vec::new();
+    // The pause ends with the reference transaction, whatever happens after it.
+    plan.remove_state = vec!["aisc/sync.json".to_owned()];
     if state.is_head {
         let skip: BTreeSet<String> = state
             .restore
@@ -1415,7 +1135,7 @@ fn finish(
                 mode: target.map_or_else(|| entry.mode.clone(), |(mode, _)| mode.clone()),
             });
         }
-        remove_after = state
+        plan.remove_files = state
             .restore
             .iter()
             .filter(|entry| entry.file != entry.path)
@@ -1443,24 +1163,17 @@ fn finish(
     let applied = match session.apply(&plan) {
         Ok(applied) => applied,
         Err(error) => {
-            // References already moved: the pause is over, whatever the state says.
+            // References already moved (apply removed the state and side files): unpin too.
             let partial = error
                 .downcast_ref::<super::HistoryError>()
                 .is_some_and(|e| e.message.starts_with("partially applied"));
             if partial {
-                let _ = fs::remove_file(state_path(git));
                 unpin(git);
             }
             return Err(error);
         }
     };
-    if state_path(git).exists() {
-        let _ = fs::remove_file(state_path(git));
-    }
     unpin(git);
-    for file in remove_after {
-        let _ = fs::remove_file(git.root.join(&file));
-    }
 
     let after = view::read(git, state.branch.as_deref(), 20, state.is_head)?;
     let mut result = format!(
@@ -1521,4 +1234,26 @@ fn finish(
         "log": render::log_json(&after, false),
     });
     Ok(Outcome::with_text(value, text))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_markers;
+
+    #[test]
+    fn markers_are_found_with_lf_and_crlf_line_endings() {
+        for newline in ["\n", "\r\n"] {
+            let lines = |parts: &[&str]| parts.join(newline).into_bytes();
+            assert!(has_markers(&lines(&["a", "=======", "b"])), "{newline:?}");
+            assert!(
+                has_markers(&lines(&["<<<<<<< ONTO", "x", ""])),
+                "{newline:?}"
+            );
+            assert!(
+                has_markers(&lines(&["x", ">>>>>>> 1a2b topic"])),
+                "{newline:?}"
+            );
+            assert!(!has_markers(&lines(&["a", "======== not a marker", "b"])));
+        }
+    }
 }
