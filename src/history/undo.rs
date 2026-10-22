@@ -16,21 +16,34 @@ pub(crate) fn run(spec: Option<&str>, quiet: bool) -> Result<Outcome> {
     check_current(&git, &session, &data)?;
     let plan = reverse_plan(&git, &op_oid, &data)?;
     let applied = session.apply(&plan)?;
-    let after = super::summary::after(&git, None, true)?;
-    let result = format!(
-        "undid {} ({}); op {}",
-        oplog::short(&op_oid),
-        data.verb,
-        applied.op
-    );
-    Ok(Outcome::with_text(
-        json!({"op": applied.op, "verb": "undo", "undid": oplog::short(&op_oid),
-            "log": render::log_json(&after, false)}),
-        if quiet {
-            result
+    let undid = oplog::short(&op_oid);
+    // Text names the undone op and the tips it restored: the rest of the state is what an
+    // earlier command already reported. A redo is `aisc undo` again, so the new op id is in
+    // JSON and `aisc oplog` only.
+    let result = format!("undid {} {undid}", data.verb);
+    if !super::summary::full() {
+        let tips = if quiet {
+            Some(Vec::new())
         } else {
-            super::summary::text(&after, &result)
-        },
+            super::summary::restored_tips(&git)
+        };
+        if let Some(tips) = tips {
+            let mut text = result;
+            for line in tips {
+                text.push('\n');
+                text.push_str(&line);
+            }
+            return Ok(Outcome::with_text(
+                json!({"op": applied.op, "verb": "undo", "undid": undid}),
+                text,
+            ));
+        }
+    }
+    let after = super::summary::after(&git, None, true)?;
+    Ok(Outcome::with_text(
+        json!({"op": applied.op, "verb": "undo", "undid": undid,
+            "log": render::log_json(&after, false)}),
+        super::summary::text(&after, &result),
     ))
 }
 

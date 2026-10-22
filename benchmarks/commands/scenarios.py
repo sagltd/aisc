@@ -311,7 +311,7 @@ def scenarios():
             squash_series, {"README.md": README_EDIT}, squash_series, {"README.md": README_EDIT},
             {"git": [Run(["git", "reflog", "-n", "5", "feature"]),
                      Run(lambda c: ["git", "reset", q, "--keep", git_reflog_before_rewrite(c)])],
-             "aisc": [Run(["aisc", "undo"])],
+             "aisc": [Run(["aisc", "undo", q])],
              "but": [Run(["but", "undo"])],
              "jj": [Run(["jj", "undo", jq])]},
             before={"git": [git_squash], "aisc": [aisc_squash], "but": but_squash, "jj": [jj_squash]},

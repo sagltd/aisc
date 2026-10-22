@@ -421,7 +421,7 @@ def main():
         "token_text": "output = stdout+stderr of each command; authored = '$ ' + command line (+ stdin), or path + content for an edit step; run paths scrubbed to <run>",
         "timing": "sum of per-command wall time (perf_counter around each subprocess); fixture copy, tool adoption (but setup/apply, jj git init) and grading excluded; warm filesystem",
         "modes": {"default": "no quiet flags anywhere",
-                  "quietest": "each tool's documented quiet flags: git -q, aisc -q (not on switch/undo/log, which have none), jj --quiet, but status --no-hint (but has no quiet flag on writes)"},
+                  "quietest": "each tool's documented quiet flags: git -q, aisc -q on writes and undo (log is an inspection command, unchanged), jj --quiet, but status --no-hint (but has no quiet flag on writes)"},
         "repetitions": arguments.repetitions, "warmup": arguments.warmup,
         "order": "(mode, tool) pairs rotate through every slot across repetitions and scenarios",
         "platform": platform.system() + " " + platform.machine(), "cpu_count": os.cpu_count(),

@@ -105,17 +105,24 @@ fn moved_branches_print_their_new_tip() {
     fixture.commit_all("add b");
     let squash = fixture.aisc(&["squash", "--into", "a and b", "add a", "add b"]);
     squash.ok();
+    assert!(
+        squash.stdout.lines().any(|line| line.starts_with("topic ")
+            && line.contains('→')
+            && line.ends_with(" a and b")),
+        "squash names the old and new tip: {}",
+        squash.stdout
+    );
     let undo = fixture.aisc(&["undo"]);
     undo.ok();
     let tip = fixture.git(&["rev-parse", "HEAD"]);
-    let line = format!("topic {}", &squash_tip(&squash.stdout));
-    assert!(
-        undo.stdout.lines().any(|text| text.starts_with(&line)
-            && text.contains(&tip[..7])
-            && text.ends_with(" add b")),
+    // The undone op, then the restored tip: nothing an earlier command already reported.
+    assert_eq!(
+        undo.stdout.lines().collect::<Vec<_>>()[1..],
+        [format!("topic {} add b", &tip[..7])],
         "undo names the restored tip: {}",
         undo.stdout
     );
+    assert!(undo.stdout.starts_with("undid squash "), "{}", undo.stdout);
     let switch = fixture.aisc(&["switch", "main"]);
     switch.ok();
     let main = fixture.git(&["rev-parse", "HEAD"]);
@@ -124,16 +131,6 @@ fn moved_branches_print_their_new_tip() {
         "switch names the tip it moved to: {}",
         switch.stdout
     );
-}
-
-/// The `old→new` source of the topic line: the squashed tip's 7-character id.
-fn squash_tip(output: &str) -> String {
-    output
-        .lines()
-        .find_map(|line| line.strip_prefix("topic "))
-        .and_then(|rest| rest.split('→').nth(1))
-        .map(|rest| rest.chars().take(7).collect())
-        .unwrap_or_else(|| panic!("no topic line: {output}"))
 }
 
 #[test]
