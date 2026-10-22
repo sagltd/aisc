@@ -1,0 +1,24 @@
+name: Main guard
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+jobs:
+  source-branch:
+    name: Source branch is dev
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require a dev to main pull request from this repository
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ] || [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+            echo "::error::main only accepts pull requests from the dev branch of $THIS_REPO (got '$HEAD_REF' from '$HEAD_REPO'). Open feature PRs against dev."
+            exit 1
+          fi
