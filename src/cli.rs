@@ -179,7 +179,7 @@ pub(crate) struct Commit {
     #[arg(short = 'b', long = "new-branch", value_name = "NEW")]
     pub new_branch: Option<String>,
     /// With -b NEW: build NEW on BASE instead, without switching (a parallel branch). HEAD stays;
-    /// the committed changes leave the worktree and index unless --keep
+    /// the committed changes leave the worktree and index unless --keep. Runs no Git hooks (D3), unlike git switch + commit
     #[arg(
         long,
         value_name = "BASE",

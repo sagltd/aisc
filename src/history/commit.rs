@@ -144,6 +144,16 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     let git = Git::from_repo(&repo);
     if let Some(name) = &args.new_branch {
         git.valid_branch_name(name)?;
+        if let Some(existing) = conflicting_branch(&git, name)? {
+            return Err(fail_hint(
+                Code::State,
+                format!("branch '{name}' conflicts with existing branch {existing}"),
+                "a branch cannot be both a name and a directory of names; pick another name",
+            ));
+        }
+        if git.ref_oid(&format!("refs/tags/{name}"))?.is_some() {
+            eprintln!("warning: refname '{name}' is ambiguous (a tag of that name exists)");
+        }
         if git.ref_oid(&format!("refs/heads/{name}"))?.is_some() && !args.existing {
             let hint = if args.onto.is_some() {
                 format!("pick another name, or add --existing --onto {name} to commit on top of it")
@@ -425,6 +435,45 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
         "log": render::log_json(&after, false),
     });
     Ok(Outcome::with_text(value, text))
+}
+
+/// An existing branch that `refs/heads/NAME` cannot live beside: `a` for `a/b`, or `a/b` for
+/// `a` (Git keeps refs as paths, so a name cannot also be a directory of names).
+fn conflicting_branch(git: &Git, name: &str) -> Result<Option<String>> {
+    let parts: Vec<&str> = name.split('/').collect();
+    for end in 1..parts.len() {
+        let parent = format!("refs/heads/{}", parts[..end].join("/"));
+        if git.ref_oid(&parent)?.is_some() {
+            return Ok(Some(parent));
+        }
+    }
+    let prefix = format!("refs/heads/{name}/");
+    let common = git.common_dir()?;
+    if !common.join("reftable").exists() {
+        // Loose refs below refs/heads/NAME/, then packed ones; read in process.
+        let mut stack = vec![common.join("refs/heads").join(name)];
+        while let Some(directory) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&directory) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if let Ok(relative) = path.strip_prefix(common.join("refs/heads")) {
+                    return Ok(Some(format!("refs/heads/{}", relative.to_string_lossy())));
+                }
+            }
+        }
+        let packed = std::fs::read_to_string(common.join("packed-refs")).unwrap_or_default();
+        return Ok(packed
+            .lines()
+            .filter_map(|line| line.split_once(' ').map(|(_, name)| name))
+            .find(|reference| reference.starts_with(&prefix))
+            .map(str::to_owned));
+    }
+    let found = git.line(&["for-each-ref", "--count=1", "--format=%(refname)", &prefix])?;
+    Ok((!found.is_empty()).then_some(found))
 }
 
 fn first_line(message: &str) -> &str {

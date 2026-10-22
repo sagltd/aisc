@@ -699,9 +699,10 @@ impl Git {
             .collect())
     }
 
-    /// `git check-ref-format refs/heads/NAME`, in process (the rules are Git's, see the store).
+    /// `git check-ref-format --branch NAME`, in process (the rules are Git's, see the store): a
+    /// valid `refs/heads/NAME` that is not `HEAD` and does not start with `-`.
     pub fn valid_branch_name(&self, name: &str) -> Result<()> {
-        if name.is_empty() || name.starts_with('-') {
+        if name.is_empty() || name.starts_with('-') || name == "HEAD" {
             return Err(fail(Code::Usage, format!("invalid branch name {name:?}")));
         }
         if store::check_ref_format(&format!("refs/heads/{name}"), false) {

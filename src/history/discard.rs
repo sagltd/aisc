@@ -1,7 +1,7 @@
 //! `aisc discard`: reverts selected uncommitted changes. The old bytes are kept in the op so that
 //! `aisc undo` restores them exactly.
-use super::amend::{finish, hash_as_staged, hunks_in, require_checked_out};
-use super::apply::{Direction, join_lines, split_lines, transplant, unsplice};
+use super::amend::{Recorded, Way, finish, follow, hash_as_staged, hunks_in, require_checked_out};
+use super::apply::{join_lines, split_lines, unsplice};
 use super::model::{Block, ChangeSet, FileChange, Kind};
 use super::plumbing::{Entry, Git};
 use super::rewrite::{IndexChange, Plan, Session, WorktreeWrite, stale};
@@ -470,6 +470,32 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
     )
 }
 
+/// How blob `to` differs from blob `from` (both at `path`), as Git's own diff.
+fn blob_blocks(
+    git: &Git,
+    path: &str,
+    (from_mode, from): (&str, &str),
+    (to_mode, to): (&str, &str),
+) -> Result<Vec<Block>> {
+    let empty = git.empty_tree()?;
+    let tree = |mode: &str, oid: &str| {
+        git.tree_with(
+            &empty,
+            &[super::plumbing::TreeEdit {
+                path: path.to_owned(),
+                entry: Some((mode.to_owned(), oid.to_owned())),
+            }],
+        )
+    };
+    let (old, new) = (tree(from_mode, from)?, tree(to_mode, to)?);
+    let patch = git.tree_patch(&old, &new, &[path.to_owned()])?;
+    Ok(super::diff::parse_patch(&patch)?
+        .into_iter()
+        .find(|file| file.path == path)
+        .map(|file| file.blocks)
+        .unwrap_or_default())
+}
+
 /// Reverts some blocks of a modified file; returns the worktree write and the index change.
 fn partial(
     git: &Git,
@@ -517,27 +543,60 @@ fn partial(
         }
         Some((_, oid)) if oid == head_oid => None,
         Some((mode, oid)) => {
-            // Staged differently: take the reverted hunks out of the staged copy too, or refuse.
-            let staged = git
-                .read_blobs(std::slice::from_ref(oid))?
-                .pop()
-                .unwrap_or_default();
-            let placed =
-                transplant(&split_lines(&staged), &chosen, Direction::Reverse).map_err(|_| {
-                    fail_hint(
-                        Code::Dirty,
-                        format!(
-                            "{} has staged changes that overlap the discarded hunks",
-                            file.path
-                        ),
-                        format!("unstage it first: git restore --staged {}", file.path),
-                    )
-                })?;
-            Some(IndexChange {
-                path: file.path.clone(),
-                from: Some((mode.clone(), oid.clone())),
-                to: Some((mode.clone(), git.write_blob(&join_lines(&placed), true)?)),
-            })
+            // Staged differently (`git add -p`): a reverted hunk the staged copy also holds
+            // leaves it too; one it does not hold leaves the index alone; any other staged
+            // change to the same lines is a real overlap.
+            let overlap = || {
+                fail_hint(
+                    Code::Dirty,
+                    format!(
+                        "{} has staged changes that overlap the discarded hunks",
+                        file.path
+                    ),
+                    format!("unstage it first: git restore --staged {}", file.path),
+                )
+            };
+            let head_mode = head.map_or(mode, |(head_mode, _)| head_mode);
+            let staged_blocks = blob_blocks(git, &file.path, (head_mode, head_oid), (mode, oid))?;
+            let steps: Recorded = vec![
+                BTreeMap::new(),
+                BTreeMap::from([(file.path.clone(), Some(staged_blocks.clone()))]),
+            ];
+            let mut revert = Vec::new();
+            for block in &chosen {
+                let untouched = follow(
+                    &steps,
+                    &file.path,
+                    [1],
+                    Way::Forward,
+                    block.old_pos,
+                    block.removed.len(),
+                )
+                .is_ok();
+                if untouched {
+                    continue;
+                }
+                let same = staged_blocks.iter().find(|staged| {
+                    staged.old_pos == block.old_pos
+                        && staged.removed == block.removed
+                        && staged.added == block.added
+                });
+                revert.push(same.ok_or_else(overlap)?);
+            }
+            if revert.is_empty() {
+                None
+            } else {
+                let staged = git
+                    .read_blobs(std::slice::from_ref(oid))?
+                    .pop()
+                    .unwrap_or_default();
+                let placed = unsplice(&split_lines(&staged), &revert).map_err(|_| overlap())?;
+                Some(IndexChange {
+                    path: file.path.clone(),
+                    from: Some((mode.clone(), oid.clone())),
+                    to: Some((mode.clone(), git.write_blob(&join_lines(&placed), true)?)),
+                })
+            }
         }
         None => None,
     };

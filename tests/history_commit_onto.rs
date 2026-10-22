@@ -359,3 +359,103 @@ fn onto_needs_a_new_branch() {
     assert_eq!(unknown.code, 1, "{} {}", unknown.stdout, unknown.stderr);
     assert_eq!(before, fixture.snapshot());
 }
+
+/// `l1`..`l30` with `edits` (1-based line, text) applied.
+fn numbered(edits: &[(usize, &str)]) -> String {
+    (1..=30)
+        .map(|n| {
+            edits
+                .iter()
+                .find(|(line, _)| *line == n)
+                .map_or_else(|| format!("l{n}\n"), |(_, text)| format!("{text}\n"))
+        })
+        .collect()
+}
+
+#[test]
+fn a_staged_hunk_elsewhere_in_the_file_stays_staged() {
+    // As after `git add -p`: line 3 staged, line 25 only in the worktree.
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(3, "STAGED3")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(3, "STAGED3"), (25, "WT25")]));
+    let run = fixture.aisc(&[
+        "commit", "-b", "side", "--onto", "main", "-m", "wt25", "f:25",
+    ]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        fixture.tree_blob("side", "f").unwrap(),
+        numbered(&[(25, "WT25")])
+    );
+    assert_eq!(fixture.read("f"), numbered(&[(3, "STAGED3")]));
+    assert_eq!(
+        fixture.git(&["show", ":f"]) + "\n",
+        numbered(&[(3, "STAGED3")])
+    );
+}
+
+#[test]
+fn head_and_option_like_names_are_refused() {
+    let fixture = parallel();
+    let before = fixture.snapshot();
+    for name in ["HEAD", "-x"] {
+        let run = fixture.aisc(&[
+            "commit",
+            "-b",
+            name,
+            "--onto",
+            "main",
+            "-m",
+            "t",
+            "docs/guide.md",
+        ]);
+        assert_ne!(run.code, 0, "{name}: {} {}", run.stdout, run.stderr);
+        assert_eq!(before, fixture.snapshot(), "{name}");
+    }
+}
+
+#[test]
+fn a_name_that_conflicts_with_an_existing_branch_says_so() {
+    let fixture = parallel();
+    fixture.git(&["branch", "a/b", "main"]);
+    fixture.git(&["branch", "c", "main"]);
+    let before = fixture.snapshot();
+    for (name, existing) in [("a", "refs/heads/a/b"), ("c/d", "refs/heads/c")] {
+        let run = fixture.aisc(&[
+            "commit",
+            "-b",
+            name,
+            "--onto",
+            "main",
+            "-m",
+            "t",
+            "docs/guide.md",
+        ]);
+        assert_eq!(run.code, 1, "{name}: {} {}", run.stdout, run.stderr);
+        assert!(
+            run.stderr.contains("conflicts with") && run.stderr.contains(existing),
+            "{name}: {}",
+            run.stderr
+        );
+        assert_eq!(before, fixture.snapshot(), "{name}");
+    }
+}
+
+#[test]
+fn a_branch_named_like_a_tag_is_created_with_a_warning() {
+    let fixture = parallel();
+    fixture.git(&["tag", "v1", "main"]);
+    let run = fixture.aisc(&[
+        "commit",
+        "-b",
+        "v1",
+        "--onto",
+        "main",
+        "-m",
+        "update guide",
+        "docs/guide.md",
+    ]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("ambiguous"), "{}", run.stderr);
+    assert_eq!(fixture.subjects("main..refs/heads/v1"), ["update guide"]);
+}
