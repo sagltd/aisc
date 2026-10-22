@@ -432,6 +432,22 @@ fn system_config_path(root: &Path, common: &Path) -> Option<PathBuf> {
     if let Some(explicit) = std::env::var_os("GIT_CONFIG_SYSTEM") {
         return Some(PathBuf::from(explicit));
     }
+    git_var_path(root, common, "GIT_CONFIG_SYSTEM", "git-system-config")
+}
+
+/// The system attributes file this Git reads (`git var GIT_ATTR_SYSTEM`), remembered like the
+/// system configuration's location; `None` when unknown.
+pub(crate) fn system_attributes_path(root: &Path) -> Option<PathBuf> {
+    let git_dir = git_dir_of(root)?;
+    let common = match std::fs::read_to_string(git_dir.join("commondir")) {
+        Ok(text) => git_dir.join(text.trim_end_matches(['\n', '\r'])),
+        Err(_) => git_dir,
+    };
+    git_var_path(root, &common, "GIT_ATTR_SYSTEM", "git-system-attributes")
+}
+
+/// A path `git var NAME` prints, cached per Git executable in `$GIT_COMMON_DIR/aisc/FILE`.
+fn git_var_path(root: &Path, common: &Path, name: &str, file: &str) -> Option<PathBuf> {
     use std::os::unix::fs::MetadataExt;
     let program = program();
     let resolved = if Path::new(program).is_absolute() {
@@ -448,15 +464,14 @@ fn system_config_path(root: &Path, common: &Path) -> Option<PathBuf> {
         metadata.ctime_nsec(),
         metadata.ino()
     );
-    let cache = common.join("aisc").join("git-system-config");
+    let cache = common.join("aisc").join(file);
     if let Ok(text) = std::fs::read_to_string(&cache)
         && let Some((seen, path)) = text.split_once('\n')
         && seen == identity
     {
         return Some(PathBuf::from(path.trim_end_matches('\n')));
     }
-    let output =
-        crate::git::run_git_raw(root, &["var", "GIT_CONFIG_SYSTEM"], &[], None, 1 << 16).ok()?;
+    let output = crate::git::run_git_raw(root, &["var", name], &[], None, 1 << 16).ok()?;
     if !output.success() {
         return None;
     }
@@ -468,7 +483,7 @@ fn system_config_path(root: &Path, common: &Path) -> Option<PathBuf> {
     let _ = std::fs::create_dir_all(common.join("aisc"));
     let staged = common
         .join("aisc")
-        .join(format!("git-system-config.{}", std::process::id()));
+        .join(format!("{file}.{}", std::process::id()));
     if std::fs::write(&staged, format!("{identity}\n{path}\n")).is_ok() {
         let _ = std::fs::rename(&staged, &cache);
     }
@@ -776,7 +791,7 @@ pub(crate) fn parse_date(value: &str) -> Option<(i64, i32)> {
         && !zone.contains(':')
     {
         let seconds: i64 = seconds.parse().ok()?;
-        return Some((seconds, offset(zone)?));
+        return within_range(seconds).then_some((seconds, offset(zone)?));
     }
     // ISO 8601.
     let bytes = value.as_bytes();
@@ -812,7 +827,14 @@ pub(crate) fn parse_date(value: &str) -> Option<(i64, i32)> {
     };
     let days = days_from_civil(year, month, day);
     let local = days * 86_400 + hour * 3_600 + minute * 60 + second;
-    Some((local - i64::from(zone) * 60, zone))
+    let seconds = local - i64::from(zone) * 60;
+    within_range(seconds).then_some((seconds, zone))
+}
+
+/// Timestamps Git certainly accepts: after the epoch (Git refuses dates before it) and before
+/// 2100. Anything else is left to Git.
+fn within_range(seconds: i64) -> bool {
+    (1..4_102_444_800).contains(&seconds)
 }
 
 fn days_in_month(year: i64, month: i64) -> i64 {
@@ -1123,6 +1145,9 @@ mod tests {
             "2026-01-01",
             "1700000000",
             "2026-13-01T00:00:00Z",
+            // Before the epoch once the offset applies: Git refuses it.
+            "1970-01-01T00:00:00+01:00",
+            "@0 +0000",
         ] {
             assert_eq!(parse_date(date), None, "{date}");
         }

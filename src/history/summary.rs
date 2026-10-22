@@ -88,6 +88,7 @@ pub(crate) fn after(git: &Git, branch: Option<&str>, with_changes: bool) -> Resu
             sync_paused: None,
             locals: Vec::new(),
             created: Default::default(),
+            moves: Vec::new(),
         });
     }
     if FULL.load(Ordering::SeqCst) {
@@ -98,10 +99,62 @@ pub(crate) fn after(git: &Git, branch: Option<&str>, with_changes: bool) -> Resu
         .expect("applied plans")
         .get(&git.dir)
         .cloned();
-    match light(git, branch, with_changes, plan.as_ref()) {
-        Ok(Some(view)) => Ok(view),
-        _ => view::read(git, branch, 20, with_changes),
+    let mut view = match light(git, branch, with_changes, plan.as_ref()) {
+        Ok(Some(view)) => view,
+        _ => view::read(git, branch, 20, with_changes)?,
+    };
+    view.moves = plan
+        .as_ref()
+        .map(|plan| moves(git, plan))
+        .unwrap_or_default();
+    Ok(view)
+}
+
+/// A branch tip an operation moved, or the branch HEAD switched to.
+#[derive(Clone, Debug)]
+pub(crate) struct Move {
+    pub name: String,
+    pub old: Option<String>,
+    pub new: Option<String>,
+    pub subject: Option<String>,
+    /// HEAD now names this branch; its tip did not move.
+    pub switched: bool,
+}
+
+/// Every branch tip the plan moved, and the branch HEAD now names when only HEAD moved.
+fn moves(git: &Git, plan: &Plan) -> Vec<Move> {
+    let subject = |oid: &Option<String>| -> Option<String> {
+        let oid = oid.as_ref()?;
+        git.fast(|store| store.commit(oid))
+            .and_then(|commit| commit.subject())
+    };
+    let mut moved: Vec<Move> = plan
+        .refs
+        .iter()
+        .filter(|movement| movement.name.starts_with("refs/heads/") || movement.name == "HEAD")
+        .map(|movement| Move {
+            name: movement.name.trim_start_matches("refs/heads/").to_owned(),
+            old: movement.old.clone(),
+            new: movement.new.clone(),
+            subject: subject(&movement.new),
+            switched: false,
+        })
+        .collect();
+    if let Some(head) = &plan.head
+        && let Some(name) = head.to.strip_prefix("refs/heads/")
+        && !moved.iter().any(|moved| moved.name == name)
+        && let Ok(Some(tip)) = git.ref_oid(&head.to)
+    {
+        let new = Some(tip);
+        moved.push(Move {
+            name: name.to_owned(),
+            old: None,
+            subject: subject(&new),
+            new,
+            switched: true,
+        });
     }
+    moved
 }
 
 /// The text printed after a mutation: `result`, then the short summary (or the full compact log
@@ -111,10 +164,41 @@ pub(crate) fn text(after: &View, result: &str) -> String {
         return format!("{result}\n{}", render::compact_text(after));
     }
     let mut out = String::from(result);
+    // Each moved tip with full-enough ids to chain the next command.
+    let seven = |oid: &str| oid.chars().take(7).collect::<String>();
+    let mut tips = Vec::new();
+    for moved in &after.moves {
+        let name = escape_line(&moved.name);
+        if result.contains(&format!("moved branch {}:", moved.name)) {
+            continue;
+        }
+        let line = match &moved.new {
+            Some(new) => {
+                tips.push(new.clone());
+                let tip = match (&moved.old, moved.switched) {
+                    (_, true) => seven(new),
+                    (Some(old), false) => format!("{}→{}", seven(old), seven(new)),
+                    (None, false) => format!("new→{}", seven(new)),
+                };
+                match &moved.subject {
+                    Some(subject) => format!("{name} {tip} {}", escape_line(subject)),
+                    None => format!("{name} {tip}"),
+                }
+            }
+            None => format!(
+                "{name} {}→deleted",
+                moved.old.as_deref().map(seven).unwrap_or_default()
+            ),
+        };
+        let _ = write!(out, "\n{line}");
+    }
     let _ = write!(out, "\n{}", render::header_line(after));
     for commit in &after.commits {
-        // Only commits this operation wrote, unless the result line already names them.
-        if after.created.contains(&commit.oid) && !result.contains(&commit.short) {
+        // Only commits this operation wrote, unless a line above already names them.
+        if after.created.contains(&commit.oid)
+            && !result.contains(&commit.short)
+            && !tips.contains(&commit.oid)
+        {
             let _ = write!(out, "\n{} {}", commit.short, escape_line(&commit.subject));
         }
     }
@@ -265,6 +349,7 @@ fn light(
         sync_paused,
         locals: refs.locals,
         created,
+        moves: Vec::new(),
     }))
 }
 
@@ -542,7 +627,7 @@ fn derive_changes(git: &Git, new_head: &str, plan: &Plan) -> Result<Option<Chang
             (Side::Absent, None, None) => None,
             (Side::Absent, Some(_), Some(_)) => Some(modified_stub(path)),
             (Side::Present(mode, oid), Some((new_mode, new_oid)), Some(_)) => {
-                if mode == new_mode && oid == new_oid {
+                if mode == new_mode && oid == new_oid && (!raw || git.no_conversion(path)) {
                     None
                 } else if raw {
                     return Ok(None); // raw bytes differ: filters could still make them equal

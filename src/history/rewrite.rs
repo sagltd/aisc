@@ -1685,12 +1685,15 @@ pub(crate) fn carry(
         }
         works.push(read_work(&git.root, &change.path)?);
     }
-    // A file whose bytes are exactly one side's blob needs no `git hash-object`: those bytes are
-    // already in history, so the comparison below cannot lose anything Git would have kept.
+    // A file whose bytes are exactly one side's blob needs no `git hash-object` when Git stores
+    // its bytes unchanged (no filter or end-of-line conversion applies to it).
     let known: Vec<Option<String>> = active
         .iter()
         .zip(&works)
         .map(|(change, work)| {
+            if !git.no_conversion(&change.path) {
+                return None;
+            }
             let oid = work.bytes().and_then(|bytes| git.blob_id(&bytes).ok())?;
             [&change.from, &change.to]
                 .into_iter()

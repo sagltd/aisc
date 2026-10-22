@@ -129,14 +129,50 @@ pub(crate) fn discover(cwd: &Path) -> Option<(PathBuf, PathBuf)> {
     for line in config.lines() {
         let line = line.trim().to_ascii_lowercase();
         let key = line.split(['=', ' ', '\t']).next().unwrap_or_default();
-        if line.starts_with("[include")
-            || key == "worktree"
-            || key == "bare" && line.contains("true")
-        {
+        if line.starts_with("[include") || key == "worktree" {
             return None;
         }
     }
+    if core_bare(&config)? {
+        return None;
+    }
     Some((root, git_dir))
+}
+
+/// `core.bare` from a repository config file with Git's boolean rules (`yes`/`on`/`1`/`true`,
+/// any case; a key without a value is true). `None` when a value cannot be read exactly.
+fn core_bare(config: &str) -> Option<bool> {
+    let mut section = String::new();
+    let mut bare = false;
+    for raw in config.lines() {
+        let line = raw.trim();
+        if let Some(rest) = line.strip_prefix('[') {
+            section = rest
+                .split([']', ' ', '\t', '"'])
+                .next()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            continue;
+        }
+        let (key, value) = match line.split_once('=') {
+            Some((key, value)) => (key.trim(), Some(value)),
+            None => (line, None),
+        };
+        if section != "core" || !key.eq_ignore_ascii_case("bare") {
+            continue;
+        }
+        bare = match value {
+            None => true,
+            Some(value) => {
+                let value = value.split(['#', ';']).next().unwrap_or_default().trim();
+                if value.contains(['"', '\\']) {
+                    return None;
+                }
+                crate::runner::parse_bool(value)?
+            }
+        };
+    }
+    Some(bare)
 }
 
 fn common_dir_of(git_dir: &Path) -> Result<PathBuf> {
@@ -464,7 +500,13 @@ impl Store {
         let mut candidates = Vec::new();
         if spec == "HEAD" || spec.starts_with("refs/") {
             candidates.push(spec.to_owned());
-        } else if self.common_dir.join(spec).exists() || self.refs.git_dir().join(spec).exists() {
+        } else if spec.ends_with("HEAD")
+            || spec.starts_with("main-worktree/")
+            || spec.starts_with("worktrees/")
+            || self.common_dir.join(spec).exists()
+            || self.refs.git_dir().join(spec).exists()
+        {
+            // Git's first rule (a name under $GIT_DIR, pseudo-refs, other worktrees' refs).
             return Ok(None);
         }
         for pattern in [
@@ -541,12 +583,13 @@ impl Store {
                 let reference = reference.map_err(|error| anyhow::anyhow!("{error}"))?;
                 let name = reference.name.as_bstr().to_string();
                 match reference.target {
+                    // Like for-each-ref with this format: a ref to a missing object is still
+                    // listed (no object is read), a symbolic ref that dangles is not.
                     gix_ref::Target::Object(oid) => {
-                        found.push((name, oid.to_string(), String::new()))
+                        found.push((name, oid.to_string(), String::new()));
                     }
                     gix_ref::Target::Symbolic(target) => {
                         let target = target.as_bstr().to_string();
-                        // for-each-ref skips symbolic refs that dangle.
                         if let Some(oid) = self.resolve_ref(&target)? {
                             found.push((name, oid, target));
                         }
@@ -570,13 +613,9 @@ impl Store {
             linked.sort();
             heads.extend(linked);
         }
-        let bare = std::fs::read_to_string(self.common_dir.join("config"))
-            .unwrap_or_default()
-            .lines()
-            .any(|line| {
-                let line = line.trim().to_ascii_lowercase().replace(' ', "");
-                line == "bare=true"
-            });
+        let bare =
+            core_bare(&std::fs::read_to_string(self.common_dir.join("config")).unwrap_or_default())
+                .context("core.bare is not a plain boolean")?;
         let mut branches = Vec::new();
         for (index, head) in heads.iter().enumerate() {
             if index == 0 && bare {
@@ -1017,5 +1056,41 @@ mod tests {
             open(&root, &dir).is_some(),
             "and it comes back once they are gone"
         );
+    }
+
+    #[test]
+    fn bare_settings_use_git_booleans() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(directory.path()).unwrap();
+        let git = |args: &[&str]| crate::git::run_git(&root, args, None).unwrap();
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.name", "T"]);
+        git(&["config", "user.email", "t@example.invalid"]);
+        std::fs::write(root.join("a"), "a\n").unwrap();
+        git(&["add", "a"]);
+        git(&["commit", "-qm", "one"]);
+        let other = root.join("wt");
+        git(&[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "side",
+            other.to_str().unwrap(),
+        ]);
+        let dir = root.join(".git");
+        for value in ["YES", "on", "1", "true"] {
+            git(&["config", "core.bare", value]);
+            assert!(discover(&root).is_none(), "bare = {value}: Git decides");
+            let ours = open(&root, &dir).unwrap().checked_out().unwrap();
+            let listed = git(&["worktree", "list", "--porcelain"]);
+            let theirs: Vec<String> = String::from_utf8(listed)
+                .unwrap()
+                .lines()
+                .filter_map(|line| line.strip_prefix("branch "))
+                .map(str::to_owned)
+                .collect();
+            assert_eq!(ours, theirs, "bare = {value}");
+        }
     }
 }

@@ -58,6 +58,8 @@ pub(crate) struct View {
     pub locals: Vec<BranchRef>,
     /// Commits this process wrote (the post-mutation summary lists those in the range).
     pub created: std::collections::HashSet<String>,
+    /// Branch tips the operation moved (printed after a mutation).
+    pub moves: Vec<super::summary::Move>,
 }
 
 impl View {
@@ -504,5 +506,6 @@ pub(crate) fn read(
         sync_paused,
         locals: refs.locals,
         created: super::plumbing::created(&git.dir),
+        moves: Vec::new(),
     })
 }

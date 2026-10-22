@@ -558,6 +558,62 @@ impl Git {
         })
     }
 
+    /// Whether Git stores the worktree bytes of `path` unchanged: no `core.autocrlf` and no
+    /// attributes file with any rule (repository, `info/attributes`, global, system), so no clean
+    /// filter, end-of-line or encoding conversion can apply. Only then may raw bytes stand in for
+    /// Git's filtered hash.
+    pub fn no_conversion(&self, path: &str) -> bool {
+        if self.fast(|_| Ok(())).is_none() {
+            return false;
+        }
+        let Ok(config) = crate::runner::config(&self.root) else {
+            return false;
+        };
+        let autocrlf_off = match config.get("core.autocrlf") {
+            None => true,
+            Some(None) => false,
+            Some(Some(value)) => crate::runner::parse_bool(value) == Some(false),
+        };
+        if !autocrlf_off || config.get("core.attributesfile").is_some() {
+            return false;
+        }
+        let rules = |file: &Path| -> bool {
+            match std::fs::read(file) {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).lines().any(|line| {
+                    let line = line.trim();
+                    !line.is_empty() && !line.starts_with('#')
+                }),
+                Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+            }
+        };
+        let mut files = vec![self.root.join(".gitattributes")];
+        let mut directory = PathBuf::new();
+        let components: Vec<&str> = path.split('/').collect();
+        for component in &components[..components.len().saturating_sub(1)] {
+            directory.push(component);
+            files.push(self.root.join(&directory).join(".gitattributes"));
+        }
+        let Ok(common) = self.common_dir() else {
+            return false;
+        };
+        files.push(common.join("info").join("attributes"));
+        match std::env::var_os("XDG_CONFIG_HOME").filter(|value| !value.is_empty()) {
+            Some(xdg) => files.push(PathBuf::from(xdg).join("git").join("attributes")),
+            None => {
+                if let Some(home) = std::env::var_os("HOME") {
+                    files.push(PathBuf::from(home).join(".config/git/attributes"));
+                }
+            }
+        }
+        if std::env::var_os("GIT_ATTR_NOSYSTEM").is_none() {
+            match crate::runner::system_attributes_path(&self.root) {
+                Some(system) => files.push(system),
+                None => return false,
+            }
+        }
+        !files.iter().any(|file| rules(file))
+    }
+
     /// `symbolic-ref -q HEAD`: the branch HEAD names, even an unborn one (`None`: detached).
     pub fn head_symbolic(&self) -> Result<Option<String>> {
         if let Some((symbolic, _)) = self.fast(|store| store.head()) {
@@ -762,8 +818,18 @@ impl Git {
     }
 
     /// The blob id of `bytes` without storing anything (`hash-object --stdin --no-filters`).
+    /// In process only where the fast path reads this repository (SHA-1 storage); otherwise
+    /// Git hashes it with the repository's own object format.
     pub fn blob_id(&self, bytes: &[u8]) -> Result<String> {
-        store::hash_object(store::Kind::Blob, bytes)
+        if let Some(oid) = self.fast(|_| store::hash_object(store::Kind::Blob, bytes)) {
+            return Ok(oid);
+        }
+        let output = self.run_with(
+            &["hash-object", "--stdin", "--no-filters"],
+            &[],
+            Some(bytes.to_vec()),
+        )?;
+        Ok(text(&output)?.trim().to_owned())
     }
 
     /// Stores blob content taken from the worktree (whole files or spliced hunks) through
@@ -884,7 +950,9 @@ impl Git {
         std::fs::create_dir_all(&directory)?;
         let sequence = COUNTER.fetch_add(1, Ordering::SeqCst);
         let index = TempIndex(directory.join(format!("index-{}-{sequence}", std::process::id())));
-        if entries.iter().all(|(path, _, _)| safe_path(path))
+        // The index aisc writes uses SHA-1 ids and checksum: only where the fast path applies.
+        if self.fast(|_| Ok(())).is_some()
+            && entries.iter().all(|(path, _, _)| safe_path(path))
             && let Ok(bytes) = store::write_index(entries)
         {
             std::fs::write(&index.0, bytes)?;
@@ -1624,6 +1692,10 @@ mod tests {
             "origin/main",
             "HEAD",
             "nope",
+            // Git's first rule: names under $GIT_DIR, including per-worktree HEADs.
+            "main-worktree/HEAD",
+            "worktrees/other/HEAD",
+            "ORIG_HEAD",
             &commits[0],
         ] {
             let argument = format!("{spec}^{{commit}}");
@@ -1672,6 +1744,12 @@ mod tests {
                 assert_eq!(bytes, git.run(&["cat-file", "blob", blob]).unwrap());
             }
         }
+        // A ref to a missing object: listed exactly as for-each-ref lists it.
+        std::fs::write(
+            git.dir.join("refs/heads/broken"),
+            "1234567890123456789012345678901234567890\n",
+        )
+        .unwrap();
         let listed = git
             .fast(|store| store.list_refs(&["refs/heads/", "refs/remotes/"]))
             .unwrap();
