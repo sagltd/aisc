@@ -1,209 +1,245 @@
-<!-- CLAIMS: fill only from measured results -->
-<!-- Placeholders: each ⏳ cell has a BENCH comment; replace both together. -->
 <div align="center">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-  <img src="assets/logo.svg" alt="AISC" width="420">
+  <img src="assets/logo.svg" alt="AISC" width="400">
 </picture>
 
-**Git-backed source control for coding agents.**
-One call per history edit. Compact output. Your work stays safe.
+### Source control built for coding agents
 
+One command per history edit · compact output · every change undoable · Git underneath
+
+[![CI](https://github.com/sagltd/aisc/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/sagltd/aisc/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust 1.91.1+](https://img.shields.io/badge/rust-1.91.1%2B-orange.svg)](Cargo.toml)
-[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#safety-model)
-[![Git 2.43+](https://img.shields.io/badge/git-2.43%2B-f05032.svg)](#safety-model)
+[![Rust 1.91+](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](Cargo.toml)
+[![Git 2.43+](https://img.shields.io/badge/git-2.43%2B-f05032.svg)](#safety)
+[![macOS · Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-lightgrey.svg)](#safety)
 
-[Why](#why-aisc) · [Before/after](#before--after) · [Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [Commands](#commands) · [Safety](#safety-model) · [Disk](#disk-efficiency)
+[Benchmarks](#benchmarks) · [Quickstart](#quickstart) · [Commands](#commands) · [Safety](#safety) · [Disk](#disk) · [Agent skill](#agent-skill)
 
 </div>
 
+---
+
+## At a glance
+
+Ten scripted version-control tasks, all four tools in the same run, every end state verified ([method](#benchmarks)):
+
+| | **AISC** | GitButler | Git | Jujutsu |
+| --- | ---: | ---: | ---: | ---: |
+| Commands an agent runs | **12** | 22 | 28 | 21 |
+| Output the agent reads | **1.7 KB** | 5.9 KB | 3.8 KB | 3.7 KB |
+| Transcript tokens (estimate) | **575** | 1,639 | 1,261 | 1,307 |
+| Wall time, all ten tasks | **733 ms** | 1,579 ms | 1,555 ms | 1,415 ms |
+| Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
+
+Default output, no quiet flags. Tokens are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
+
 ## Why AISC
 
-- **One call per history edit.** Amend, split, squash, reorder or sync is a single command, not a rebase script.
-- **Compact output.** Short ids, one line per commit, one line per hunk. Built to cost few transcript tokens.
-- **Never loses your work.** Every call is atomic, recorded in an oplog, and reversible with `aisc undo`.
-- **Disk-lean.** No worktree by default, sparse worktrees when you do need one, and `aisc gc` (planned) for the rest.
-
-It is a thin layer over Git: Git stays the storage and transport backend, and your repository stays a normal repository.
+- **One call per history edit.** Commit some hunks, amend a fix into an older commit, split, squash, reorder, sync, or branch off in place. Each is a single command instead of a stash-rebase-fixup script.
+- **Output sized for a context window.** Short ids, one line per commit and per hunk, and only the lines an agent needs to chain its next command.
+- **Every change is undoable.** Each write is one atomic ref transaction, recorded in an operation log. `aisc undo` reverses it, and `aisc undo` again redoes it.
+- **Lean on disk.** Work happens in place by default. Worktrees are opt-in, can be sparse, and are removed when the task finishes.
+- **Plain Git underneath.** Your repository stays an ordinary Git repository. Git is the storage and the transport, and nothing else needs a server or a daemon.
 
 ## Before / after
 
-Task: move three uncommitted hunks into three older commits.
+Fold three uncommitted fixes into the three commits they belong to:
 
 <table>
-<tr><th>Plain Git</th><th>AISC</th></tr>
+<tr><th>Git</th><th>AISC</th></tr>
 <tr><td>
 
 ```sh
+git log --oneline -n 4
+git add -p a.txt && git commit --fixup 77e7
+git add -p b.txt && git commit --fixup f578
+git add -p c.txt && git commit --fixup 475a
 git stash
-git log --oneline -n 6
-git rebase -i HEAD~5      # mark 3 edits
-git stash pop             # conflicts?
-git add -p                # pick hunk 1
-git commit --fixup 72abdaf
-git add -p                # pick hunk 2
-git commit --fixup f5f5138
-git add -p                # pick hunk 3
-git commit --fixup 60d2e54
-git rebase -i --autosquash HEAD~8
+GIT_SEQUENCE_EDITOR=: git rebase -i \
+  --autosquash HEAD~7
+git stash pop
 ```
 
 </td><td>
 
 ```sh
 aisc log
-aisc amend \
-  --into 72ab tpm \
-  --into f5f5 lrn \
-  --into 60d2 tut
+aisc amend --into "add a" jji \
+           --into "add b" min \
+           --into "add c" qqu
 ```
 
 </td></tr>
 </table>
 
-Illustrative command counts only; nothing is claimed about speed or cost. See [Benchmarks](#benchmarks) for what is and is not measured.
+Real output:
 
-## Benchmarks
+```text
+$ aisc log
+main: last 4 commits (newest first)
+0e26 add docs | docs/guide.md
+475a add c | c.txt
+f578 add b | b.txt
+77e7 add a | a.txt
+uncommitted:
+a.txt jji @3 +1-1 EDIT3
+b.txt min @3 +1-1 EDIT3
+c.txt qqu @3 +1-1 EDIT3
+docs/guide.md kio @1 +1-1 guide v2
 
-Per-scenario means. Competitor figures are the numbers [published by vcbench.dev](https://vcbench.dev). GitButler ran them with their own setup; **AISC will be re-run under identical conditions** with the same harness, and every AISC cell stays a placeholder until then.
+$ aisc amend --into "add a" jji --into "add b" min --into "add c" qqu
+amended 77e7 +1 hunk, f578 +1, 475a +1; rewrote 4; op 8324
+main 0e260b3→af43f43 add docs
+main: last 4 commits
+a845 add c
+2f4a add b
+b492 add a
+uncommitted: docs/guide.md
 
-| Tool | Commands / task | Wall time | Transcript | Provider tokens | Disk added |
-| --- | --- | --- | --- | --- | --- |
-| **AISC** | ⏳ <!-- BENCH:aisc.commands --> | ⏳ <!-- BENCH:aisc.time --> | ⏳ <!-- BENCH:aisc.kb --> | ⏳ <!-- BENCH:aisc.tokens --> | ⏳ <!-- BENCH:aisc.disk --> |
-| GitButler | 4.5 | 34.0 s | 13.3 KB | not published | not published |
-| Jujutsu | 21.0 | 110 s | 46.1 KB | not published | not published |
-| Git | 20.4 | 92.2 s | 31.7 KB | not published | not published |
+$ aisc commit -b docs --onto main -m "update guide" docs/guide.md
+new branch docs: dedf "update guide"
 
-Design target, not a result: roughly 2 calls and 2-3 KB of output per scenario. Transcript size is a text proxy, not billed provider usage.
-
-Method and existing measurements: [`docs/benchmarks.md`](docs/benchmarks.md) · harness: [`benchmarks/vcbench/README.md`](benchmarks/vcbench/README.md) (lands with the vcbench arm).
+$ aisc undo
+undid commit 7d86
+docs deleted
+```
 
 ## Quickstart
 
 ```sh
-# build from source (Git and Rust 1.91.1+); prebuilt release binaries: coming with v0.2
+# Install (Git 2.43+ and Rust 1.91+)
 cargo install --git https://github.com/sagltd/aisc --locked
 
-# teach your agent the workflow
+# Give your agent the skill
 npx skills add sagltd/aisc --skill aisc
 ```
 
-A typical agent loop (real output, lightly trimmed):
-
-```text
-$ aisc log
-main: last 3 commits (newest first)
-60d2 add c | c.txt
-f5f5 add b | b.txt
-72ab add a | a.txt
-uncommitted:
-a.txt tpm @3 +1-1 EDIT3
-b.txt lrn @3 +1-1 EDIT3
-c.txt tut @3 +1-1 EDIT3
-$ aisc amend --into 72ab tpm --into f5f5 lrn --into 60d2 tut
-amended 72ab +1 hunk, f5f5 +1, 60d2 +1; rewrote 3; op b954
-main: last 3 commits (newest first)
-978f add c | c.txt
-9e5b add b | b.txt
-1f25 add a | a.txt
-$ aisc undo
-undid b954 (amend); op 5559
-…
-$ aisc verify -- cargo test && aisc finish
-```
-
-Task flow: `aisc start NAME` (in place by default), `aisc context`, `aisc checkpoint -m MSG -- PATHS`, `aisc verify -- CMD`, `aisc finish`.
+Then let the agent work. It runs `aisc log` to see ids and state, makes one call per edit, and can undo anything with `aisc undo`.
 
 ## Commands
 
-Available now: `start`, `context`, `diff`, `checkpoint`, `verify`, `finish`, `github`, `gitlab`. History verbs: `log`, `show`, `commit`, `amend`, `discard`, `split`, `uncommit`, `squash`, `move`, `pick`, `sync`, `land`, `switch`, `undo`, `oplog`; `gc` is listed but not implemented yet. Selectors are a hunk id (`tpm`), a path, `PATH:L-R`, or `PATH~text`. Commits are a hex id or an exact subject.
+A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30` (new-side lines) or `"PATH~text"` (the hunk containing *text*). A commit is a hex id or its exact subject.
 
-| Verb | What it does | Example |
-| --- | --- | --- |
-| `log` | Branch view plus uncommitted hunks with ids | `aisc log --limit 10` |
-| `show` | Hunks of a commit, range or uncommitted changes | `aisc show 60d2` |
-| `commit` | New commit(s) from selected hunks | `aisc commit -m "Add validation" a.txt` |
-| `amend --into` | Move uncommitted hunks into older commits | `aisc amend --into 72ab tpm` |
-| `split` | Break a commit into several | `aisc split 5a50 --into "Add b" b.txt` |
-| `uncommit` | Pull hunks out of a commit back to the worktree | `aisc uncommit 60d2 c.txt` |
-| `squash` | Join adjacent commits | `aisc squash --into "Feature" 60d2 f5f5` |
-| `move` | Reorder commits | `aisc move "add b" --before "add a"` |
-| `pick` | Replay commits onto another branch | `aisc pick ca81 -b hotfix` |
-| `sync` | Rebase onto base; pauses on conflict | `aisc sync origin/main --fetch` |
-| `land` | Fast-forward or replay branches into a target | `aisc land feature` |
-| `switch` | Change branch, carrying dirty edits | `aisc switch -c topic` |
-| `discard` | Revert selected uncommitted changes (undoable) | `aisc discard --whitespace-only` |
-| `undo` / `oplog` | Reverse or list recorded operations | `aisc undo` |
-| `gc` | Reclaim stale AISC worktrees (not implemented yet) | `aisc gc --apply` |
+| Command | What it does |
+| --- | --- |
+| `aisc log` | Branch view plus every uncommitted hunk with an id |
+| `aisc show REV` | The hunks of a commit, a range, or the worktree |
+| `aisc commit -m MSG SEL…` | Commit only the selected changes (`--all` for everything) |
+| `aisc commit -b NEW --onto BASE -m MSG SEL…` | Put the selected changes on a new branch off BASE, without leaving your branch |
+| `aisc amend --into COMMIT SEL…` | Fold changes into older commits (repeat `--into`) |
+| `aisc split COMMIT --into MSG SEL…` | Break one commit into several |
+| `aisc uncommit COMMIT SEL…` | Take changes out of a commit, keep them on disk |
+| `aisc squash --into MSG COMMIT…` | Join commits |
+| `aisc move COMMIT… --before\|--after COMMIT` | Reorder commits |
+| `aisc pick COMMIT… [-b NEW --onto BASE]` | Copy commits onto another branch |
+| `aisc sync [ONTO] [--fetch]` | Rebase onto the base, carrying your uncommitted work; pauses on conflict |
+| `aisc land BRANCH… --into main` | Integrate finished branches |
+| `aisc switch [-c] BRANCH` | Change branch, carrying uncommitted edits |
+| `aisc discard SEL…` | Throw away selected changes (undoable) |
+| `aisc undo` · `aisc oplog` | Reverse the last operation · list operations |
+| `aisc start` · `verify` · `finish` · `gc` | Task lifecycle for parallel agents ([details](skills/aisc/references/lifecycle.md)) |
 
-`aisc <verb> --help` is the authority for the installed version.
+Every write prints its result, so there is no need to re-check. `-q` prints a single line, `--json` prints machine output, and `aisc <command> --help` is the reference for the version you have installed.
 
-## Safety model
+## Benchmarks
+
+### Command benchmark
+
+[`benchmarks/commands`](benchmarks/commands) runs ten tasks modelled on [vcbench](https://vcbench.dev): select hunks, amend an older commit, split, reorder, squash, uncommit, undo a rewrite, sync with a conflict, branch off in parallel, and inspect state. Each tool runs the shortest correct sequence an expert would type, every end state is graded the same way, and the tools run in alternating order on the same fixtures. The run below used 5 repetitions plus a warm-up, at load average about 22 (a busy 14-core laptop).
+
+Each cell is commands · output bytes · median wall time (default output, Apple Git 2.50.1, GitButler 0.22.3, Jujutsu 0.42.0, macOS arm64):
+
+| Task | **AISC** | GitButler | Git | Jujutsu |
+| --- | ---: | ---: | ---: | ---: |
+| Commit selected hunks | **1 · 170 B · 100 ms** | 2 · 1,801 B · 165 ms | 3 · 904 B · 135 ms | 5 · 494 B · 166 ms |
+| Amend fixes into older commits | **1 · 141 B · 101 ms** | 2 · 379 B · 111 ms | 2 · 212 B · 172 ms | 1 · 156 B · 78 ms |
+| Split a commit | **1 · 129 B · 50 ms** | 4 · 937 B · 255 ms | 5 · 451 B · 204 ms | 2 · 428 B · 106 ms |
+| Reorder commits | **1 · 173 B · 44 ms** | 2 · 319 B · 80 ms | 1 · 98 B · 105 ms | 2 · 251 B · 100 ms |
+| Squash commits | **1 · 136 B · 52 ms** | 2 · 317 B · 112 ms | 1 · 293 B · 181 ms | 1 · 164 B · 63 ms |
+| Uncommit a file | **1 · 153 B · 105 ms** | 2 · 380 B · 103 ms | 4 · 396 B · 154 ms | 1 · 128 B · 75 ms |
+| Undo the last operation | **1 · 42 B · 37 ms** | 1 · 53 B · 43 ms | 2 · 272 B · 55 ms | 1 · 320 B · 44 ms |
+| Sync a dirty branch, resolve a conflict | **3 · 481 B · 246 ms** | 4 · 1,294 B · 514 ms | 4 · 842 B · 278 ms | 4 · 1,077 B · 518 ms |
+| Branch off in parallel | **1 · 37 B · 51 ms** | 1 · 71 B · 111 ms | 3 · 170 B · 167 ms | 2 · 357 B · 171 ms |
+| Inspect status, log and diff | **1 · 246 B · 16 ms** | 2 · 385 B · 44 ms | 3 · 113 B · 115 ms | 2 · 357 B · 74 ms |
+| **Total** | **12 · 1.7 KB · 733 ms** | 22 · 5.9 KB · 1,579 ms | 28 · 3.8 KB · 1,555 ms | 21 · 3.7 KB · 1,415 ms |
+
+Against GitButler, AISC uses fewer commands, less output and less time on every task. The exceptions are ties at one command (undo, parallel branch) and the uncommit timing, which is within noise. Against the others, it is not best on every cell:
+- **Jujutsu** is faster on amend and uncommit, and prints slightly less on uncommit. With `--quiet` it prints nothing on success, so in quiet mode it reads fewer bytes than AISC's one-line `-q` results.
+- **Git** prints less when reordering or inspecting, because a bare `git log --oneline` says less than AISC's hunk listing.
+- **Scope.** These are scripted sequences, not live agents. They count the commands and text an agent would handle, but not model reasoning. Real-agent runs on vcbench are the next step.
+
+### Agent guidance
+
+The skill an agent loads every session costs context too ([`benchmarks/README.md`](benchmarks/README.md#context-cost-agent-guidance)):
+
+| Guidance | Loaded every session | On demand |
+| --- | ---: | ---: |
+| **AISC** skill | **558 tokens** | 681 |
+| GitButler 0.22.3 (setup + skill) | 5,890 tokens | 14,487 |
+
+### vcbench reference solutions
+
+With no model in the loop, the reference solutions for the 13 vcbench tasks need **1.38 AISC calls and 499 bytes** of output per task, against 5.31 calls and 12.5 KB for GitButler and 6.15 calls and 639 bytes for Git. All of them pass the harness's own verification. AISC's arm for the GitButler harness lives in [`benchmarks/vcbench`](benchmarks/vcbench).
+
+## Disk
+
+Four agents on a 5,000-file, 78 MiB repository ([`benchmarks/disk.py`](benchmarks/disk.py)):
+
+| Setup | Disk added |
+| --- | ---: |
+| **AISC in place** (default, one shared checkout) | **0.12 MiB** |
+| GitButler virtual branches (one shared checkout) | 0.50 MiB |
+| **AISC after `finish`** (worktrees removed) | **0.11 MiB** |
+| **`aisc start --path --sparse src`** | **48.9 MiB** |
+| `git worktree add` / `aisc start --path` | 236 MiB |
+| `jj workspace add` | 236 MiB |
+
+- `aisc finish` removes the worktree it created. `--keep` keeps it.
+- `aisc gc` lists leftover AISC worktrees and the space they hold. `aisc gc --apply` removes them.
+- Removal deletes only content known to be regenerable (`target`, `node_modules`, `.venv`, build output). A worktree holding anything else, such as secrets, nested repositories or unknown ignored files, is kept and reported.
+- AISC never touches worktrees it did not create, and before cleanup it saves any commit that would otherwise become unreachable under `refs/aisc/rescue/`.
+
+## Safety
 
 ```mermaid
 flowchart LR
-  A[plan] --> B[preflight] --> C["ref transaction (CAS)"] --> D[index / worktree] --> E[oplog]
+  A[plan] --> B[preflight] --> C[journal] --> D["ref transaction (CAS)"] --> E[index + worktree] --> F[oplog]
 ```
 
-- **Atomic per call.** Refs update by compare-and-swap. If anything fails or something changed concurrently (exit 4), refs, index and worktree stay byte-identical.
-- **Undo.** Each mutation writes an oplog entry; `aisc undo [OP]` restores it, including bytes removed by `discard`.
-- **Your index is preserved.** Staged state you did not touch is left alone.
+- **All or nothing.** Refs move in one compare-and-swap transaction. If anything changed underneath, the command exits with code 4 and changes nothing.
+- **Crash-safe.** A journal lets the next command finish or roll back an operation that was killed at any step.
+- **Your edits win.** A file edited while AISC is working is never overwritten. The edit is kept beside the file as `PATH.aisc-conflict` and reported.
+- **Your index is yours.** Staged changes you did not select stay staged, including partial `git add -p` stages and `git add -N` placeholders.
+- **Verified rewrites.** After an amend, split or uncommit, every rewritten commit is checked line by line against its own original diff. If the placement is ambiguous, the command refuses rather than guesses.
 - **Hooks.** `checkpoint` runs your Git hooks. History plumbing commits do not, as with `git rebase`.
-- **Requirements.** Git 2.43+, macOS or Linux. CI covers Ubuntu 24.04 and macOS 15; Windows is untested.
-- **One agent per checkout.** Use separate worktrees for parallel agents.
+- **Requirements.** Git 2.43+ (SHA-1 and SHA-256 repositories), macOS or Linux. CI runs on Ubuntu 24.04 and macOS 15.
 
-## Disk efficiency
+## Agent skill
 
-- **Single-checkout model.** History verbs edit in place; `--branch B` rewrites another branch with no checkout.
-- **In place by default.** `aisc start NAME` keeps your checkout; `--path` opts into a worktree. Worktree removal on `finish` is planned: today worktrees are kept.
-- **`aisc gc` (planned).** The command exists but reports "not implemented yet". Design: dry run by default, `--apply` removes only verified, clean AISC worktrees.
-- **Sparse worktrees.** `aisc start NAME --path P --sparse DIR...` checks out only the directories you need.
+[`skills/aisc/SKILL.md`](skills/aisc/SKILL.md) is a 558-token decision table: one command per task, the selectors, and the rules an agent needs (exit codes, refusals, undo). Parallel-agent lifecycle, pull requests and sandbox notes live in [`references/lifecycle.md`](skills/aisc/references/lifecycle.md), which agents load only when they need it.
 
-Measured disk numbers: pending, see [Benchmarks](#benchmarks).
+<details><summary>Sandboxed agents (Codex, Claude)</summary>
 
-## Advanced
-
-<details><summary>Sandbox permissions (Codex, Claude)</summary>
-
-AISC writes Git metadata, so the agent host must allow it. For non-interactive Codex, pass `--add-dir /abs/path/to/repo/.git` and keep the workspace sandbox on. For a linked worktree, allow the resolved directories:
+AISC writes Git metadata, so the agent's sandbox must allow the repository's `.git` directory. For non-interactive Codex, pass `--add-dir /abs/path/to/repo/.git`. For a linked worktree, allow both directories:
 
 ```sh
-git -C /path/to/worktree rev-parse --path-format=absolute --git-dir
-git -C /path/to/worktree rev-parse --path-format=absolute --git-common-dir
+git rev-parse --path-format=absolute --git-dir --git-common-dir
 ```
 
-Interactive agents can use their normal approval flow. Do not disable the sandbox.
+Do not disable the sandbox.
 
 </details>
 
-<details><summary>Output formats and JSON</summary>
+<details><summary>Output formats</summary>
 
-Terminals get readable text; redirected output is stable JSON for existing verbs. New history verbs print compact text by default. Force with `--json` or `AISC_OUTPUT=json`, or `--human --color always|never`. `NO_COLOR` disables color. Errors carry a `code` (`usage|selector|stale|dirty|conflict|unsupported|state|git`).
-
-</details>
-
-<details><summary>GitHub and GitLab overviews</summary>
-
-`aisc github` (via `gh pr status`) and `aisc gitlab` (via `glab`, open MRs whose source branch matches) are explicit, read-only, need network access and may return partial fields. Local commands never need either CLI.
-
-</details>
-
-<details><summary>Verify and finish evidence binding</summary>
-
-`verify` runs a program directly (use `sh -c` only when you need a shell) on a clean committed checkout, macOS or Linux. The record binds tracked files, index, Git config, environment and executable identity. Ignored files, interpreters and external services are not hermetic inputs. `finish` succeeds only when the same clean commit and environment have a passing record; it never pushes or merges. Git hooks and signing programs run normally and are trusted.
-
-</details>
-
-<details><summary>Current measured evidence</summary>
-
-Measured to date, with limits, in [`docs/benchmarks.md`](docs/benchmarks.md) and `benchmarks/results/`. On one compact inspection AISC context was slower and used more text-proxy tokens than GitButler status plus Git numstat. `cargo-audit` 0.22.2 reported zero advisories across 49 dependencies for the audited lockfile snapshot only. These do not establish whole-workflow or provider-usage savings, or production readiness.
+History commands print compact text. `-q` prints a single line, `--json` or `AISC_OUTPUT=json` prints stable JSON, and `--human --color always|never` controls colour. `NO_COLOR` is honoured. Errors carry a code: `usage`, `selector`, `stale`, `dirty`, `conflict`, `unsupported`, `state` or `git`. Exit codes: 0 success (a paused sync included), 1 refused or failed with nothing changed, 2 usage, 4 stale (something changed concurrently; nothing changed, run `aisc log` and retry).
 
 </details>
 
 ## Project
 
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT License](LICENSE) · [Research notes](docs/research.md)
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Design](docs/design/history.md) · [MIT License](LICENSE)
 
-Credits: the benchmark harness builds on [vcbench](https://vcbench.dev), an MIT-licensed project by GitButler. Competitor numbers belong to its published runs.
+Features land in `dev` by pull request, and releases reach the protected `main` branch by pull request from `dev`. The benchmark harness builds on [vcbench](https://vcbench.dev), an MIT-licensed project by GitButler. Competitor numbers come from running their released tools on the same machine.
