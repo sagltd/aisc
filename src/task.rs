@@ -445,7 +445,7 @@ fn rebuild_index(
 }
 
 pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<Value> {
-    let _guard = operation_lock(repo)?;
+    let guard = operation_lock(repo)?;
     clear_evidence(repo)?;
     repo.writable()?;
     repo.require_clean()?;
@@ -458,11 +458,18 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
         .current_dir(&repo.root)
         .env("PWD", &repo.root);
     process::exact_executable(&mut child, &command[0])?;
-    let output = process::execute(
+    // The lock records the command's process group, so if aisc is killed the lock still counts
+    // as held while the group has members (gc never removes the worktree under it). The lock fd
+    // itself stays close-on-exec: daemons left behind never hold it.
+    let output = process::execute_observed(
         &mut child,
         Duration::from_secs(timeout as u64),
         CAPTURE_LIMIT,
-    )?;
+        &mut |group| guard.record_group(Some(group)),
+    );
+    let cleared = guard.record_group(None);
+    let output = output?;
+    cleared?;
     let clean = repo.require_clean();
     // A command that deletes or replaces tracked files makes fingerprinting itself fail.
     let after = fingerprint(repo);
