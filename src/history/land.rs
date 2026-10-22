@@ -2,8 +2,8 @@
 //! (move HEAD carrying uncommitted edits). Both build one rewrite plan; any refusal changes nothing.
 use super::plumbing::Git;
 use super::render;
-use super::rewrite::{HeadMove, Plan, RefMove, Session};
-use super::sync::{ReplayOpts, Resolutions, build_commits, carry, load_picks, replay};
+use super::rewrite::{HeadMove, Plan, RefMove, Session, carry};
+use super::sync::{ReplayOpts, Resolutions, build_commits, load_picks, replay};
 use super::view;
 use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;

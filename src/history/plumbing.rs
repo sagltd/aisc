@@ -96,7 +96,7 @@ impl Git {
         run_git_raw(&self.root, args, env, input, LIMIT)
     }
 
-    fn failure(args: &[&str], output: &Output) -> anyhow::Error {
+    pub fn failure(args: &[&str], output: &Output) -> anyhow::Error {
         let stderr = escape_block(&String::from_utf8_lossy(
             &output.stderr[..output.stderr.len().min(2_048)],
         ));

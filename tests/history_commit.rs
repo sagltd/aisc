@@ -694,6 +694,7 @@ fn records_without_head_after_fail_closed_on_other_branches() {
 fn undo_of_an_intent_to_add_commit_never_fails_on_the_placeholder() {
     for ignored in [false, true] {
         let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+        let base = fixture.git(&["rev-parse", "main"]);
         fixture.write("n.txt", "new file\n");
         fixture.git(&["add", "-N", "n.txt"]);
         fixture.aisc(&["commit", "-m", "c", "n.txt"]).ok();
@@ -715,13 +716,31 @@ fn undo_of_an_intent_to_add_commit_never_fails_on_the_placeholder() {
             undo.ok();
             assert_eq!(
                 fixture.git(&["rev-parse", "main"]),
-                fixture.git(&["rev-parse", "HEAD"])
+                base,
+                "branch moved back"
             );
             assert!(fixture.git(&["ls-files", "n.txt"]).is_empty());
+            assert!(fixture.git(&["status", "--porcelain"]).is_empty());
         }
         assert!(
             fixture.tree_blob("HEAD", "n.txt").is_none(),
             "commit undone"
         );
     }
+}
+
+#[test]
+fn undo_reports_an_unexpected_placeholder_failure() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("n.txt", "new file\n");
+    fixture.git(&["add", "-N", "n.txt"]);
+    fixture.aisc(&["commit", "-m", "c", "n.txt"]).ok();
+    // Not a missing or ignored path: `git add -N` fails for another reason and must not be hidden.
+    let env = fixture.fake_git("add", "echo 'fatal: simulated failure' >&2; exit 128");
+    let run = fixture.aisc_env(&["undo"], &support::env_refs(&env));
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("intent-to-add"), "{}", run.stderr);
+    assert!(run.stderr.contains("simulated failure"), "{}", run.stderr);
+    assert!(!fixture.exists(".git/index.lock"));
+    assert!(!fixture.exists(".git/aisc-operation.lock"));
 }

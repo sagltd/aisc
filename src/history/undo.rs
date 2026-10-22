@@ -70,27 +70,14 @@ pub(crate) fn reverse_plan(git: &Git, op_oid: &str, data: &OpData) -> Result<Pla
             to: change.from.clone(),
         })
         .collect();
-    for file in &data.worktree {
-        let before = match file.before {
-            Some(position) => {
-                Some(git.run(&["cat-file", "blob", &format!("{op_oid}:wt/{position}")])?)
-            }
-            None => None,
-        };
-        let after = match &file.after {
-            Some(oid) => Some(git.read_blobs(std::slice::from_ref(oid))?.remove(0)),
-            None => None,
-        };
+    for write in oplog::recorded_writes(git, op_oid, data)? {
         plan.worktree.push(WorktreeWrite {
-            path: file.path.clone(),
-            before: after,
-            after: before,
+            path: write.path,
+            before: write.after,
+            after: write.before,
             // Restores exec bits (and mode-only changes): the old mode comes back.
-            mode: file
-                .before_mode
-                .clone()
-                .unwrap_or_else(|| file.mode.clone()),
-            before_mode: Some(file.mode.clone()),
+            mode: write.before_mode.unwrap_or_else(|| write.mode.clone()),
+            before_mode: Some(write.mode),
         });
     }
     Ok(plan)

@@ -2,7 +2,7 @@
 //! Each op commit keeps old and new commits reachable (extra parents) and stores pre-op file bytes.
 #![allow(dead_code)] // worktree restore data is consumed by later slices
 use super::plumbing::{Git, TreeEdit};
-use super::rewrite::Plan;
+use super::rewrite::{Plan, WorktreeWrite};
 use super::{Code, Outcome, fail, fail_hint};
 use crate::git::Repo;
 use crate::output::escape_line;
@@ -292,6 +292,12 @@ pub(crate) fn load(git: &Git, spec: Option<&str>) -> Result<(String, OpData)> {
             }
         }
     };
+    let data = load_oid(git, &oid)?;
+    Ok((oid, data))
+}
+
+/// Reads the record of the op commit `oid`.
+pub(crate) fn load_oid(git: &Git, oid: &str) -> Result<OpData> {
     let blob = git.run(&["cat-file", "blob", &format!("{oid}:op.json")])?;
     let data: OpData = serde_json::from_slice(&blob).context("unreadable operation record")?;
     if data.v >= 2 && data.head_after.is_none() {
@@ -299,11 +305,36 @@ pub(crate) fn load(git: &Git, spec: Option<&str>) -> Result<(String, OpData)> {
             Code::State,
             format!(
                 "operation {} has a corrupt record (no HEAD state)",
-                short(&oid)
+                short(oid)
             ),
         ));
     }
-    Ok((oid, data))
+    Ok(data)
+}
+
+/// The worktree writes an op made, in recorded order, with the bytes before and after.
+pub(crate) fn recorded_writes(git: &Git, oid: &str, data: &OpData) -> Result<Vec<WorktreeWrite>> {
+    let mut writes = Vec::with_capacity(data.worktree.len());
+    for file in &data.worktree {
+        let before = match file.before {
+            Some(position) => {
+                Some(git.run(&["cat-file", "blob", &format!("{oid}:wt/{position}")])?)
+            }
+            None => None,
+        };
+        let after = match &file.after {
+            Some(blob) => Some(git.read_blobs(std::slice::from_ref(blob))?.remove(0)),
+            None => None,
+        };
+        writes.push(WorktreeWrite {
+            path: file.path.clone(),
+            before,
+            after,
+            mode: file.mode.clone(),
+            before_mode: file.before_mode.clone(),
+        });
+    }
+    Ok(writes)
 }
 
 pub(crate) fn age(seconds: u64) -> String {
