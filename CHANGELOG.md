@@ -6,6 +6,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-22
+
+### Added
+
+- `aisc land --delete` removes the landed branches in the same operation; `aisc undo` restores
+  them. Branches checked out or being rebased in any worktree are refused.
+
+### Changed
+
+- The agent setup block and skill send agents to `aisc switch` to test another branch and to
+  `land --delete` instead of raw `git worktree` and `git branch -D`.
+- README reports the 3-run real-agent comparison for v0.1.0, failures and caveats included.
+
 ## [0.1.0] - 2026-10-22
 
 ### Added
@@ -53,5 +66,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tag, so the two versions cannot see each other's locks and can both run at
   once. Upgrade all running agents together.
 
-[Unreleased]: https://github.com/sagltd/aisc/compare/v0.1.0...dev
+[Unreleased]: https://github.com/sagltd/aisc/compare/v0.1.1...dev
+[0.1.1]: https://github.com/sagltd/aisc/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sagltd/aisc/releases/tag/v0.1.0

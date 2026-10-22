@@ -627,6 +627,16 @@ impl Store {
             {
                 branches.push(target.to_owned());
             }
+            // A worktree in the middle of a rebase has a detached HEAD but still owns the branch
+            // it will update (`git branch -d` refuses it too).
+            let admin = head.parent().expect("HEAD has a parent directory");
+            for state in ["rebase-merge", "rebase-apply"] {
+                if let Ok(name) = std::fs::read_to_string(admin.join(state).join("head-name"))
+                    && let Some(target) = name.trim_end().strip_prefix("refs/heads/")
+                {
+                    branches.push(format!("refs/heads/{target}"));
+                }
+            }
         }
         Ok(branches)
     }
