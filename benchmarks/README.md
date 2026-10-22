@@ -208,14 +208,17 @@ What each tool's guidance contains:
 | Context cost (tokens) | git | aisc | but | jj |
 |---|---|---|---|---|
 | AGENTS block | 63 | 83 | 475 | 167 |
-| Skill (`SKILL.md`) | – | **469** (was 681) | 5415 | 2591 |
-| Block + skill | 63 | **552** | 5890 | 2758 |
-| References, on demand | – | – | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
+| Skill core (`SKILL.md`) | – | **493** (was 681) | 5415 | 2591 |
+| Block + core | 63 | **576** | 5890 | 2758 |
+| References, on demand | – | 590 (`references/lifecycle.md`) | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
 
-The AISC skill is a single page: a task-to-command list, the selector syntax,
-and the rules on exit codes, sync conflicts and undo. To check it,
+The AISC core is one page: a task-to-command list, the selector syntax, and the
+rules on exit codes, sync conflicts and undo. The parallel-agent lifecycle is in
+`references/lifecycle.md`, which an agent loads only when it needs it. That
+lifecycle covers `start`/`checkpoint`/`verify`/`finish`/`gc` and their disk
+rules, `github`/`gitlab`, and the Codex sandbox note. To check both files,
 [`commands/skill_check.sh`](commands/skill_check.sh) runs every command form in
-the page against a real binary (40 checks). The vcbench reference check
+them against a real binary (63 checks). The vcbench reference check
 (`npm run aisc:check`) passes all 13 tasks with this skill.
 
 ### Where AISC loses

@@ -21,3 +21,5 @@ Use `aisc` for all version-control writes. One command per task:
 COMMIT: hex id or exact subject. SEL: `PATH`, `"PATH~text"` (hunk containing text), `PATH:A-B` (new-side lines) or a hunk id from `aisc log`.
 
 Rules: writes print the result, don't re-check; `-q` prints one line; unselected changes stay uncommitted. Exit 1, 2 or 4 means nothing changed: read `error:`/`hint:`, fix, rerun (4: run `aisc log` first). A sync conflict exits 0 with CONFLICTS: edit the marked files, then `aisc sync --continue` (or `--abort`). Keep unrelated changes; never reset, clean or push unless asked.
+
+Parallel agents, worktrees, verify/finish, PRs or Codex sandbox: read `references/lifecycle.md`.
