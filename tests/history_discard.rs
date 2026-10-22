@@ -319,3 +319,77 @@ fn a_file_changed_between_read_and_discard_is_a_stale_error() {
     );
     assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
 }
+
+#[test]
+fn a_file_changed_after_its_hash_was_checked_is_a_stale_error() {
+    // The hook runs after the hash check, when the HEAD blobs are read.
+    let fixture = pilot9();
+    let env = fixture.fake_git("cat-file", "printf 'sneaky\\n' >> src/format.ts");
+    let run = fixture.aisc_env(&["discard", "src/format.ts"], &support::env_refs(&env));
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert!(
+        fixture.read("src/format.ts").ends_with("sneaky\n"),
+        "the user's newer bytes are kept"
+    );
+    assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
+}
+
+#[test]
+fn an_untracked_file_changed_after_its_digest_was_checked_is_a_stale_error() {
+    let fixture = pilot9();
+    fixture.write("scratch.txt", "scratch\n");
+    let env = fixture.fake_git("cat-file", "printf 'sneaky\\n' >> scratch.txt");
+    let run = fixture.aisc_env(
+        &["discard", "scratch.txt", "src/format.ts"],
+        &support::env_refs(&env),
+    );
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.read("scratch.txt"), "scratch\nsneaky\n");
+    assert_eq!(fixture.read("src/format.ts"), dirty("src/format.ts"));
+    assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
+}
+
+/// Larger than the 16 MiB limit above which the listing records only the size.
+const BIG: usize = 17 * 1024 * 1024;
+
+#[test]
+fn a_large_untracked_file_rewritten_in_place_is_a_stale_error() {
+    let fixture = pilot9();
+    fixture.write_bytes("big.bin", &vec![b'x'; BIG]);
+    // Same size, different bytes: only the content (or its change time) can tell.
+    let hook = "sleep 0.05; printf 'Z' | dd of=big.bin bs=1 count=1 conv=notrunc 2>/dev/null";
+    let env = fixture.fake_git("ls-tree", hook);
+    let run = fixture.aisc_env(&["discard", "big.bin"], &support::env_refs(&env));
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    let bytes = std::fs::read(fixture.path("big.bin")).unwrap();
+    assert_eq!(bytes.len(), BIG);
+    assert_eq!(bytes[0], b'Z', "the concurrent edit is kept");
+    assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
+}
+
+#[test]
+fn a_large_untracked_file_that_grows_is_a_stale_error() {
+    let fixture = pilot9();
+    fixture.write_bytes("big.bin", &vec![b'x'; BIG]);
+    let env = fixture.fake_git("cat-file", "printf 'more' >> big.bin");
+    let run = fixture.aisc_env(
+        &["discard", "big.bin", "src/format.ts"],
+        &support::env_refs(&env),
+    );
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    let size = std::fs::metadata(fixture.path("big.bin")).unwrap().len();
+    assert_eq!(size, BIG as u64 + 4);
+    assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
+}
+
+#[test]
+fn an_unchanged_large_untracked_file_is_discarded_and_undo_restores_it() {
+    let fixture = pilot9();
+    let mut content = vec![b'x'; BIG];
+    content[BIG - 1] = b'\n';
+    fixture.write_bytes("big.bin", &content);
+    fixture.aisc(&["discard", "big.bin"]).ok();
+    assert!(!fixture.exists("big.bin"));
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(std::fs::read(fixture.path("big.bin")).unwrap(), content);
+}

@@ -338,6 +338,109 @@ pub(super) fn mismatch(path: &str, commit: &CommitInfo, names: &str) -> anyhow::
     )
 }
 
+// ---------------------------------------------------------------------------------------------
+// Exact line positions through the commits' own diffs (shared with split.rs)
+// ---------------------------------------------------------------------------------------------
+
+/// Each commit's own line changes, as Git records them (`git show`): entry `k` maps a path to the
+/// blocks of `chain[k - 1] -> chain[k]`, with `None` for a change that is not line-level (binary,
+/// added, deleted or type change). A path that the commit leaves alone is absent. Entry 0 is empty.
+pub(super) type Recorded = Vec<BTreeMap<String, Option<Vec<Block>>>>;
+
+pub(super) fn recorded(git: &Git, chain: &[CommitInfo], paths: &[String]) -> Result<Recorded> {
+    let mut steps = vec![BTreeMap::new()];
+    for pair in chain.windows(2) {
+        let mut args = super::diff::commit_diff_args(false);
+        args.extend([pair[0].tree.as_str(), pair[1].tree.as_str(), "--"]);
+        args.extend(paths.iter().map(String::as_str));
+        let mut step = BTreeMap::new();
+        for file in super::diff::parse_patch(&git.run(&args)?)? {
+            let blocks = match file.kind {
+                Kind::Modified if !file.binary => Some(file.blocks),
+                Kind::ModeOnly => Some(Vec::new()),
+                _ => None,
+            };
+            step.insert(file.path, blocks);
+        }
+        steps.push(step);
+    }
+    Ok(steps)
+}
+
+/// Which side of each recorded diff a position starts on.
+#[derive(Clone, Copy)]
+pub(super) enum Way {
+    /// From a commit to its parent (new side to old side).
+    Back,
+    /// From a parent to its commit.
+    Forward,
+}
+
+/// Maps the lines `start..end` (an insertion point when empty) across one recorded diff. `None`
+/// when the diff changes any of those lines or deletes lines between them, or when the insertion
+/// point falls inside lines the diff changes or exactly where it deletes lines (either side of
+/// the deleted lines would fit).
+fn map_range(blocks: &[Block], way: Way, start: usize, end: usize) -> Option<usize> {
+    let mut shift = 0isize;
+    for block in blocks {
+        let (from, from_len, to_len) = match way {
+            Way::Back => (block.new_pos, block.added.len(), block.removed.len()),
+            Way::Forward => (block.old_pos, block.removed.len(), block.added.len()),
+        };
+        let until = from + from_len;
+        let clash = if start == end {
+            (from < start && start < until) || (from == until && from == start)
+        } else {
+            start.max(from) < end.min(until) || (from == until && start < from && from < end)
+        };
+        if clash {
+            return None;
+        }
+        if until <= start {
+            shift += to_len as isize - from_len as isize;
+        }
+    }
+    start.checked_add_signed(shift)
+}
+
+/// Where each range (by position on the first version) lands on the last version of `steps`,
+/// following every diff's own alignment; `Err` holds the index of the first range that has no
+/// single place. Deterministic, and independent of how a 3-way merge aligns the two versions.
+pub(super) fn carry(
+    ranges: &[(usize, usize)],
+    steps: &[&[Block]],
+    way: Way,
+) -> Result<Vec<usize>, usize> {
+    ranges
+        .iter()
+        .enumerate()
+        .map(|(order, (start, end))| {
+            let length = end - start;
+            steps
+                .iter()
+                .try_fold(*start, |at, blocks| map_range(blocks, way, at, at + length))
+                .ok_or(order)
+        })
+        .collect()
+}
+
+/// A hunk whose place in a commit depends on how Git aligns repeated lines.
+pub(super) fn no_single_place(
+    path: &str,
+    hunk: &str,
+    commit: &CommitInfo,
+    hint: &str,
+) -> anyhow::Error {
+    fail_hint(
+        Code::Conflict,
+        format!(
+            "hunk {hunk} ({path}) has no single place in {}: the lines around it repeat; nothing was changed",
+            short_of(commit)
+        ),
+        hint,
+    )
+}
+
 /// Per path the (removed, added) lines routed into a commit, and the paths to skip.
 pub(super) type Routed = (BTreeMap<String, (Vec<Line>, Vec<Line>)>, BTreeSet<String>);
 
@@ -363,7 +466,8 @@ pub(super) fn verify_amend(
             }
             let ok = match lines.get(path) {
                 None => original.get(path) == rewritten.get(path),
-                // A file this commit creates has no line-level diff to compare.
+                // A file this commit creates has no line-level diff to compare here; its content
+                // is checked line by line by `verify_placements`.
                 Some(_) if matches!(original.get(path), Some(Sig::Whole(_))) => {
                     original.get(path) == rewritten.get(path)
                 }
@@ -704,6 +808,98 @@ fn explain(
     }
 }
 
+/// A file placed in one commit: (file index, entry before, entry after).
+type Placed = (usize, Option<Entry>, Option<Entry>);
+
+/// Position check, independent of how the 3-way merge aligned the two versions: where a commit
+/// holds another version of a modified file than HEAD, the merged file must be exactly that
+/// version with the selected blocks carried to it through the later commits' own diffs. When
+/// repeated lines let the merge choose a look-alike place, the two differ and nothing changes.
+/// This also checks, line by line, a file that the target commit creates.
+fn verify_placements(
+    context: &Context<'_>,
+    chain: &[CommitInfo],
+    routes: &Routes,
+    placed: &[Vec<Placed>],
+) -> Result<()> {
+    let files = &context.changes.files;
+    // (chain position, file index, version in the commit, merged version)
+    let mut pending: Vec<(usize, usize, &String, &String)> = Vec::new();
+    for (j, here) in placed.iter().enumerate() {
+        for (index, before, after) in here {
+            let file = &files[*index];
+            if let (Kind::Modified, Some((_, ours)), Some((_, merged))) = (file.kind, before, after)
+                && file.old_oid.as_ref() != Some(ours)
+            {
+                pending.push((j, *index, ours, merged));
+            }
+        }
+    }
+    if pending.is_empty() {
+        return Ok(());
+    }
+    let paths: Vec<String> = pending
+        .iter()
+        .map(|(_, index, _, _)| files[*index].path.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let steps = recorded(context.git, chain, &paths)?;
+    let oids: Vec<String> = pending
+        .iter()
+        .flat_map(|(_, _, ours, merged)| [(*ours).clone(), (*merged).clone()])
+        .collect();
+    let blobs = context.git.read_blobs(&oids)?;
+    for ((j, index, _, _), pair) in pending.iter().zip(blobs.chunks(2)) {
+        let file = &files[*index];
+        let blocks: Vec<usize> = selection_at(file, &routes[index], *j)
+            .0
+            .into_iter()
+            .collect();
+        let refuse = |order: usize| {
+            let block = blocks.get(order).copied().unwrap_or_default();
+            no_single_place(
+                &file.path,
+                &hunk_name(file, block),
+                &chain[*j],
+                "target the commit that last changed those lines, or a later one",
+            )
+        };
+        // HEAD back to this commit: the diffs of every later commit, newest first.
+        let later: Option<Vec<&[Block]>> = (j + 1..chain.len())
+            .rev()
+            .map(|k| match steps[k].get(&file.path) {
+                None => Some(&[][..]),
+                Some(blocks) => blocks.as_deref(),
+            })
+            .collect();
+        let later = later.ok_or_else(|| refuse(0))?;
+        let ranges: Vec<(usize, usize)> = blocks
+            .iter()
+            .map(|block| {
+                let block = &file.blocks[*block];
+                (block.old_pos, block.old_pos + block.removed.len())
+            })
+            .collect();
+        let starts = carry(&ranges, &later, Way::Back).map_err(refuse)?;
+        let moved: Vec<Block> = blocks
+            .iter()
+            .zip(starts)
+            .map(|(block, old_pos)| Block {
+                old_pos,
+                ..file.blocks[*block].clone()
+            })
+            .collect();
+        let moved: Vec<&Block> = moved.iter().collect();
+        let expected =
+            splice(&split_lines(&pair[0]), &moved).map_err(|error| refuse(block_of(&error)))?;
+        if join_lines(&expected) != pair[1] {
+            return Err(refuse(0));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     let groups = parse_groups(args)?;
     let repo = Repo::discover()?;
@@ -828,6 +1024,8 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
 
     // One tree per commit from the oldest target to the tip.
     let mut trees = Vec::new();
+    // Per commit: (file, entry before, entry after) of every file placed there.
+    let mut placed: Vec<Vec<Placed>> = Vec::new();
     let mut memo: BTreeMap<(String, usize, Vec<usize>, bool), Option<Entry>> = BTreeMap::new();
     for (j, commit) in chain.iter().enumerate() {
         let here: Vec<usize> = routes
@@ -841,6 +1039,7 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
             .collect();
         let entries = git.ls_tree(&commit.tree, &paths)?;
         let mut edits = Vec::new();
+        let mut placed_here = Vec::new();
         for index in here {
             let file = &changes.files[index];
             let (blocks, whole) = selection_at(file, &routes[&index], j);
@@ -862,13 +1061,16 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
                     entry
                 }
             };
+            placed_here.push((index, current.cloned(), entry.clone()));
             edits.push(TreeEdit {
                 path: file.path.clone(),
                 entry,
             });
         }
         trees.push(git.tree_with(&commit.tree, &edits)?);
+        placed.push(placed_here);
     }
+    verify_placements(&context, &chain, &routes, &placed)?;
 
     // Final verification, at line level, before any commit is created.
     let parent_tree = match chain[0].parents.first() {
@@ -966,4 +1168,65 @@ pub(super) fn selection_hunks(changes: &ChangeSet, selection: &Selection) -> usi
         .iter()
         .map(|(file, selected)| hunks_in(&changes.files[*file], selected))
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A block that turns `removed` lines at `old_pos` into `added` lines at `new_pos`.
+    fn block(old_pos: usize, removed: usize, new_pos: usize, added: usize) -> Block {
+        Block {
+            old_pos,
+            new_pos,
+            removed: vec![b"r\n".to_vec(); removed],
+            added: vec![b"a\n".to_vec(); added],
+            before: Vec::new(),
+            after: Vec::new(),
+            at_start: false,
+            at_eof: false,
+        }
+    }
+
+    #[test]
+    fn ranges_shift_past_earlier_changes_and_stay_before_later_ones() {
+        // Lines 2..4 became 2..5 (one line more); line 8 was deleted.
+        let diff = [block(2, 2, 2, 3), block(7, 1, 8, 0)];
+        assert_eq!(map_range(&diff, Way::Back, 0, 2), Some(0));
+        assert_eq!(map_range(&diff, Way::Back, 5, 6), Some(4));
+        assert_eq!(map_range(&diff, Way::Back, 9, 10), Some(9));
+        assert_eq!(map_range(&diff, Way::Forward, 4, 5), Some(5));
+        assert_eq!(map_range(&diff, Way::Forward, 9, 9), Some(9));
+        // Lines right next to a change keep their single place.
+        assert_eq!(map_range(&diff, Way::Back, 1, 2), Some(1));
+        assert_eq!(map_range(&diff, Way::Back, 5, 8), Some(4));
+    }
+
+    #[test]
+    fn ranges_touching_changed_lines_have_no_single_place() {
+        let diff = [block(2, 2, 2, 3), block(7, 1, 8, 0)];
+        // Overlaps the changed lines.
+        assert_eq!(map_range(&diff, Way::Back, 4, 6), None);
+        // Spans the deleted line.
+        assert_eq!(map_range(&diff, Way::Back, 7, 9), None);
+        // An insertion inside changed lines, or exactly where lines were deleted.
+        assert_eq!(map_range(&diff, Way::Back, 3, 3), None);
+        assert_eq!(map_range(&diff, Way::Back, 8, 8), None);
+        // At the edges of changed lines it is still unique.
+        assert_eq!(map_range(&diff, Way::Back, 2, 2), Some(2));
+        assert_eq!(map_range(&diff, Way::Back, 5, 5), Some(4));
+    }
+
+    #[test]
+    fn carry_follows_every_step_and_names_the_first_range_without_a_place() {
+        let first = [block(0, 0, 0, 2)];
+        let second = [block(5, 1, 5, 1)];
+        let steps: Vec<&[Block]> = vec![&first, &second];
+        assert_eq!(
+            carry(&[(1, 2), (3, 3)], &steps, Way::Forward),
+            Ok(vec![3, 5])
+        );
+        assert_eq!(carry(&[(1, 2), (3, 4)], &steps, Way::Forward), Err(1));
+        assert_eq!(carry(&[(6, 7)], &[&second, &first], Way::Back), Ok(vec![4]));
+    }
 }

@@ -581,3 +581,124 @@ fn a_hunk_in_a_look_alike_function_is_not_placed_in_the_older_one() {
         format!("{LOOKALIKE_HEAD}{ALPHA}")
     );
 }
+
+/// One line per word.
+fn lines(words: &str) -> String {
+    words.split(' ').map(|word| format!("{word}\n")).collect()
+}
+
+const FILLER: &str = "head f1 f2 f3 f4 f5 f6";
+
+/// Runs of identical lines that Git's 3-way merge aligns differently from the commits' own diffs:
+/// "trim the first run" keeps the second run of `a` lines intact, so the dirty `X` (the last `a`
+/// of the second run) belongs there in every commit. `git merge-file` puts it in the first run of
+/// the oldest commit, and the later commit's line counts hide the move.
+fn repeated_runs(created: bool) -> Fixture {
+    let first = lines(&format!("{FILLER} a a a b a a a b c b a c tail"));
+    let fixture = if created {
+        Fixture::with_files(&[("other.txt", "other\n")])
+    } else {
+        Fixture::with_files(&[(
+            "f.txt",
+            &lines(&format!("{FILLER} a a a b a a a b c b a c")),
+        )])
+    };
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.txt", &first);
+    fixture.commit_all("add tail");
+    fixture.write(
+        "f.txt",
+        &lines(&format!("{FILLER} a b a a a b c b a c tail")),
+    );
+    fixture.commit_all("trim the first run");
+    fixture.write(
+        "f.txt",
+        &lines(&format!("{FILLER} a b a a a b a c a c b a c tail")),
+    );
+    fixture.commit_all("insert a pair");
+    fixture.write(
+        "f.txt",
+        &lines("HEAD f1 f2 f3 f4 f5 f6 a b a a X b a c a c b a c tail"),
+    );
+    fixture
+}
+
+fn assert_never_in_the_wrong_run(created: bool) {
+    let fixture = repeated_runs(created);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&[
+        "amend",
+        "--into",
+        "add tail",
+        "f.txt~X",
+        "--into",
+        "trim the first run",
+        "f.txt~HEAD",
+    ]);
+    if run.code == 0 {
+        // Placed: only where the commits' own diffs put that line.
+        assert_eq!(
+            fixture.tree_blob("HEAD~2", "f.txt").unwrap(),
+            lines(&format!("{FILLER} a a a b a a X b c b a c tail")),
+            "{}",
+            run.stdout
+        );
+        assert_eq!(
+            fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
+            lines("HEAD f1 f2 f3 f4 f5 f6 a b a a X b c b a c tail")
+        );
+        assert_eq!(
+            fixture.tree_blob("HEAD", "f.txt").unwrap(),
+            fixture.read("f.txt")
+        );
+    } else {
+        // Or refused, naming the commit, with nothing changed.
+        assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+        assert!(
+            run.stderr.contains("f.txt") && run.stderr.contains("add tail"),
+            "{}",
+            run.stderr
+        );
+        assert_eq!(before, fixture.snapshot());
+    }
+}
+
+#[test]
+fn a_hunk_among_repeated_lines_never_lands_in_a_look_alike_run() {
+    assert_never_in_the_wrong_run(false);
+}
+
+#[test]
+fn a_hunk_into_the_commit_that_creates_the_file_is_checked_by_content() {
+    assert_never_in_the_wrong_run(true);
+}
+
+#[test]
+fn a_hunk_into_the_commit_that_creates_the_file_keeps_the_later_changes() {
+    let fixture = Fixture::with_files(&[("other.txt", "other\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write(
+        "f.txt",
+        &lines("one two three four five six seven eight nine"),
+    );
+    fixture.commit_all("add f");
+    fixture.write(
+        "f.txt",
+        &lines("one two three four five six seven eight NINE"),
+    );
+    fixture.commit_all("shout nine");
+    fixture.write(
+        "f.txt",
+        &lines("ONE two three four five six seven eight NINE"),
+    );
+    fixture.aisc(&["amend", "--into", "add f", "f.txt"]).ok();
+    assert_eq!(
+        fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
+        lines("ONE two three four five six seven eight nine")
+    );
+    assert_eq!(
+        fixture.tree_blob("HEAD", "f.txt").unwrap(),
+        fixture.read("f.txt")
+    );
+    assert_eq!(fixture.subjects("main..HEAD"), ["shout nine", "add f"]);
+}
