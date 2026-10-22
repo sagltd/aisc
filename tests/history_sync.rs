@@ -839,3 +839,21 @@ fn a_push_on_top_of_squashed_commits_replays_after_the_squash() {
     assert_eq!(fixture.subjects("main..HEAD"), ["C", "S"]);
     assert_eq!(fixture.read("b.txt"), "b2\n");
 }
+
+#[test]
+fn sync_never_takes_back_pushed_rebased_commits_the_user_squashed() {
+    let (fixture, remote) = feature_on_origin(&[("a.txt", "a\n", "A"), ("b.txt", "b\n", "B")]);
+    publish(&fixture, &remote, "main", "m1.txt", "m1\n", "M1");
+    fixture.aisc(&["sync", "--fetch"]).ok();
+    fixture.git(&["push", "-q", "-f", "origin", "feature"]);
+    fixture.aisc(&["squash", "--into", "S", "A", "B"]).ok();
+    publish(&fixture, &remote, "main", "m2.txt", "m2\n", "M2");
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert_eq!(
+        fixture.subjects("origin/main..HEAD"),
+        ["S"],
+        "{}",
+        run.stdout
+    );
+}

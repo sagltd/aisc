@@ -714,6 +714,22 @@ fn new_upstream_commits(git: &Git, name: &str, tip: &str, onto: &str) -> Result<
         .filter(|oid| !oid.bytes().all(|byte| byte == b'0'))
         .map(str::to_owned)
         .collect();
+    // Whatever the user pushed to the upstream is theirs too, even if only a sync or rebase
+    // made it locally: Git records each push in the remote-tracking reflog.
+    if let Ok(remote_log) = std::fs::read_to_string(git.common_dir()?.join("logs").join(&refname)) {
+        seen.extend(
+            remote_log
+                .lines()
+                .filter(|line| {
+                    line.split_once('\t')
+                        .is_some_and(|(_, message)| message.starts_with("update by push"))
+                })
+                .filter_map(|line| line.split(' ').nth(1))
+                .filter(|oid| oid.len() >= 40 && oid.bytes().all(|byte| byte.is_ascii_hexdigit()))
+                .filter(|oid| !oid.bytes().all(|byte| byte == b'0'))
+                .map(str::to_owned),
+        );
+    }
     seen.sort();
     seen.dedup();
     if seen.len() > 512 {
