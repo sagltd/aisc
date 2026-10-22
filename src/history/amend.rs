@@ -615,6 +615,8 @@ enum Miss {
     Apply(usize),
     /// The block's lines are changed by the commit at that chain position.
     Clash(usize, usize),
+    /// The file's mode is changed by the commit at that chain position.
+    Mode(usize),
     Other(anyhow::Error),
 }
 
@@ -636,6 +638,11 @@ struct Context<'a> {
     exact: BTreeSet<String>,
     /// Chain position of the tip.
     tip: usize,
+    /// For a whole file whose mode changes: the newest commit (chain position) that changes the
+    /// file's mode itself. The mode change can only go there or later.
+    mode_last: BTreeMap<usize, usize>,
+    /// Files whose blocks were rebuilt from the stored (filtered) blob, not the listing.
+    rebuilt: BTreeSet<usize>,
 }
 
 impl Context<'_> {
@@ -695,11 +702,12 @@ fn place(
     match file.kind {
         Kind::Modified => {
             let (mode, oid) = current.ok_or(Miss::Absent)?;
-            let mode = if whole && file.mode_changed() {
-                new_mode
-            } else {
-                mode.clone()
-            };
+            let moded = whole && file.mode_changed();
+            if moded && let Some(k) = context.mode_last.get(&file_index).filter(|k| **k > j) {
+                // A later commit changes the mode itself: the change goes there or later.
+                return Err(Miss::Mode(*k));
+            }
+            let mode = if moded { new_mode } else { mode.clone() };
             let exact = context.exact.contains(&file.path);
             if file.old_oid.as_ref() == Some(oid) {
                 // HEAD's version: the blocks go exactly where they were recorded.
@@ -714,10 +722,10 @@ fn place(
                 return Ok((Some((mode, oid)), Some(placed)));
             }
             if !exact {
-                return Err(Miss::Other(fail_hint(
+                // Unreachable: a whole file's blocks are rebuilt from the stored blob.
+                return Err(Miss::Other(fail(
                     Code::Unsupported,
-                    format!("{}: Git filters or line-ending conversion apply", file.path),
-                    "amend it into the last commit that changed the file",
+                    format!("{}: its change cannot be placed line by line", file.path),
                 )));
             }
             // Another version of the file: each block goes where the later commits' own diffs
@@ -772,19 +780,23 @@ fn selected_blocks(file: &FileChange, selected: &FileSel) -> BTreeSet<usize> {
     }
 }
 
-/// The one `aisc amend` call that places every block: each block goes into its own target, or
-/// into the newest later commit that changes its lines (`needs`). `None` when a mode change
-/// would have to be split across commits.
+/// The one `aisc amend` call that places every change: each block goes into its own target, or
+/// into the newest later commit that changes its lines (`needs`); a whole file with a mode change
+/// goes, whole, into the newest commit any of its parts or its mode needs. The call is checked
+/// before it is offered: every group must resolve to exactly the blocks meant for it, with no
+/// overlap. `None` when no checked call exists.
 fn one_call(
-    changes: &ChangeSet,
+    context: &Context<'_>,
     chain: &[CommitInfo],
     routes: &Routes,
     needs: &BTreeMap<(usize, usize), usize>,
 ) -> Option<String> {
+    let changes = context.changes;
     let mut groups: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    // What each group must select: file -> its blocks (`None`: the whole file).
+    let mut meant: BTreeMap<usize, BTreeMap<usize, Option<BTreeSet<usize>>>> = BTreeMap::new();
     for (index, file_routes) in routes {
         let file = &changes.files[*index];
-        let path = shell_word(&file.path);
         let finals: BTreeMap<usize, usize> = file_routes
             .iter()
             .flat_map(|(target, selected)| {
@@ -796,17 +808,29 @@ fn one_call(
                 })
             })
             .collect();
-        let targets: BTreeSet<usize> = finals.values().copied().collect();
         let whole = file_routes
             .iter()
             .any(|(_, selected)| *selected == FileSel::Whole);
-        if file.kind != Kind::Modified || (whole && targets.len() <= 1) {
-            let target = targets.first().copied().unwrap_or_else(|| file_routes[0].0);
-            groups.entry(target).or_default().push(path);
+        let targets: BTreeSet<usize> = finals.values().copied().collect();
+        let together = file.kind != Kind::Modified
+            || (whole
+                && (targets.len() <= 1 || file.mode_changed() || context.rebuilt.contains(index)));
+        if together {
+            let mode = if whole && file.mode_changed() {
+                context.mode_last.get(index).copied()
+            } else {
+                None
+            };
+            let target = targets
+                .iter()
+                .copied()
+                .chain(mode)
+                .chain(file_routes.iter().map(|(target, _)| *target))
+                .max()
+                .unwrap_or_default();
+            groups.entry(target).or_default().push(file.path.clone());
+            meant.entry(target).or_default().insert(*index, None);
             continue;
-        }
-        if whole && file.mode_changed() {
-            return None;
         }
         for hunk in &file.hunks {
             let picked: Vec<usize> = hunk
@@ -816,45 +840,73 @@ fn one_call(
                 .collect();
             let into: BTreeSet<usize> = picked.iter().map(|block| finals[block]).collect();
             if picked.len() == hunk.blocks.len() && into.len() == 1 {
-                groups
-                    .entry(finals[&picked[0]])
+                let target = finals[&picked[0]];
+                groups.entry(target).or_default().push(hunk.short.clone());
+                let blocks = meant
+                    .entry(target)
                     .or_default()
-                    .push(hunk.short.clone());
+                    .entry(*index)
+                    .or_insert(Some(BTreeSet::new()));
+                blocks.get_or_insert_with(BTreeSet::new).extend(picked);
                 continue;
             }
             for block in picked {
                 let lines = &file.blocks[block];
-                let (from, count) = if lines.added.is_empty() {
-                    (lines.old_pos + 1, lines.removed.len())
-                } else {
-                    (lines.new_pos + 1, lines.added.len())
-                };
-                let last = from + count.max(1) - 1;
+                // New-side lines; a deletion is named by the line it falls at.
+                let from = lines.new_pos + 1;
+                let last = from + lines.added.len().max(1) - 1;
+                let target = finals[&block];
                 groups
-                    .entry(finals[&block])
+                    .entry(target)
                     .or_default()
-                    .push(shell_word(&format!("{}:{from}-{last}", file.path)));
+                    .push(format!("{}:{from}-{last}", file.path));
+                let blocks = meant
+                    .entry(target)
+                    .or_default()
+                    .entry(*index)
+                    .or_insert(Some(BTreeSet::new()));
+                blocks.get_or_insert_with(BTreeSet::new).insert(block);
             }
         }
     }
+    // The check: resolve each group exactly as the offered call would.
+    let mut selections = Vec::new();
+    for (target, tokens) in &groups {
+        let selection = selector::resolve(&context.git.root, changes, tokens).ok()?;
+        let want = &meant[target];
+        if selection.files.len() != want.len() {
+            return None;
+        }
+        for (index, selected) in &selection.files {
+            let file = &changes.files[*index];
+            let fits = match want.get(index)? {
+                None => *selected == FileSel::Whole,
+                Some(blocks) => {
+                    selected_blocks(file, selected) == *blocks
+                        && !(*selected == FileSel::Whole && file.mode_changed())
+                }
+            };
+            if !fits {
+                return None;
+            }
+        }
+        selections.push(selection);
+    }
+    selector::check_disjoint(changes, &selections).ok()?;
     let mut call = "aisc amend".to_owned();
     for (target, tokens) in groups {
         call.push_str(&format!(" --into {}", shell_word(&chain[target].short)));
         for token in tokens {
             call.push(' ');
-            call.push_str(&token);
+            call.push_str(&shell_word(&token));
         }
     }
     Some(call)
 }
 
-/// A block whose lines a later commit changes: names that commit and the one call that works.
-fn retarget(
-    context: &Context<'_>,
-    chain: &[CommitInfo],
-    routes: &Routes,
-    (file_index, block, at): (usize, usize, usize),
-) -> anyhow::Error {
+/// The hint for a change that a later commit (chain position `at`) stands in the way of: the one
+/// call that works, checked, or else the commit to target.
+fn retarget(context: &Context<'_>, chain: &[CommitInfo], routes: &Routes, at: usize) -> String {
     let mut needs = BTreeMap::new();
     for (index, file_routes) in routes {
         let file = &context.changes.files[*index];
@@ -869,21 +921,10 @@ fn retarget(
             }
         }
     }
-    let file = &context.changes.files[file_index];
-    let hint = match one_call(context.changes, chain, routes, &needs) {
+    match one_call(context, chain, routes, &needs) {
         Some(call) => format!("target {} instead: {call}", chain[at].short),
         None => format!("target {} or later", chain[at].short),
-    };
-    fail_hint(
-        Code::Conflict,
-        format!(
-            "hunk {} ({}) edits lines from {}; nothing was changed",
-            hunk_name(file, block),
-            file.path,
-            short_of(&chain[at])
-        ),
-        hint,
-    )
+    }
 }
 
 fn nth(blocks: &BTreeSet<usize>, order: usize) -> usize {
@@ -963,7 +1004,26 @@ fn explain(
             format!("{} is changed again by {}", file.path, short_of(here)),
             "target that commit or a later one",
         ),
-        Miss::Clash(block, k) => retarget(context, chain, routes, (file_index, block, k)),
+        Miss::Clash(block, k) => fail_hint(
+            Code::Conflict,
+            format!(
+                "hunk {} ({}) edits lines from {}; nothing was changed",
+                hunk_name(file, block),
+                file.path,
+                short_of(&chain[k])
+            ),
+            retarget(context, chain, routes, k),
+        ),
+        Miss::Mode(k) => fail_hint(
+            Code::Conflict,
+            format!(
+                "{}: {} changes its mode too; the mode change cannot go into {}; nothing was changed",
+                file.path,
+                short_of(&chain[k]),
+                short_of(here)
+            ),
+            retarget(context, chain, routes, k),
+        ),
         Miss::Apply(block) => fail_hint(
             Code::Conflict,
             format!(
@@ -993,6 +1053,7 @@ struct Placed {
 fn verify_commits(
     context: &Context<'_>,
     chain: &[CommitInfo],
+    routes: &Routes,
     placed: &[Vec<Placed>],
 ) -> Result<BTreeSet<(usize, String)>> {
     let mut oids = BTreeSet::new();
@@ -1017,9 +1078,26 @@ fn verify_commits(
             };
             let file = &context.changes.files[item.index];
             let unproved = || mismatch(&file.path, &chain[j], "");
-            let (Some((_, before)), Some((_, after))) = (&item.before, &item.after) else {
+            let (Some((mode_before, before)), Some((mode_after, after))) =
+                (&item.before, &item.after)
+            else {
                 return Err(unproved());
             };
+            // Modes: the worktree's mode change goes in with the whole file, from HEAD's mode;
+            // otherwise the commit keeps its own mode, so its own mode change stays as it was.
+            let mode_routed = file.mode_changed()
+                && routes[&item.index]
+                    .iter()
+                    .any(|(target, selected)| *selected == FileSel::Whole && *target <= j);
+            let modes_kept = if mode_routed {
+                file.old_mode.as_ref() == Some(mode_before)
+                    && file.new_mode.as_ref() == Some(mode_after)
+            } else {
+                mode_before == mode_after
+            };
+            if !modes_kept {
+                return Err(unproved());
+            }
             // The same file in the rewritten parent, when the parent is rewritten too.
             let previous = j
                 .checked_sub(1)
@@ -1055,6 +1133,104 @@ fn verify_commits(
         }
     }
     Ok(proved)
+}
+
+/// Whether `blocks` applied to `lines` give exactly the blob `oid`.
+fn rebuilds(git: &Git, lines: &[Line], blocks: &[Block], oid: Option<&str>) -> Result<bool> {
+    let every: Vec<&Block> = blocks.iter().collect();
+    let (Some(oid), Ok(rebuilt)) = (oid, splice(lines, &every)) else {
+        return Ok(false);
+    };
+    Ok(git.write_blob(&join_lines(&rebuilt), true)? == oid)
+}
+
+/// The file's change as the diff of HEAD's blob and `stored` (the blob Git stores for the
+/// worktree file): exact blocks by construction, whatever filters produced `stored`.
+fn stored_blocks(git: &Git, tip_tree: &str, file: &FileChange, stored: &str) -> Result<FileChange> {
+    let mode = file
+        .new_mode
+        .clone()
+        .or_else(|| file.old_mode.clone())
+        .unwrap_or_else(|| "100644".to_owned());
+    let tree = git.tree_with(
+        tip_tree,
+        &[TreeEdit {
+            path: file.path.clone(),
+            entry: Some((mode, stored.to_owned())),
+        }],
+    )?;
+    let mut args = super::diff::commit_diff_args(false);
+    args.extend([tip_tree, tree.as_str(), "--", file.path.as_str()]);
+    let mut files = super::diff::parse_patch(&git.run(&args)?)?;
+    super::diff::assign_ids(&mut files);
+    files
+        .into_iter()
+        .find(|other| other.path == file.path && other.kind == Kind::Modified && !other.binary)
+        .ok_or_else(|| {
+            fail(
+                Code::Unsupported,
+                format!("{}: its change cannot be placed line by line", file.path),
+            )
+        })
+}
+
+/// Blob ids of worktree files exactly as `git add` would store them: through Git's filters and
+/// line-ending rules, several of which consult the index (a file whose staged version has CRLF
+/// keeps it under `core.autocrlf`). Works on a copy of the index; the real one is untouched.
+pub(super) fn hash_as_staged(git: &Git, paths: &[String]) -> Result<Vec<String>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let real = git.dir.join("index");
+    let copy = git
+        .dir
+        .join(format!("aisc-hash-index-{}", std::process::id()));
+    let result = (|| -> Result<Vec<String>> {
+        match std::fs::copy(&real, &copy) {
+            Ok(_) => {
+                // Git's racy-clean check compares entries with the index file's own time.
+                let modified = std::fs::metadata(&real)?.modified()?;
+                std::fs::File::options()
+                    .write(true)
+                    .open(&copy)?
+                    .set_modified(modified)?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let env = [
+            ("GIT_INDEX_FILE", copy.as_os_str()),
+            ("GIT_LITERAL_PATHSPECS", std::ffi::OsStr::new("1")),
+        ];
+        let mut stored = BTreeMap::new();
+        for chunk in paths.chunks(400) {
+            let mut args = vec!["update-index", "--add", "--"];
+            args.extend(chunk.iter().map(String::as_str));
+            git.run_with(&args, &env, None)?;
+            let mut args = vec!["ls-files", "-s", "-z", "--"];
+            args.extend(chunk.iter().map(String::as_str));
+            let output = git.run_with(&args, &env, None)?;
+            for record in output.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
+                let text = String::from_utf8_lossy(record);
+                if let Some((meta, path)) = text.split_once('\t')
+                    && let Some(oid) = meta.split(' ').nth(1)
+                {
+                    stored.insert(path.to_owned(), oid.to_owned());
+                }
+            }
+        }
+        paths
+            .iter()
+            .map(|path| {
+                stored
+                    .get(path)
+                    .cloned()
+                    .ok_or_else(|| fail(Code::State, format!("{path}: cannot read file")))
+            })
+            .collect()
+    })();
+    let _ = std::fs::remove_file(&copy);
+    result
 }
 
 pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
@@ -1122,7 +1298,8 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
             to_hash.push(file.path.clone());
         }
     }
-    let hashes = git.hash_worktree(&to_hash)?;
+    // Hashed as `git add` would store them, so this compares with what the listing saw.
+    let hashes = hash_as_staged(&git, &to_hash)?;
     let mut hashed = BTreeMap::new();
     for (path, oid) in to_hash.iter().zip(hashes) {
         let file = &changes.files[changes.index_of(path).expect("path from the change set")];
@@ -1150,6 +1327,8 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     let old_blobs = git.read_blobs(&old_oids)?;
     let mut old_lines = BTreeMap::new();
     let mut exact = BTreeSet::new();
+    let mut owned = changes.clone();
+    let mut rebuilt = BTreeSet::new();
     for (index, blob) in modified.iter().zip(old_blobs) {
         let file = &changes.files[*index];
         let lines = split_lines(&blob);
@@ -1157,13 +1336,7 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
             .iter()
             .any(|(_, selected)| matches!(selected, FileSel::Blocks(_)));
         // Exactness gate: all blocks together must reproduce the worktree blob exactly.
-        let every: Vec<&Block> = file.blocks.iter().collect();
-        let rebuilt = splice(&lines, &every).ok();
-        let oid = match &rebuilt {
-            Some(rebuilt) => Some(git.write_blob(&join_lines(rebuilt), true)?),
-            None => None,
-        };
-        if oid.is_some() && file.new_oid == oid {
+        if rebuilds(&git, &lines, &file.blocks, file.new_oid.as_deref())? {
             exact.insert(file.path.clone());
         } else if partial {
             return Err(fail_hint(
@@ -1171,9 +1344,27 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
                 format!("{}: Git filters or line-ending conversion apply", file.path),
                 "select the whole file",
             ));
+        } else {
+            // A whole file: its exact blocks are the diff of HEAD's blob and the blob Git
+            // stores for the worktree file (through every filter).
+            let stored = &hashed[&file.path];
+            let blocks = stored_blocks(&git, &tip_tree, file, stored)?;
+            if !rebuilds(&git, &lines, &blocks.blocks, Some(stored))? {
+                return Err(fail(
+                    Code::Unsupported,
+                    format!("{}: its change cannot be placed line by line", file.path),
+                ));
+            }
+            let target = &mut owned.files[*index];
+            target.blocks = blocks.blocks;
+            target.hunks = blocks.hunks;
+            target.new_oid = Some(stored.clone());
+            rebuilt.insert(*index);
+            exact.insert(file.path.clone());
         }
         old_lines.insert(file.path.clone(), lines);
     }
+    let changes = &owned;
     let modified_paths: Vec<String> = modified
         .iter()
         .map(|index| changes.files[*index].path.clone())
@@ -1183,6 +1374,42 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     } else {
         recorded(&git, &chain, &modified_paths)?
     };
+    // Whole files whose mode changes: the newest commit that changes their mode itself.
+    let moded: Vec<usize> = routes
+        .iter()
+        .filter(|(index, file_routes)| {
+            let file = &changes.files[**index];
+            file.kind == Kind::Modified
+                && file.mode_changed()
+                && file_routes
+                    .iter()
+                    .any(|(_, selected)| *selected == FileSel::Whole)
+        })
+        .map(|(index, _)| *index)
+        .collect();
+    let mut mode_last = BTreeMap::new();
+    if !moded.is_empty() && chain.len() > 1 {
+        let paths: Vec<String> = moded
+            .iter()
+            .map(|index| changes.files[*index].path.clone())
+            .collect();
+        let mut previous: Option<BTreeMap<String, Entry>> = None;
+        for (k, commit) in chain.iter().enumerate() {
+            let entries = git.ls_tree(&commit.tree, &paths)?;
+            if let Some(previous) = &previous {
+                for index in &moded {
+                    let path = &changes.files[*index].path;
+                    let mode = |entries: &BTreeMap<String, Entry>| {
+                        entries.get(path).map(|(mode, _)| mode.clone())
+                    };
+                    if mode(previous) != mode(&entries) {
+                        mode_last.insert(*index, k);
+                    }
+                }
+            }
+            previous = Some(entries);
+        }
+    }
     let context = Context {
         git: &git,
         changes,
@@ -1192,6 +1419,8 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
         steps,
         exact,
         tip: chain.len() - 1,
+        mode_last,
+        rebuilt,
     };
 
     // One tree per commit from the oldest target to the tip.
@@ -1231,7 +1460,7 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
         trees.push(git.tree_with(&commit.tree, &edits)?);
         placed.push(placed_here);
     }
-    let proved = verify_commits(&context, &chain, &placed)?;
+    let proved = verify_commits(&context, &chain, &routes, &placed)?;
 
     // Final verification, at line level, before any commit is created.
     let parent_tree = match chain[0].parents.first() {
@@ -1443,5 +1672,60 @@ mod tests {
         assert!(!check(false, "A\nb\nC\nd\n", Some("A\nb\nc\nD\n")));
         assert!(!check(false, "a\nb\nC\nA\n", Some("A\nb\nc\nd\n")));
         assert!(!check(true, "A\nb\nC\nd\n", Some("A\nb\nc\nd\n")));
+    }
+
+    fn sh(root: &std::path::Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap()
+            .status;
+        assert!(status.success(), "{args:?}");
+    }
+
+    #[test]
+    fn stored_blocks_rebuild_the_stored_blob_exactly() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().to_path_buf();
+        sh(&root, &["init", "-q", "-b", "main"]);
+        sh(&root, &["config", "user.name", "T"]);
+        sh(&root, &["config", "user.email", "t@example.invalid"]);
+        std::fs::write(root.join("f"), "a\r\nb\r\nc\r\n").unwrap();
+        sh(&root, &["add", "."]);
+        sh(&root, &["commit", "-q", "-m", "base"]);
+        let git = Git {
+            dir: root.join(".git"),
+            root,
+        };
+        let head = git.head_state().unwrap();
+        let tree = git.commit_tree_of(&head.oid).unwrap();
+        let old = git.ls_tree(&tree, &["f".to_owned()]).unwrap()["f"]
+            .1
+            .clone();
+        // Whatever a filter made of the worktree file: mixed endings, a changed and an added line.
+        let stored = git.write_blob(b"A\nb\r\nc\r\nd\n", true).unwrap();
+        let file = FileChange {
+            path: "f".into(),
+            kind: Kind::Modified,
+            old_mode: Some("100644".into()),
+            new_mode: Some("100644".into()),
+            old_oid: Some(old.clone()),
+            new_oid: None,
+            blocks: Vec::new(),
+            hunks: Vec::new(),
+            lines: 0,
+            binary: false,
+            digest: String::new(),
+            ws: false,
+        };
+        let change = stored_blocks(&git, &tree, &file, &stored).unwrap();
+        let head_lines = split_lines(&git.read_blobs(&[old]).unwrap()[0]);
+        assert_eq!(change.blocks.len(), 2);
+        assert!(rebuilds(&git, &head_lines, &change.blocks, Some(&stored)).unwrap());
+        assert!(!rebuilds(&git, &head_lines, &change.blocks[..1], Some(&stored)).unwrap());
     }
 }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
     name = "aisc",
     version,
     about = "Task-oriented source control, backed by Git",
-    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix --sparse src\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nNo automatic push or merge. finish removes the worktree `start --path` created (its branch stays; --keep opts out); aisc gc lists leftovers.\nConfigured Git hooks/signing run normally for checkpoint."
+    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix --sparse src\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nSelectors (SEL): PATH | hunk id | PATH:L-R | PATH~text. L-R are new-side line numbers; a deletion counts at the line that follows it (within L..R+1).\nNo automatic push or merge. finish removes the worktree `start --path` created (its branch stays; --keep opts out); aisc gc lists leftovers.\nConfigured Git hooks/signing run normally for checkpoint."
 )]
 pub(crate) struct Cli {
     /// Emit stable, ANSI-free JSON, including errors and help
@@ -147,7 +147,7 @@ pub(crate) struct Log {
 
 #[derive(Args, Debug)]
 pub(crate) struct Show {
-    /// Optional commit/range first, then selectors (PATH, hunk id, PATH:L-R, PATH~text)
+    /// Optional commit/range first, then selectors (PATH, hunk id, PATH:L-R on new-side lines, PATH~text)
     #[arg(value_name = "REV|A..B|SEL")]
     pub args: Vec<String>,
     /// Include 3 lines of context and do not cap hunk length

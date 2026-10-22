@@ -1,6 +1,6 @@
 //! `aisc discard`: reverts selected uncommitted changes. The old bytes are kept in the op so that
 //! `aisc undo` restores them exactly.
-use super::amend::{finish, hunks_in, require_checked_out};
+use super::amend::{finish, hash_as_staged, hunks_in, require_checked_out};
 use super::apply::{Direction, join_lines, split_lines, transplant, unsplice};
 use super::model::{Block, ChangeSet, FileChange, Kind};
 use super::plumbing::{Entry, Git};
@@ -269,7 +269,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
             )));
         }
     }
-    let hashes = git.hash_worktree(&modified)?;
+    let hashes = hash_as_staged(&git, &modified)?;
     for (path, oid) in modified.iter().zip(&hashes) {
         let file = &changes.files[changes.index_of(path).expect("path from the change set")];
         if file.new_oid.as_deref() != Some(oid.as_str()) {

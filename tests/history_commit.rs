@@ -480,7 +480,7 @@ fn partially_staged_selected_file_keeps_the_users_staging() {
 fn a_file_changed_between_read_and_commit_is_a_stale_error() {
     let fixture = pilot1();
     let hook = "printf 'sneaky\\n' >> README.md";
-    let env = fixture.fake_git("hash-object", hook);
+    let env = fixture.fake_git("update-index", hook);
     let before_refs = fixture.git(&["for-each-ref"]);
     let run = fixture.aisc_env(
         &["commit", "-m", "x", "README.md"],
@@ -727,6 +727,19 @@ fn undo_of_an_intent_to_add_commit_never_fails_on_the_placeholder() {
             "commit undone"
         );
     }
+}
+
+#[test]
+fn autocrlf_on_a_file_committed_with_crlf_is_not_a_concurrent_change() {
+    // Git keeps CRLF for a file whose committed version has CRLF; so must the change check.
+    let fixture = Fixture::with_files(&[("f", "a\r\nb\r\nc\r\n")]);
+    fixture.git(&["config", "core.autocrlf", "true"]);
+    fixture.write(".git/info/attributes", "* text=auto\n");
+    fixture.write("f", "A\nb\r\nc\r\n");
+    let run = fixture.aisc(&["commit", "-m", "edit", "f"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.git_bytes(&["show", "HEAD:f"]), b"A\nb\r\nc\r\n");
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
 }
 
 #[test]

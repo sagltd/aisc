@@ -310,7 +310,7 @@ fn failures_change_nothing() {
 #[test]
 fn a_file_changed_between_read_and_discard_is_a_stale_error() {
     let fixture = pilot9();
-    let env = fixture.fake_git("hash-object", "printf 'sneaky\\n' >> src/format.ts");
+    let env = fixture.fake_git("update-index", "printf 'sneaky\\n' >> src/format.ts");
     let run = fixture.aisc_env(&["discard", "src/format.ts"], &support::env_refs(&env));
     assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
     assert!(
@@ -392,4 +392,18 @@ fn an_unchanged_large_untracked_file_is_discarded_and_undo_restores_it() {
     assert!(!fixture.exists("big.bin"));
     fixture.aisc(&["undo"]).ok();
     assert_eq!(std::fs::read(fixture.path("big.bin")).unwrap(), content);
+}
+
+#[test]
+fn autocrlf_on_a_file_committed_with_crlf_is_not_a_concurrent_change() {
+    let fixture = Fixture::with_files(&[("f", "a\r\nb\r\nc\r\n")]);
+    fixture.git(&["config", "core.autocrlf", "true"]);
+    fixture.write(".git/info/attributes", "* text=auto\n");
+    fixture.write("f", "A\nb\r\nc\r\n");
+    let run = fixture.aisc(&["discard", "f"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        std::fs::read(fixture.path("f")).unwrap(),
+        b"a\r\nb\r\nc\r\n"
+    );
 }

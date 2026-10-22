@@ -196,7 +196,8 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
             to_hash.push(file.path.clone());
         }
     }
-    let hashes = git.hash_worktree(&to_hash)?;
+    // Hashed as `git add` would store them, so this compares with what the listing saw.
+    let hashes = super::amend::hash_as_staged(&git, &to_hash)?;
     let mut hashed = BTreeMap::new();
     for (path, oid) in to_hash.iter().zip(hashes) {
         let file = &changes.files[changes.index_of(path).expect("path from the change set")];

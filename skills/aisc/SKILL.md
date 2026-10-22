@@ -9,7 +9,7 @@ compatibility: Requires Git and the AISC command-line tool (sagltd/aisc).
 
 Use `aisc` for every version-control write. Run `aisc log` once: it shows the branch's commits (hex ids) and uncommitted hunks (letter ids). Don't also run git status/log/diff.
 
-Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:START-END | "PATH~text in the change".
+Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:START-END (new-side lines; a deletion counts at the line after it, so a range ending on the line just before a deletion also selects it) | "PATH~text in the change".
 
 - Commit: `aisc commit -m MSG [-b NEW_BRANCH] SEL...` (`--all` = everything)
 - Fold changes into existing commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]`

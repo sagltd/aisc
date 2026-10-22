@@ -82,7 +82,7 @@ Published means: git 92.2 s / 20.4 commands / 31.7 KB, jj 110 s / 21.0 / 46.1 KB
 
 ### 3.3 Selectors (`selector.rs`)
 Selectors are resolved against a changeset (uncommitted, or one commit's diff for split and uncommit):
-1. `PATH:L-R` or `PATH:L`: blocks whose new-side range (old-side for pure deletions) intersects lines L..R.
+1. `PATH:L-R` or `PATH:L`: new-side line numbers only. A block is selected when its added lines intersect L..R; a pure deletion is selected when the new-side line it falls at (the line after the deleted lines) lies within L..R+1. Old-side numbers never count, so a range never picks up a deletion recorded elsewhere.
 2. `PATH~TEXT` (split at the first `~` whose prefix is a changed path): hunks whose changed lines contain TEXT (case-sensitive). Zero matches is an error.
 3. An exact changed path: every hunk of the file. For text files this means all hunks; added, deleted, untracked and binary files are whole-file.
 4. A token matching `^[g-v]{3,16}$`: a unique hunk-id prefix.
@@ -397,7 +397,7 @@ Steps:
   ---
   # AISC
   Use `aisc` for every version-control write. Run `aisc log` once: it shows the branch's commits (hex ids) and uncommitted hunks (letter ids). Don't also run git status/log/diff.
-  Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:START-END | "PATH~text in the change".
+  Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:START-END (new-side lines; a deletion counts at the line after it, so a range ending on the line just before a deletion also selects it) | "PATH~text in the change".
   - Commit: aisc commit -m MSG [-b NEW_BRANCH] SEL...   (--all = everything)
   - Fold changes into existing commits: aisc amend --into COMMIT SEL... [--into COMMIT SEL...]
   - Split: aisc split COMMIT --into MSG SEL... [--into MSG SEL...]   (unselected parts become uncommitted)
