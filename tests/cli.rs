@@ -105,7 +105,7 @@ fn agent_setup_prints_a_plain_text_instructions_block() {
         text.trim_end().ends_with("<!-- aisc-agent-setup:end -->"),
         "{text}"
     );
-    assert!(text.contains("Start with `aisc log`"), "{text}");
+    assert!(text.contains("two calls: `aisc log`"), "{text}");
     // Small enough to sit in every agent session.
     assert!(text.len() < 2000, "{} bytes", text.len());
     assert!(
