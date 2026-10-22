@@ -1685,19 +1685,34 @@ pub(crate) fn carry(
         }
         works.push(read_work(&git.root, &change.path)?);
     }
+    // A file whose bytes are exactly one side's blob needs no `git hash-object`: those bytes are
+    // already in history, so the comparison below cannot lose anything Git would have kept.
+    let known: Vec<Option<String>> = active
+        .iter()
+        .zip(&works)
+        .map(|(change, work)| {
+            let oid = work.bytes().and_then(|bytes| git.blob_id(&bytes).ok())?;
+            [&change.from, &change.to]
+                .into_iter()
+                .flatten()
+                .any(|(_, side)| *side == oid)
+                .then_some(oid)
+        })
+        .collect();
     let present: Vec<String> = active
         .iter()
         .zip(&works)
-        .filter(|(_, work)| !work.is_absent())
-        .map(|(change, _)| change.path.clone())
+        .zip(&known)
+        .filter(|((_, work), known)| !work.is_absent() && known.is_none())
+        .map(|((change, _), _)| change.path.clone())
         .collect();
     let mut hashes = git.hash_worktree(&present)?.into_iter();
     let mut hashed = Vec::new();
-    for work in &works {
+    for (work, known) in works.iter().zip(known) {
         hashed.push(if work.is_absent() {
             None
         } else {
-            hashes.next()
+            known.or_else(|| hashes.next())
         });
     }
 

@@ -13,6 +13,7 @@ use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -191,7 +192,7 @@ fn resolve_conflict(
                     false,
                 )
                 .map_err(|_| unmergeable(path))?;
-            let oid = git.write_blob(&bytes, true)?;
+            let oid = git.write_object(Kind::Blob, &bytes)?;
             return Ok(Resolved::Entry(Some((mode, oid))));
         }
         let side = if prefer_branch { 2 } else { 1 };
@@ -200,7 +201,7 @@ fn resolve_conflict(
     let blob = |stage: &Option<Entry>| -> Result<String> {
         match stage {
             Some((mode, oid)) if regular(mode) => Ok(oid.clone()),
-            None => git.write_blob(b"", true),
+            None => git.write_object(Kind::Blob, b""),
             Some(_) => Err(fail_hint(
                 Code::Unsupported,
                 format!("{path}: conflict in a symlink or submodule"),
@@ -220,7 +221,7 @@ fn resolve_conflict(
             true,
         )
         .map_err(|_| unmergeable(path))?;
-    let oid = git.write_blob(&bytes, true)?;
+    let oid = git.write_object(Kind::Blob, &bytes)?;
     if count == 0 {
         return Ok(Resolved::Entry(Some((mode, oid))));
     }
