@@ -535,6 +535,29 @@ impl Git {
         .flatten()
     }
 
+    /// `GIT_INDEX_FILE=INDEX git ls-files -s -- PATHS` (path to blob id), read in process.
+    pub fn index_file_entries(
+        &self,
+        index: &Path,
+        paths: &[String],
+    ) -> Option<Vec<(String, String)>> {
+        self.fast(|_| store::read_index_file(index)).map(|entries| {
+            entries
+                .into_iter()
+                .filter(|entry| {
+                    paths.iter().any(|path| {
+                        entry.path == *path
+                            || entry
+                                .path
+                                .strip_prefix(path.as_str())
+                                .is_some_and(|rest| rest.starts_with('/'))
+                    })
+                })
+                .map(|entry| (entry.path, entry.oid))
+                .collect()
+        })
+    }
+
     /// `symbolic-ref -q HEAD`: the branch HEAD names, even an unborn one (`None`: detached).
     pub fn head_symbolic(&self) -> Result<Option<String>> {
         if let Some((symbolic, _)) = self.fast(|store| store.head()) {
@@ -693,6 +716,49 @@ impl Git {
             position = start + size + 1;
         }
         Ok(blobs)
+    }
+
+    /// Stores several blobs (no filters) with one `git hash-object --stdin-paths` process. The
+    /// operation log's own records go through Git this way, so every mutation writes through Git
+    /// at least once before its reference transaction.
+    pub fn store_blobs(&self, blobs: &[&[u8]]) -> Result<Vec<String>> {
+        if blobs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let directory = self.dir.join("aisc").join("tmp");
+        let listed = directory.to_string_lossy();
+        if listed.contains(['\n', '\r']) || listed.starts_with('"') {
+            // --stdin-paths would split or unquote such names: one process per blob instead.
+            return blobs
+                .iter()
+                .map(|bytes| self.write_blob(bytes, true))
+                .collect();
+        }
+        std::fs::create_dir_all(&directory)?;
+        let mut files = Vec::with_capacity(blobs.len());
+        for bytes in blobs {
+            let sequence = COUNTER.fetch_add(1, Ordering::SeqCst);
+            // Named like the scratch indexes, so recovery sweeps them after a crash.
+            let file =
+                TempIndex(directory.join(format!("index-{}-{sequence}-blob", std::process::id())));
+            std::fs::write(&file.0, bytes)?;
+            files.push(file);
+        }
+        let mut input = String::new();
+        for file in &files {
+            input.push_str(&file.0.to_string_lossy());
+            input.push('\n');
+        }
+        let output = self.run_with(
+            &["hash-object", "-w", "--no-filters", "--stdin-paths"],
+            &[],
+            Some(input.into_bytes()),
+        )?;
+        let ids: Vec<String> = text(&output)?.lines().map(str::to_owned).collect();
+        if ids.len() != blobs.len() {
+            bail!("hash-object returned an unexpected number of ids");
+        }
+        Ok(ids)
     }
 
     /// The blob id of `bytes` without storing anything (`hash-object --stdin --no-filters`).

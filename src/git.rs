@@ -193,6 +193,10 @@ impl Repo {
         Ok(())
     }
     fn config_flag(&self, name: &str) -> Result<bool> {
+        // `git config --bool --get` printing `true`; unset and invalid values are false.
+        if let Ok(config) = crate::runner::config(&self.root) {
+            return Ok(config.is_true(name));
+        }
         Ok(text(
             &self
                 .git(&["config", "--bool", "--get", name])
@@ -218,10 +222,15 @@ impl Repo {
         if entries.iter().any(|entry| entry.mode == "160000") {
             bail!("submodule checkouts are unsupported for task writes");
         }
-        if entries
-            .iter()
-            .any(|entry| entry.assume_valid || entry.skip_worktree)
-        {
+        let cone = self.sparse_cone()?;
+        // Skip-worktree is how a cone checkout hides paths outside the cone; inside it, or
+        // without a cone, the flag would hide edits from verification.
+        let hidden = |entry: &crate::store::IndexEntry| {
+            entry.assume_valid
+                || (entry.skip_worktree
+                    && cone.as_ref().is_none_or(|cone| in_cone(&entry.path, cone)))
+        };
+        if entries.iter().any(hidden) {
             bail!(
                 "assume-unchanged and skip-worktree entries are unsupported for task writes and verification"
             );
@@ -240,9 +249,6 @@ impl Repo {
         }
         if entries.iter().any(|entry| entry.stage != 0) {
             bail!("resolve Git conflicts before task writes");
-        }
-        if crate::runner::config(&self.root)?.is_true("core.sparsecheckout") {
-            bail!("sparse checkouts are unsupported for task writes");
         }
         Ok(())
     }

@@ -609,7 +609,12 @@ pub(crate) struct IndexEntry {
 
 /// Reads `GIT_DIR/index`; an absent index is empty.
 pub(crate) fn read_index(git_dir: &Path) -> Result<Vec<IndexEntry>> {
-    let path = git_dir.join("index");
+    read_index_file(&git_dir.join("index"))
+}
+
+/// Reads an index file; an absent one is empty.
+pub(crate) fn read_index_file(path: &Path) -> Result<Vec<IndexEntry>> {
+    let path = path.to_owned();
     if !path.exists() {
         return Ok(Vec::new());
     }

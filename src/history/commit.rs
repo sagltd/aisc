@@ -10,6 +10,7 @@ use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -114,7 +115,9 @@ impl Context<'_> {
                 let chosen: Vec<_> = blocks.iter().map(|block| &file.blocks[*block]).collect();
                 let lines = splice(old, &chosen)
                     .map_err(|error| stale(&format!("{}: {error}", file.path)))?;
-                let oid = self.git.write_blob(&join_lines(&lines), true)?;
+                let oid = self
+                    .git
+                    .write_object(ObjectKind::Blob, &join_lines(&lines))?;
                 let mode = file.old_mode.clone().unwrap_or_else(|| "100644".to_owned());
                 Ok(Some((mode, oid)))
             }

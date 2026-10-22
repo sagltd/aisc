@@ -11,6 +11,7 @@ use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -727,7 +728,9 @@ fn place(
                 let lines = splice(&context.old_lines[&file.path], &chosen(file, blocks))
                     .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
                 let placed = chosen(file, blocks).into_iter().cloned().collect();
-                let oid = context.git.write_blob(&join_lines(&lines), true)?;
+                let oid = context
+                    .git
+                    .write_object(ObjectKind::Blob, &join_lines(&lines))?;
                 return Ok((Some((mode, oid)), Some(placed)));
             }
             if !exact {
@@ -750,7 +753,9 @@ fn place(
             let refs: Vec<&Block> = placed.iter().collect();
             let lines = splice(&split_lines(&ours), &refs)
                 .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
-            let oid = context.git.write_blob(&join_lines(&lines), true)?;
+            let oid = context
+                .git
+                .write_object(ObjectKind::Blob, &join_lines(&lines))?;
             Ok((Some((mode, oid)), Some(placed)))
         }
         Kind::Untracked | Kind::Added => {
@@ -1150,7 +1155,7 @@ fn rebuilds(git: &Git, lines: &[Line], blocks: &[Block], oid: Option<&str>) -> R
     let (Some(oid), Ok(rebuilt)) = (oid, splice(lines, &every)) else {
         return Ok(false);
     };
-    Ok(git.write_blob(&join_lines(&rebuilt), true)? == oid)
+    Ok(git.blob_id(&join_lines(&rebuilt))? == oid)
 }
 
 /// The file's change as the diff of HEAD's blob and `stored` (the blob Git stores for the
@@ -1216,6 +1221,10 @@ pub(super) fn hash_as_staged(git: &Git, paths: &[String]) -> Result<Vec<String>>
             let mut args = vec!["update-index", "--add", "--"];
             args.extend(chunk.iter().map(String::as_str));
             git.run_with(&args, &env, None)?;
+            if let Some(entries) = git.index_file_entries(&copy, chunk) {
+                stored.extend(entries);
+                continue;
+            }
             let mut args = vec!["ls-files", "-s", "-z", "--"];
             args.extend(chunk.iter().map(String::as_str));
             let output = git.run_with(&args, &env, None)?;

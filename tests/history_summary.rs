@@ -215,7 +215,9 @@ fn typical_verbs_stay_within_the_git_process_budget() {
     assert!(spawns(&["log"]) <= 3);
     assert!(spawns(&["commit", "-m", "b", "b.txt"]) <= 8);
     fixture.write("c.txt", "c2\n");
-    assert!(spawns(&["amend", "--into", "add c", "c.txt"]) <= 8);
+    // amend also diffs the commits it rewrites (once before, once after) and hashes the file the
+    // way `git add` does (`update-index` on an index copy).
+    assert!(spawns(&["amend", "--into", "add c", "c.txt"]) <= 9);
     assert!(spawns(&["squash", "--into", "c and d", "add c", "add d"]) <= 8);
     assert!(spawns(&["move", "b", "--before", "c and d"]) <= 8);
     assert!(spawns(&["undo"]) <= 8);
