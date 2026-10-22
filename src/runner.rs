@@ -315,6 +315,18 @@ pub(crate) fn config(root: &Path) -> Result<Arc<Config>> {
     {
         return Ok(config.clone());
     }
+    let config = match read_config_files(root) {
+        Some(config) => Arc::new(config),
+        None => Arc::new(config_from_git(root)?),
+    };
+    config_cache()
+        .lock()
+        .expect("config cache")
+        .insert(root.to_owned(), (generation, config.clone()));
+    Ok(config)
+}
+
+fn config_from_git(root: &Path) -> Result<Config> {
     let output = crate::git::run_git_raw(root, &["config", "-l", "-z"], &[], None, 16 << 20)?;
     // Exit 1 means "no configuration at all".
     if !(output.success() || output.code == Some(1)) || output.stdout_omitted != 0 {
@@ -323,12 +335,241 @@ pub(crate) fn config(root: &Path) -> Result<Arc<Config>> {
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    let config = Arc::new(Config::parse(&output.stdout));
-    config_cache()
-        .lock()
-        .expect("config cache")
-        .insert(root.to_owned(), (generation, config.clone()));
-    Ok(config)
+    Ok(Config::parse(&output.stdout))
+}
+
+/// `git config -l` without Git: the files Git reads, in Git's order, when every one of them is
+/// in the plain subset parsed exactly here. `None` (ask Git) for includes, quoted or escaped
+/// values, line continuations, legacy `[a.b]` headers, `git -c` parameters, or a system file
+/// whose location is not known yet.
+fn read_config_files(root: &Path) -> Option<Config> {
+    if std::env::var_os("GIT_CONFIG_PARAMETERS").is_some() {
+        return None;
+    }
+    let git_dir = git_dir_of(root)?;
+    let common = match std::fs::read_to_string(git_dir.join("commondir")) {
+        Ok(text) => git_dir.join(text.trim_end_matches(['\n', '\r'])),
+        Err(_) => git_dir.clone(),
+    };
+    let mut files: Vec<PathBuf> = Vec::new();
+    if std::env::var_os("GIT_CONFIG_NOSYSTEM")
+        .is_none_or(|value| parse_bool(&value.to_string_lossy()) != Some(true))
+    {
+        files.push(system_config_path(root, &common)?);
+    }
+    match std::env::var_os("GIT_CONFIG_GLOBAL") {
+        Some(global) => files.push(PathBuf::from(global)),
+        None => {
+            let home = std::env::var_os("HOME").map(PathBuf::from);
+            let xdg = std::env::var_os("XDG_CONFIG_HOME")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| home.as_ref().map(|home| home.join(".config")));
+            if let Some(xdg) = xdg {
+                files.push(xdg.join("git").join("config"));
+            }
+            if let Some(home) = home {
+                files.push(home.join(".gitconfig"));
+            }
+        }
+    }
+    files.push(common.join("config"));
+    let mut entries = Vec::new();
+    for file in &files {
+        entries.extend(parse_config_file(file)?);
+    }
+    let local = Config {
+        entries: entries.clone(),
+    };
+    if local.is_true("extensions.worktreeconfig") {
+        entries.extend(parse_config_file(&git_dir.join("config.worktree"))?);
+    }
+    // `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` come last.
+    if let Some(count) = std::env::var_os("GIT_CONFIG_COUNT") {
+        let count: usize = count.to_str()?.trim().parse().ok()?;
+        for index in 0..count {
+            let key = std::env::var(format!("GIT_CONFIG_KEY_{index}")).ok()?;
+            let value = std::env::var(format!("GIT_CONFIG_VALUE_{index}")).ok()?;
+            let (section, rest) = key.split_once('.')?;
+            let (middle, name) = rest.rsplit_once('.').unwrap_or(("", rest));
+            let key = if middle.is_empty() {
+                format!(
+                    "{}.{}",
+                    section.to_ascii_lowercase(),
+                    name.to_ascii_lowercase()
+                )
+            } else {
+                format!(
+                    "{}.{middle}.{}",
+                    section.to_ascii_lowercase(),
+                    name.to_ascii_lowercase()
+                )
+            };
+            entries.push((key, Some(value)));
+        }
+    }
+    Some(Config { entries })
+}
+
+/// The Git directory of the worktree at `root` (`.git` directory or `gitdir:` file).
+fn git_dir_of(root: &Path) -> Option<PathBuf> {
+    let dot = root.join(".git");
+    let metadata = std::fs::symlink_metadata(&dot).ok()?;
+    if metadata.is_dir() {
+        return Some(dot);
+    }
+    let text = std::fs::read_to_string(&dot).ok()?;
+    let target = text
+        .strip_prefix("gitdir: ")?
+        .trim_end_matches(['\n', '\r']);
+    Some(root.join(target))
+}
+
+/// The system configuration file this Git reads: `$GIT_CONFIG_SYSTEM`, or the build's own path
+/// from `git var GIT_CONFIG_SYSTEM`, remembered per Git executable (path, size, change time) in
+/// `$GIT_COMMON_DIR/aisc/git-system-config` so that only the first command asks.
+fn system_config_path(root: &Path, common: &Path) -> Option<PathBuf> {
+    if let Some(explicit) = std::env::var_os("GIT_CONFIG_SYSTEM") {
+        return Some(PathBuf::from(explicit));
+    }
+    use std::os::unix::fs::MetadataExt;
+    let program = program();
+    let resolved = if Path::new(program).is_absolute() {
+        PathBuf::from(program)
+    } else {
+        return None;
+    };
+    let metadata = std::fs::metadata(&resolved).ok()?;
+    let identity = format!(
+        "{}\0{}\0{}.{}\0{}",
+        resolved.display(),
+        metadata.len(),
+        metadata.ctime(),
+        metadata.ctime_nsec(),
+        metadata.ino()
+    );
+    let cache = common.join("aisc").join("git-system-config");
+    if let Ok(text) = std::fs::read_to_string(&cache)
+        && let Some((seen, path)) = text.split_once('\n')
+        && seen == identity
+    {
+        return Some(PathBuf::from(path.trim_end_matches('\n')));
+    }
+    let output =
+        crate::git::run_git_raw(root, &["var", "GIT_CONFIG_SYSTEM"], &[], None, 1 << 16).ok()?;
+    if !output.success() {
+        return None;
+    }
+    let path = String::from_utf8(output.stdout).ok()?;
+    let path = path.trim_end_matches('\n');
+    if path.is_empty() || path.contains('\n') {
+        return None;
+    }
+    let _ = std::fs::create_dir_all(common.join("aisc"));
+    let staged = common
+        .join("aisc")
+        .join(format!("git-system-config.{}", std::process::id()));
+    if std::fs::write(&staged, format!("{identity}\n{path}\n")).is_ok() {
+        let _ = std::fs::rename(&staged, &cache);
+    }
+    Some(PathBuf::from(path))
+}
+
+/// One configuration file in the plain subset (see [`read_config_files`]); a missing file is
+/// empty. `None` for anything outside the subset.
+fn parse_config_file(path: &Path) -> Option<Vec<(String, Option<String>)>> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    parse_config_text(std::str::from_utf8(&bytes).ok()?)
+}
+
+fn parse_config_text(text: &str) -> Option<Vec<(String, Option<String>)>> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    if text.contains('\\') {
+        return None; // escapes and line continuations
+    }
+    let space = |c: char| matches!(c, ' ' | '\t' | '\r' | '\n');
+    let mut section: Option<String> = None;
+    let mut entries = Vec::new();
+    for line in text.split('\n') {
+        let line = line.trim_start_matches(space);
+        if line.is_empty() || line.starts_with(['#', ';']) {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            // `[name]` or `[name "subsection"]`; the legacy `[name.sub]` is left to Git.
+            let name_end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+                .unwrap_or(rest.len());
+            let name = &rest[..name_end];
+            let mut tail = &rest[name_end..];
+            let mut subsection = None;
+            if tail.starts_with([' ', '\t']) {
+                tail = tail.trim_start_matches([' ', '\t']);
+                let quoted = tail.strip_prefix('"')?;
+                let close = quoted.find('"')?;
+                subsection = Some(&quoted[..close]);
+                tail = &quoted[close + 1..];
+            }
+            let after = tail.strip_prefix(']')?.trim_start_matches(space);
+            if name.is_empty() || !(after.is_empty() || after.starts_with(['#', ';'])) {
+                return None; // a variable after the header on the same line
+            }
+            let lower = name.to_ascii_lowercase();
+            if lower == "include" || lower == "includeif" {
+                return None;
+            }
+            section = Some(match subsection {
+                Some(subsection) => format!("{lower}.{subsection}"),
+                None => lower,
+            });
+            continue;
+        }
+        let section = section.as_ref()?;
+        let end = line
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+            .unwrap_or(line.len());
+        let name = &line[..end];
+        if !name.chars().next()?.is_ascii_alphabetic() {
+            return None;
+        }
+        let rest = line[end..].trim_start_matches(space);
+        let key = format!("{section}.{}", name.to_ascii_lowercase());
+        if rest.is_empty() || rest.starts_with(['#', ';']) {
+            entries.push((key, None));
+            continue;
+        }
+        let value = rest.strip_prefix('=')?;
+        if value.contains('"') {
+            return None; // quoted values
+        }
+        // Git's parse_value: leading and trailing whitespace dropped, inner whitespace kept,
+        // `#` or `;` starts a comment. A carriage return is the one character Git changes.
+        if value.contains('\r') {
+            return None;
+        }
+        let mut out = String::new();
+        let mut pending = String::new();
+        for c in value.chars() {
+            if space(c) {
+                if !out.is_empty() {
+                    pending.push(c);
+                }
+                continue;
+            }
+            if c == '#' || c == ';' {
+                break;
+            }
+            out.push_str(&pending);
+            pending.clear();
+            out.push(c);
+        }
+        entries.push((key, Some(out)));
+    }
+    Some(entries)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -699,6 +940,93 @@ mod tests {
         assert!(parsed.is_true("user.flag"));
         assert!(!parsed.is_true("core.bare"));
         assert_eq!(parsed.string("USER.NAME"), Some("A\nB"));
+    }
+
+    #[test]
+    fn the_system_config_location_is_asked_once_per_git_executable() {
+        if std::env::var_os("GIT_CONFIG_SYSTEM").is_some() {
+            return;
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(directory.path()).unwrap();
+        crate::git::run_git(&root, &["init", "-q"], None).unwrap();
+        let common = root.join(".git");
+        let Some(first) = system_config_path(&root, &common) else {
+            return; // a Git without `git var GIT_CONFIG_SYSTEM`: Git reads the config itself
+        };
+        let output = Command::new(program())
+            .args(["var", "GIT_CONFIG_SYSTEM"])
+            .env_remove("GIT_CONFIG_NOSYSTEM")
+            .output()
+            .unwrap();
+        assert_eq!(
+            first,
+            PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
+        );
+        let before = spawns_here();
+        assert_eq!(system_config_path(&root, &common), Some(first.clone()));
+        assert_eq!(spawns_here(), before, "remembered in the repository");
+        // Another executable (or the same one replaced) asks again.
+        let cache = common.join("aisc").join("git-system-config");
+        let text = std::fs::read_to_string(&cache).unwrap();
+        std::fs::write(&cache, text.replacen('\0', "\0x", 1)).unwrap();
+        assert_eq!(system_config_path(&root, &common), Some(first));
+        assert_eq!(spawns_here(), before + 1);
+    }
+
+    #[test]
+    fn configuration_files_read_in_process_match_git_config_list() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(directory.path()).unwrap();
+        let status = Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let global = root.join("global.cfg");
+        let local_base = std::fs::read_to_string(root.join(".git/config")).unwrap();
+        let samples = [
+            "[user]\n\tname = Some  Body\t# comment\n\temail=a@b.invalid ; more\n[Core]\nFlag\nEmpty =\n",
+            "[a]\nkey = one\n[a]\nkey = two\n[branch]\nb-c = 1\n\n# done\n",
+            "[x]\n  spaced   =   v   w\t\tz   \n",
+            "[remote \"origin\"]\n\turl = x\n[branch  \"Main.x\"] # c\nmerge = refs/heads/m\n",
+            // Outside the plain subset: Git reads these.
+            "[y] k = v\n",
+            "[include]\npath = other\n",
+            "[a.b]\nc = d\n",
+            "[s]\nk = \"quoted\"\n",
+        ];
+        for sample in samples {
+            std::fs::write(&global, sample).unwrap();
+            let git = Command::new("git")
+                .args(["config", "-l", "-z"])
+                .current_dir(&root)
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", &global)
+                .env_remove("GIT_CONFIG_COUNT")
+                .output()
+                .unwrap();
+            let theirs = Config::parse(&git.stdout);
+            let ours = parse_config_text(sample).map(|mut entries| {
+                entries.extend(parse_config_text(&local_base).unwrap());
+                Config { entries }
+            });
+            // `None` is left to Git.
+            if let Some(ours) = ours {
+                assert!(git.status.success(), "{sample:?}");
+                assert_eq!(ours.entries, theirs.entries, "{sample:?}");
+            }
+        }
+        for inside in &samples[..4] {
+            assert!(parse_config_text(inside).is_some(), "{inside:?} is read");
+        }
+        for outside in &samples[4..] {
+            assert!(
+                parse_config_text(outside).is_none(),
+                "{outside:?} is left to Git"
+            );
+        }
     }
 
     #[test]
