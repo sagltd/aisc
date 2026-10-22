@@ -19,6 +19,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Human-readable colored output (`--color auto|always|never`) and JSON output.
 - Reproducible source-control benchmark tooling and documentation.
 - Release workflow, dependency audit (`cargo-deny`) and Dependabot configuration.
+- History verbs, each one call: `log`, `show`, `commit` (path, hunk id, `PATH:L-R`
+  and `PATH~text` selectors), `commit -b NEW --onto BASE`, `amend --into`, `split`,
+  `uncommit`, `squash`, `move`, `pick`, `discard`, `sync` (pause, `--continue`,
+  `--abort`, `--prefer-*`), `land`, `switch`, `undo`/redo and `oplog`.
+- Crash-safe engine: one compare-and-swap ref transaction per operation, an
+  operation journal that rolls an interrupted command forward or back, and
+  compare-before-write that keeps edits made while aisc runs as `PATH.aisc-conflict`.
+- Line-level verification of every rewritten commit, refusing ambiguous placements.
+- Disk: `finish` removes the worktree it created (`--keep`), `gc` (dry run, `--apply`)
+  with rescue refs and an allowlist of regenerable ignored content, `start --sparse`.
+- Lean agent skill (`skills/aisc`) with an on-demand lifecycle reference.
+- Command, disk and vcbench benchmarks against Git, GitButler and Jujutsu.
+
+### Changed
+
+- 6-10x fewer Git processes per command: batched reads, in-process object, ref and
+  config access through gitoxide (falling back to Git whenever unsure), and Git's
+  one-line answers remembered per executable.
+- `--help` and `--version` always print plain text.
 
 ### Known limitations
 
