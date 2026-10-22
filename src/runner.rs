@@ -107,23 +107,46 @@ fn developer_git(env: &dyn Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 // ---------------------------------------------------------------------------------------------
 
 static SPAWNS: AtomicUsize = AtomicUsize::new(0);
-static GENERATION: AtomicU64 = AtomicU64::new(0);
+static EPOCH: AtomicU64 = AtomicU64::new(0);
+
+thread_local! {
+    static SPAWNED_HERE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn changes() -> &'static Mutex<HashMap<PathBuf, u64>> {
+    static CHANGES: OnceLock<Mutex<HashMap<PathBuf, u64>>> = OnceLock::new();
+    CHANGES.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// Git processes started by this process so far.
-#[allow(dead_code)] // read by tests and debugging
+#[allow(dead_code)] // read by debugging aids
 pub(crate) fn spawns() -> usize {
     SPAWNS.load(Ordering::SeqCst)
 }
 
-/// Changes whenever a Git command ran that may have changed configuration, references layout
-/// (packing, replace refs) or object storage (new packs). Caches compare it before use.
-pub(crate) fn generation() -> u64 {
-    GENERATION.load(Ordering::SeqCst)
+/// Git processes started by the calling thread so far.
+#[allow(dead_code)] // read by tests
+pub(crate) fn spawns_here() -> usize {
+    SPAWNED_HERE.with(std::cell::Cell::get)
 }
 
-/// Marks every cache stale, as a write through another channel would.
+/// Changes whenever a Git command ran in `root` that may have changed configuration, the
+/// reference layout (packing, replace refs) or object storage (new packs), or after
+/// [`invalidate`]. Caches compare it before use.
+pub(crate) fn generation(root: &Path) -> u64 {
+    let local = changes()
+        .lock()
+        .expect("generations")
+        .get(root)
+        .copied()
+        .unwrap_or(0);
+    EPOCH.load(Ordering::SeqCst) + local
+}
+
+/// Marks every cache of every repository stale, as a write through another channel would.
+#[allow(dead_code)] // for callers that change a repository without the runner
 pub(crate) fn invalidate() {
-    GENERATION.fetch_add(1, Ordering::SeqCst);
+    EPOCH.fetch_add(1, Ordering::SeqCst);
 }
 
 /// The subcommand of a Git argument list, skipping global options.
@@ -167,11 +190,16 @@ fn harmless(args: &[&str]) -> bool {
     }
 }
 
-/// Called before every Git subprocess this program starts.
-pub(crate) fn note(args: &[&str]) {
+/// Called before every Git subprocess this program starts in `root`.
+pub(crate) fn note(root: &Path, args: &[&str]) {
     SPAWNS.fetch_add(1, Ordering::SeqCst);
+    SPAWNED_HERE.with(|count| count.set(count.get() + 1));
     if !harmless(args) {
-        invalidate();
+        *changes()
+            .lock()
+            .expect("generations")
+            .entry(root.to_owned())
+            .or_default() += 1;
     }
 }
 
@@ -264,7 +292,7 @@ fn config_cache() -> &'static ConfigCache {
 /// The repository's configuration, read with one `git config -l -z` per process (and again only
 /// after a command that may have changed it).
 pub(crate) fn config(root: &Path) -> Result<Arc<Config>> {
-    let generation = generation();
+    let generation = generation(root);
     if let Some((seen, config)) = config_cache().lock().expect("config cache").get(root)
         && *seen == generation
     {
@@ -323,7 +351,7 @@ fn ident_cache() -> &'static IdentCache {
 /// is either absent or in one of the unambiguous formats below); otherwise Git is asked once and
 /// the answer is kept for the rest of the process.
 pub(crate) fn ident(root: &Path, who: Who) -> Result<String> {
-    let generation = generation();
+    let generation = generation(root);
     let key = (root.to_owned(), who);
     if let Some((seen, value)) = ident_cache().lock().expect("ident cache").get(&key)
         && *seen == generation
@@ -638,17 +666,17 @@ mod tests {
         git(&["init", "-q"]);
         git(&["config", "aisc.test", "one"]);
         assert_eq!(config(root).unwrap().string("aisc.test"), Some("one"));
-        let before = spawns();
+        let before = spawns_here();
         assert_eq!(config(root).unwrap().string("aisc.test"), Some("one"));
-        assert_eq!(spawns(), before, "a cached read starts no process");
+        assert_eq!(spawns_here(), before, "a cached read starts no process");
         // A configuration write through the runner invalidates the cache.
         git(&["config", "aisc.test", "two"]);
         assert_eq!(config(root).unwrap().string("aisc.test"), Some("two"));
         // A harmless command keeps it.
         git(&["rev-parse", "--git-dir"]);
-        let before = spawns();
+        let before = spawns_here();
         assert_eq!(config(root).unwrap().string("aisc.test"), Some("two"));
-        assert_eq!(spawns(), before);
+        assert_eq!(spawns_here(), before);
         let parsed = Config::parse(b"core.bare\nfalse\0user.flag\0user.name\nA\nB\0");
         assert_eq!(parsed.get("user.flag"), Some(None));
         assert!(parsed.is_true("user.flag"));

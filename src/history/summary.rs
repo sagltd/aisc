@@ -184,13 +184,16 @@ fn light(
         }
     });
     // Commits: the newest 20 of the range, read in process (needed for the created ones).
-    let Some((commits, _)) = view::walk(
+    let commits = match view::walk(
         git,
         &tip,
         base_info.as_ref().map(|base| base.oid.as_str()),
         20,
-    ) else {
-        return Ok(None);
+    ) {
+        Some((commits, _)) => commits,
+        // The header has its counts; only the list of new commits is lost.
+        None if base_info.is_some() => Vec::new(),
+        None => return Ok(None),
     };
     let total = base_info.as_ref().map_or(commits.len(), |base| base.ahead);
     let mut status = None;

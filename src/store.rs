@@ -31,9 +31,10 @@ thread_local! {
     static STORES: RefCell<Stores> = RefCell::new(HashMap::new());
 }
 
-/// The store of `git_dir`, or `None` when the fast path is unavailable for this repository.
-pub(crate) fn open(git_dir: &Path) -> Option<Rc<Store>> {
-    let generation = crate::runner::generation();
+/// The store of `git_dir` (the repository at `root`), or `None` when the fast path is
+/// unavailable for this repository.
+pub(crate) fn open(root: &Path, git_dir: &Path) -> Option<Rc<Store>> {
+    let generation = crate::runner::generation(root);
     if let Some(found) = STORES.with(|stores| {
         stores
             .borrow()
@@ -53,8 +54,12 @@ pub(crate) fn open(git_dir: &Path) -> Option<Rc<Store>> {
 }
 
 /// Runs `body` on the store; `None` (fast path unavailable, or it failed) means "ask Git".
-pub(crate) fn with<T>(git_dir: &Path, body: impl FnOnce(&Store) -> Result<T>) -> Option<T> {
-    let store = open(git_dir)?;
+pub(crate) fn with<T>(
+    root: &Path,
+    git_dir: &Path,
+    body: impl FnOnce(&Store) -> Result<T>,
+) -> Option<T> {
+    let store = open(root, git_dir)?;
     body(&store).ok()
 }
 
@@ -968,5 +973,44 @@ mod tests {
         assert_eq!(read[0].path, "x/y");
         assert_eq!(read[0].mode, "100755");
         assert_eq!(read[0].oid, blob);
+    }
+
+    #[test]
+    fn the_store_is_reopened_after_commands_that_change_storage() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(directory.path()).unwrap();
+        let git = |args: &[&str]| {
+            crate::git::run_git(&root, args, None).unwrap();
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.name", "T"]);
+        git(&["config", "user.email", "t@example.invalid"]);
+        std::fs::write(root.join("a"), "a\n").unwrap();
+        git(&["add", "a"]);
+        git(&["commit", "-qm", "one"]);
+        std::fs::write(root.join("a"), "b\n").unwrap();
+        git(&["commit", "-qam", "two"]);
+        let dir = root.join(".git");
+        let head = |store: &Store| store.head().unwrap().1.unwrap();
+        let first = open(&root, &dir).expect("plain repository");
+        let tip = head(&first);
+        // Packing removes the loose objects the open store knew about; gc is not a harmless
+        // command, so the next open is a fresh handle that reads the pack.
+        git(&["gc", "-q", "--prune=now"]);
+        let second = open(&root, &dir).unwrap();
+        assert!(!Rc::ptr_eq(&first, &second), "reopened after gc");
+        assert_eq!(second.commit(&tip).unwrap().parents.len(), 1);
+        // A replace ref changes what every reader sees: the fast path steps aside.
+        let parent = second.commit(&tip).unwrap().parents[0].clone();
+        git(&["replace", &tip, &parent]);
+        assert!(
+            open(&root, &dir).is_none(),
+            "replace refs disable the fast path"
+        );
+        git(&["replace", "-d", &tip]);
+        assert!(
+            open(&root, &dir).is_some(),
+            "and it comes back once they are gone"
+        );
     }
 }

@@ -138,7 +138,7 @@ impl Repo {
         Ok(())
     }
     pub fn writable(&self) -> Result<()> {
-        if let Some(entries) = crate::store::open(&self.directory)
+        if let Some(entries) = crate::store::open(&self.root, &self.directory)
             .and_then(|_| crate::store::read_index(&self.directory).ok())
         {
             return self.writable_with(&entries);
@@ -382,7 +382,7 @@ pub(crate) fn run_git_raw(
     input: Option<Vec<u8>>,
     limit: usize,
 ) -> Result<process::Output> {
-    crate::runner::note(args);
+    crate::runner::note(root, args);
     let mut command = Command::new(crate::runner::program());
     command
         .arg("--literal-pathspecs")

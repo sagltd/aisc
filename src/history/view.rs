@@ -249,8 +249,9 @@ pub(crate) fn parse_log(output: &[u8]) -> Result<Vec<CommitInfo>> {
     Ok(commits)
 }
 
-/// Longest first-parent line walked in process before Git is asked instead.
-const WALK_CAP: usize = 5_000;
+/// Longest first-parent line walked in process before Git is asked instead (at least the
+/// requested limit): a line that does not reach the base is otherwise walked to its root.
+const WALK_CAP: usize = 200;
 
 /// The commits shown, and `(ahead, behind)` when exact.
 pub(crate) type Walked = (Vec<CommitInfo>, Option<(usize, usize)>);
@@ -277,7 +278,7 @@ pub(crate) fn walk(git: &Git, tip: &str, base: Option<&str>, limit: usize) -> Op
                 break;
             }
             steps += 1;
-            if steps > WALK_CAP {
+            if steps > WALK_CAP.max(limit) {
                 anyhow::bail!("long range");
             }
             let commit = store.commit(&oid)?;

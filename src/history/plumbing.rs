@@ -208,7 +208,7 @@ impl Git {
         if subprocesses {
             return None;
         }
-        store::with(&self.dir, body)
+        store::with(&self.root, &self.dir, body)
     }
 
     /// Runs every later step of this process as a Git subprocess, as before the in-process
