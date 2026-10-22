@@ -205,7 +205,7 @@ pub(super) struct Finished<'a> {
 
 /// Reads the resulting view and renders the result line, moved branches and compact log.
 pub(super) fn finish(git: &Git, done: &Finished<'_>) -> Result<Outcome> {
-    let after = view::read(git, None, 20, true)?;
+    let after = super::summary::after(git, None, true)?;
     let mut text = done.result.clone();
     let mut moved_json = Vec::new();
     for moved in done.moved {
@@ -228,7 +228,7 @@ pub(super) fn finish(git: &Git, done: &Finished<'_>) -> Result<Outcome> {
     let text = if done.quiet {
         text
     } else {
-        format!("{text}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &text)
     };
     let uncommitted: Vec<&str> = after
         .changes

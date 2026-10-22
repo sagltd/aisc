@@ -28,6 +28,7 @@ pub(crate) mod rewrite;
 pub(crate) mod selector;
 pub(crate) mod split;
 pub(crate) mod squash;
+pub(crate) mod summary;
 pub(crate) mod sync;
 pub(crate) mod undo;
 #[allow(dead_code)]
@@ -141,7 +142,7 @@ pub(crate) fn run(command: &Operation) -> Option<Result<Outcome>> {
         Operation::Sync(args) => sync::run(args),
         Operation::Land(args) => land::run(args),
         Operation::Switch(args) => land::switch(args),
-        Operation::Undo { op } => undo::run(op.as_deref()),
+        Operation::Undo { op, quiet, .. } => undo::run(op.as_deref(), *quiet),
         Operation::Oplog { limit } => oplog::run(*limit),
         Operation::Gc(args) => crate::worktree::gc(args),
         _ => return None,

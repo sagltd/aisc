@@ -384,10 +384,12 @@ impl Session {
             git.run(&["symbolic-ref", "HEAD", &head.to])
                 .map_err(|e| partial("could not switch HEAD", &e))?;
         }
+        let mut preserved = false;
         for write in write_order(&plan.worktree) {
             let side =
                 preserve_if_changed(&git.root, write).map_err(|e| partial(&write.path, &e))?;
             if let Some(side) = side {
+                preserved = true;
                 eprintln!(
                     "aisc: {} changed while aisc was working; your version is in {}",
                     escape_line(&write.path),
@@ -405,6 +407,7 @@ impl Session {
             self.install_index(&bytes)
                 .map_err(|e| partial("could not install the index", &e))?;
         }
+        super::summary::note_applied(&git, plan, preserved);
         Ok(Applied { op, op_oid })
     }
 

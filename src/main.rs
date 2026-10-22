@@ -76,6 +76,7 @@ fn main() {
     };
     let operation = command.name();
     let presentation = presentation.for_operation(&command);
+    history::summary::configure(presentation.json, command.stack());
     let history = command.prefers_text();
     let exit;
     match run(&command) {

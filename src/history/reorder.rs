@@ -257,12 +257,12 @@ pub(crate) struct Report<'a> {
 }
 
 pub(crate) fn outcome(git: &Git, report: &Report, finished: &Finished) -> Result<Outcome> {
-    let after = view::read(git, report.branch_option, 20, true)?;
+    let after = super::summary::after(git, report.branch_option, true)?;
     let result = format!("{}; op {}", report.line, finished.applied.op);
     let text = if report.quiet {
         result
     } else {
-        format!("{result}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &result)
     };
     let value = json!({
         "op": finished.applied.op,

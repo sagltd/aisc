@@ -56,6 +56,8 @@ pub(crate) struct View {
     pub changes: Option<ChangeSet>,
     pub sync_paused: Option<usize>,
     pub locals: Vec<BranchRef>,
+    /// Commits this process wrote (the post-mutation summary lists those in the range).
+    pub created: std::collections::HashSet<String>,
 }
 
 impl View {
@@ -129,8 +131,9 @@ pub(crate) struct Refs {
 /// Local and remote-tracking branches (`for-each-ref refs/heads refs/remotes`), read in process
 /// when possible.
 pub(crate) fn read_refs(git: &Git) -> Result<Refs> {
-    let listed = {
-        {
+    let listed = match git.fast(|store| store.list_refs(&["refs/heads/", "refs/remotes/"])) {
+        Some(listed) => listed,
+        None => {
             let output = git.run(&[
                 "for-each-ref",
                 "--format=%(refname)%00%(objectname)%00%(symref)",
@@ -323,6 +326,9 @@ pub(crate) fn read_changes(git: &Git) -> Result<(Status, ChangeSet)> {
     let status = diff::parse_status(&status.map_err(|_| panicked())??)?;
     let patch = patch.map_err(|_| panicked())??;
     let changes = diff::build_changes(&git.root, &patch, &status.untracked)?;
+    if let Some(oid) = &status.oid {
+        super::summary::note_changes(git, oid, &changes);
+    }
     Ok((status, changes))
 }
 
@@ -462,7 +468,11 @@ pub(crate) fn read(
     let mut upstream = None;
     if is_head && let (Some(raw), Some(patch)) = (status_output, patch) {
         let parsed = diff::parse_status(&raw)?;
-        changes = Some(diff::build_changes(&git.root, &patch, &parsed.untracked)?);
+        let built = diff::build_changes(&git.root, &patch, &parsed.untracked)?;
+        if let Some(oid) = &parsed.oid {
+            super::summary::note_changes(git, oid, &built);
+        }
+        changes = Some(built);
         if let Some(label) = &parsed.upstream {
             upstream = Some(UpstreamInfo {
                 label: label.clone(),
@@ -492,5 +502,6 @@ pub(crate) fn read(
         changes,
         sync_paused,
         locals: refs.locals,
+        created: super::plumbing::created(&git.dir),
     })
 }

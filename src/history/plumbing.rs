@@ -109,6 +109,16 @@ pub(crate) fn note_created(dir: &Path, oid: &str) {
         .insert(oid.to_owned());
 }
 
+/// Commits this process wrote in `dir`'s repository.
+pub(crate) fn created(dir: &Path) -> HashSet<String> {
+    notes()
+        .lock()
+        .expect("notes")
+        .get(dir)
+        .map(|notes| notes.created.clone())
+        .unwrap_or_default()
+}
+
 struct TempIndex(PathBuf);
 impl Drop for TempIndex {
     fn drop(&mut self) {

@@ -1196,7 +1196,7 @@ fn finish(
     };
     unpin(git);
 
-    let after = view::read(git, state.branch.as_deref(), 20, state.is_head)?;
+    let after = super::summary::after(git, state.branch.as_deref(), state.is_head)?;
     let mut result = format!(
         "synced {} onto {onto_label} ({kept} commits, {} dropped); op {}",
         state.label(),
@@ -1217,7 +1217,7 @@ fn finish(
     let text = if quiet {
         result
     } else {
-        format!("{result}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &result)
     };
     let uncommitted: Vec<&str> = after
         .changes

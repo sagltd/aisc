@@ -350,7 +350,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
 
     let applied = session.apply(&plan)?;
 
-    let after = view::read(&git, None, 20, true)?;
+    let after = super::summary::after(&git, None, true)?;
     let on = if args.new_branch.is_some() {
         format!("new branch {target_name}")
     } else {
@@ -375,7 +375,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     let text = if args.opts.quiet {
         result
     } else {
-        format!("{result}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &result)
     };
     let uncommitted: Vec<&str> = after
         .changes
