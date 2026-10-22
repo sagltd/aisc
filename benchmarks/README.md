@@ -6,7 +6,7 @@
 version-control tasks it measures how many tool calls an expert agent needs,
 how many bytes the tools print, a token estimate for that text, and wall time.
 It compares Git, AISC, GitButler (`but`) and Jujutsu (`jj`). Results are in
-[`results/commands-v2.json`](results/commands-v2.json). The single-task v1
+[`results/commands-v3.json`](results/commands-v3.json) (v0.1.0 release binary; v2 in [`results/commands-v2.json`](results/commands-v2.json)). The single-task v1
 comparison (`commands.py`, `results/commands-v1.json`) is kept unchanged.
 
 ### Tasks and grading
