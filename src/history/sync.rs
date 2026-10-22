@@ -685,8 +685,30 @@ fn new_upstream_commits(git: &Git, name: &str, tip: &str, onto: &str) -> Result<
     else {
         return Ok(None);
     };
+    // Tips the branch reached by importing other people's commits (a sync, pull, merge, reset or
+    // undo) do not make those commits the user's own.
+    let imported = |message: &str| {
+        [
+            "aisc sync",
+            "aisc undo",
+            "aisc land",
+            "pull",
+            "merge",
+            "reset",
+            "rebase",
+            "fetch",
+            "branch: Reset",
+        ]
+        .iter()
+        .any(|prefix| message.starts_with(prefix))
+    };
     let mut seen: Vec<String> = log
         .lines()
+        .filter(|line| {
+            !line
+                .split_once('\t')
+                .is_some_and(|(_, message)| imported(message))
+        })
         .filter_map(|line| line.split(' ').nth(1))
         .filter(|oid| oid.len() >= 40 && oid.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .filter(|oid| !oid.bytes().all(|byte| byte == b'0'))
@@ -848,12 +870,24 @@ fn drive(git: &Git, session: Session, mut state: State, quiet: bool) -> Result<O
             let mut picks = load_picks(git, &upstream.base, &state.onto_oid)?;
             let mut excludes: Vec<&str> = vec![&upstream.base, &state.onto_oid, &state.old_tip];
             excludes.extend(upstream.seen.iter().map(String::as_str));
-            picks.extend(load_picks_excluding(git, &upstream.oid, &excludes)?);
-            picks.extend(load_picks_excluding(
-                git,
-                &state.old_tip,
-                &[&upstream.base, &state.onto_oid],
-            )?);
+            let foreign = load_picks_excluding(git, &upstream.oid, &excludes)?;
+            let own =
+                load_picks_excluding(git, &state.old_tip, &[&upstream.base, &state.onto_oid])?;
+            // Foreign commits built on the shared history go first, as `git pull --rebase` does.
+            // Built on commits the user has since rewritten, they go after the user's own.
+            let on_shared = foreign.first().is_none_or(|first| {
+                first.parent == upstream.base
+                    || git
+                        .probe(&["merge-base", "--is-ancestor", &first.parent, &upstream.base])
+                        .is_ok_and(|found| found.is_some())
+            });
+            if on_shared {
+                picks.extend(foreign);
+                picks.extend(own);
+            } else {
+                picks.extend(own);
+                picks.extend(foreign);
+            }
             picks
         }
         None => load_picks(git, &state.old_tip, &state.onto_oid)?,
