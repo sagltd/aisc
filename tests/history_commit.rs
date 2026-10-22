@@ -689,3 +689,39 @@ fn records_without_head_after_fail_closed_on_other_branches() {
         }
     }
 }
+
+#[test]
+fn undo_of_an_intent_to_add_commit_never_fails_on_the_placeholder() {
+    for ignored in [false, true] {
+        let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+        fixture.write("n.txt", "new file\n");
+        fixture.git(&["add", "-N", "n.txt"]);
+        fixture.aisc(&["commit", "-m", "c", "n.txt"]).ok();
+        if ignored {
+            // Now ignored: `git add -N` would refuse it, the placeholder is still restored.
+            fixture.write(".git/info/exclude", "n.txt\n");
+            let undo = fixture.aisc(&["undo"]);
+            undo.ok();
+            assert_eq!(
+                fixture.git(&["ls-files", "n.txt"]),
+                "n.txt",
+                "placeholder restored"
+            );
+            assert!(fixture.exists("n.txt"));
+        } else {
+            // Deleted after the commit: nothing to restore, undo still succeeds.
+            std::fs::remove_file(fixture.path("n.txt")).unwrap();
+            let undo = fixture.aisc(&["undo"]);
+            undo.ok();
+            assert_eq!(
+                fixture.git(&["rev-parse", "main"]),
+                fixture.git(&["rev-parse", "HEAD"])
+            );
+            assert!(fixture.git(&["ls-files", "n.txt"]).is_empty());
+        }
+        assert!(
+            fixture.tree_blob("HEAD", "n.txt").is_none(),
+            "commit undone"
+        );
+    }
+}

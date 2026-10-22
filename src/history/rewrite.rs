@@ -262,7 +262,11 @@ impl Session {
                 .iter()
                 .filter(|p| applied.contains(&p.as_str()))
             {
-                git.run_with(&["add", "-N", "--", path], &env, None)?;
+                // Best effort: a file deleted since the commit has nothing to restore, and -f
+                // covers paths that are ignored now. Undo never fails on this step.
+                if fs::symlink_metadata(git.root.join(path)).is_ok() {
+                    let _ = git.raw(&["add", "-N", "-f", "--", path], &env, None);
+                }
             }
             Ok(fs::read(&alternate)?)
         })();
