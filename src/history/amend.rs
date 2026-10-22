@@ -1,8 +1,8 @@
 //! `aisc amend`: moves uncommitted hunks into several existing commits in one call (algorithm 6.4).
 //! Also hosts the helpers that `split`/`uncommit` share for rewriting a commit chain.
-use super::apply::{ApplyError, join_lines, splice, split_lines};
+use super::apply::{ApplyError, join_lines, splice, split_lines, unsplice};
 use super::model::{Block, ChangeSet, FileChange, Kind, Line};
-use super::plumbing::{Entry, Favor, Git, HeadState, TreeEdit};
+use super::plumbing::{Entry, Git, HeadState, TreeEdit};
 use super::render;
 use super::rewrite::{IndexChange, Plan, RefMove, Session, dependent_moves, stale};
 use super::selector::{self, FileSel, Selection};
@@ -403,42 +403,126 @@ fn map_range(blocks: &[Block], way: Way, start: usize, end: usize) -> Option<usi
     start.checked_add_signed(shift)
 }
 
-/// Where each range (by position on the first version) lands on the last version of `steps`,
-/// following every diff's own alignment; `Err` holds the index of the first range that has no
-/// single place. Deterministic, and independent of how a 3-way merge aligns the two versions.
-pub(super) fn carry(
-    ranges: &[(usize, usize)],
-    steps: &[&[Block]],
+/// Follows the lines `start..start + len` of `path` across the recorded diffs of the commits
+/// `steps` (chain positions, in that order). `Err(k)` names the first commit whose own change
+/// leaves them no single place. Deterministic: it follows each diff's own alignment, as `git show`
+/// displays it, never a 3-way merge's realignment of two distant versions.
+pub(super) fn follow(
+    recorded: &Recorded,
+    path: &str,
+    steps: impl IntoIterator<Item = usize>,
     way: Way,
-) -> Result<Vec<usize>, usize> {
-    ranges
-        .iter()
-        .enumerate()
-        .map(|(order, (start, end))| {
-            let length = end - start;
-            steps
-                .iter()
-                .try_fold(*start, |at, blocks| map_range(blocks, way, at, at + length))
-                .ok_or(order)
-        })
-        .collect()
+    start: usize,
+    len: usize,
+) -> Result<usize, usize> {
+    let mut at = start;
+    for k in steps {
+        match recorded[k].get(path) {
+            None => {}
+            Some(Some(blocks)) => at = map_range(blocks, way, at, at + len).ok_or(k)?,
+            Some(None) => return Err(k),
+        }
+    }
+    Ok(at)
 }
 
-/// A hunk whose place in a commit depends on how Git aligns repeated lines.
-pub(super) fn no_single_place(
-    path: &str,
-    hunk: &str,
-    commit: &CommitInfo,
-    hint: &str,
-) -> anyhow::Error {
-    fail_hint(
-        Code::Conflict,
-        format!(
-            "hunk {hunk} ({path}) has no single place in {}: the lines around it repeat; nothing was changed",
-            short_of(commit)
-        ),
-        hint,
-    )
+/// Sets each block's `new_pos` for `blocks` taken as one diff from the version they apply to.
+fn with_new_positions(mut blocks: Vec<Block>) -> Vec<Block> {
+    let mut shift = 0isize;
+    for block in &mut blocks {
+        block.new_pos = block.old_pos.saturating_add_signed(shift);
+        shift += block.added.len() as isize - block.removed.len() as isize;
+    }
+    blocks
+}
+
+/// One file of one rewritten commit, for [`proves`].
+pub(super) struct Rewrite<'a> {
+    /// The commit's original version.
+    pub ours: &'a [Line],
+    /// Original -> rewritten version, as blocks positioned on the original (sorted).
+    pub delta: Vec<Block>,
+    /// Per block of `delta`: whether this commit gains it (amend's routed hunks); the others its
+    /// rewritten parent already has.
+    pub fresh: Vec<bool>,
+    /// The commit's own recorded blocks for the file (`None`: not a line-level change).
+    pub own: Option<&'a [Block]>,
+    pub rewritten: &'a [u8],
+    /// The rewritten parent's version; `None` when the parent is not rewritten for this file.
+    pub parent: Option<&'a [u8]>,
+}
+
+/// Position-aware proof that a rewritten commit changes this file exactly as intended:
+/// - the rewritten version is the original with `delta` applied at its positions;
+/// - taking out the fresh blocks and then the commit's own blocks, each moved only past the delta
+///   lines, gives exactly the rewritten parent (or, with no rewritten parent, the original).
+///
+/// So the rewritten commit's diff is its own diff, line for line and place for place, plus the
+/// fresh blocks. Nothing depends on how a diff of the rewritten versions would be aligned.
+pub(super) fn proves(file: &Rewrite<'_>) -> bool {
+    let delta = with_new_positions(file.delta.clone());
+    let all: Vec<&Block> = delta.iter().collect();
+    let Ok(built) = splice(file.ours, &all) else {
+        return false;
+    };
+    if join_lines(&built) != file.rewritten {
+        return false;
+    }
+    let fresh: Vec<&Block> = delta
+        .iter()
+        .zip(&file.fresh)
+        .filter_map(|(block, fresh)| fresh.then_some(block))
+        .collect();
+    let Ok(without) = unsplice(&built, &fresh) else {
+        return false;
+    };
+    let kept = with_new_positions(
+        delta
+            .iter()
+            .zip(&file.fresh)
+            .filter(|(_, fresh)| !**fresh)
+            .map(|(block, _)| block.clone())
+            .collect(),
+    );
+    let Some(parent) = file.parent else {
+        return kept.is_empty() && without == file.ours;
+    };
+    let kept_refs: Vec<&Block> = kept.iter().collect();
+    if splice(file.ours, &kept_refs).ok().as_ref() != Some(&without) {
+        return false;
+    }
+    let Some(own) = file.own else {
+        return false;
+    };
+    // The commit's own blocks, from its original version to the one that also holds `kept`.
+    let moved: Option<Vec<Block>> = own
+        .iter()
+        .map(|block| {
+            let end = block.new_pos + block.added.len();
+            map_range(&kept, Way::Forward, block.new_pos, end).map(|new_pos| Block {
+                new_pos,
+                ..block.clone()
+            })
+        })
+        .collect();
+    let Some(moved) = moved else {
+        return false;
+    };
+    let moved: Vec<&Block> = moved.iter().collect();
+    unsplice(&without, &moved).is_ok_and(|lines| join_lines(&lines) == parent)
+}
+
+/// Quotes a selector or commit id for a shell when it needs it.
+pub(super) fn shell_word(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._/:~+-@,=".contains(&byte));
+    if plain {
+        word.to_owned()
+    } else {
+        format!("'{}'", word.replace('\'', "'\\''"))
+    }
 }
 
 /// Per path the (removed, added) lines routed into a commit, and the paths to skip.
@@ -527,8 +611,10 @@ enum Miss {
     Exists,
     /// A whole-file change needs the commit to still hold the HEAD version.
     Differs,
-    /// The block (index into the file's blocks) has no unique place.
+    /// The block (index into the file's blocks) does not apply.
     Apply(usize),
+    /// The block's lines are changed by the commit at that chain position.
+    Clash(usize, usize),
     Other(anyhow::Error),
 }
 
@@ -544,7 +630,49 @@ struct Context<'a> {
     head: BTreeMap<String, Entry>,
     hashed: BTreeMap<String, String>,
     old_lines: BTreeMap<String, Vec<Line>>,
+    /// The chain's recorded diffs of the modified files.
+    steps: Recorded,
+    /// Modified files whose blocks rebuild the worktree file byte for byte.
+    exact: BTreeSet<String>,
+    /// Chain position of the tip.
+    tip: usize,
 }
+
+impl Context<'_> {
+    /// The blocks moved from HEAD to their places in the commit at chain position `j`, through
+    /// every later commit's own diff. `Err((block, k))`: commit `k` changes that block's lines.
+    fn carried(
+        &self,
+        file: &FileChange,
+        blocks: &BTreeSet<usize>,
+        j: usize,
+    ) -> Result<Vec<Block>, (usize, usize)> {
+        blocks
+            .iter()
+            .map(|index| {
+                let block = &file.blocks[*index];
+                let steps = (j + 1..=self.tip).rev();
+                follow(
+                    &self.steps,
+                    &file.path,
+                    steps,
+                    Way::Back,
+                    block.old_pos,
+                    block.removed.len(),
+                )
+                .map(|old_pos| Block {
+                    old_pos,
+                    ..block.clone()
+                })
+                .map_err(|k| (*index, k))
+            })
+            .collect()
+    }
+}
+
+/// What a placement produced: the new entry and, for a text file, the placed blocks (positions on
+/// the commit's version).
+type Placement = (Option<Entry>, Option<Vec<Block>>);
 
 /// Where each file's selected parts go: (chain position, selection).
 type Routes = BTreeMap<usize, Vec<(usize, FileSel)>>;
@@ -553,113 +681,209 @@ fn chosen<'a>(file: &'a FileChange, blocks: &BTreeSet<usize>) -> Vec<&'a Block> 
     blocks.iter().map(|block| &file.blocks[*block]).collect()
 }
 
-/// New entry for one file in a commit whose current entry is `current`.
+/// New entry for one file in the commit at chain position `j`, whose entry is `current`.
 fn place(
     context: &Context<'_>,
     file_index: usize,
-    blocks: &BTreeSet<usize>,
-    whole: bool,
+    (blocks, whole): (&BTreeSet<usize>, bool),
     current: Option<&Entry>,
-) -> Result<Option<Entry>, Miss> {
+    j: usize,
+) -> Result<Placement, Miss> {
     let file = &context.changes.files[file_index];
     let head = context.head.get(&file.path);
     let new_mode = file.new_mode.clone().unwrap_or_else(|| "100644".to_owned());
     match file.kind {
         Kind::Modified => {
             let (mode, oid) = current.ok_or(Miss::Absent)?;
-            let blocks_here = chosen(file, blocks);
             let mode = if whole && file.mode_changed() {
                 new_mode
             } else {
                 mode.clone()
             };
-            let result = if file.old_oid.as_ref() == Some(oid) {
+            let exact = context.exact.contains(&file.path);
+            if file.old_oid.as_ref() == Some(oid) {
+                // HEAD's version: the blocks go exactly where they were recorded.
                 if whole {
-                    context.hashed[&file.path].clone()
-                } else {
-                    let lines = splice(&context.old_lines[&file.path], &blocks_here)
-                        .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
-                    context.git.write_blob(&join_lines(&lines), true)?
+                    let placed = exact.then(|| chosen(file, blocks).into_iter().cloned().collect());
+                    return Ok((Some((mode, context.hashed[&file.path].clone())), placed));
                 }
-            } else {
-                // A different version of the file: 3-way merge of HEAD -> HEAD+hunks onto it.
-                // The merge conflicts when a hunk touches lines this commit does not have, so a
-                // hunk can never land in a look-alike place.
-                let base = file.old_oid.as_deref().ok_or(Miss::Absent)?;
-                let theirs = if whole {
-                    context.hashed[&file.path].clone()
-                } else {
-                    let lines = splice(&context.old_lines[&file.path], &blocks_here)
-                        .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
-                    context.git.write_blob(&join_lines(&lines), true)?
-                };
-                match merge3(context.git, base, oid, &theirs)? {
-                    Some(bytes) => context.git.write_blob(&bytes, true)?,
-                    None => {
-                        return Err(Miss::Apply(first_conflicting(context, file, blocks, oid)?));
-                    }
-                }
-            };
-            Ok(Some((mode, result)))
+                let lines = splice(&context.old_lines[&file.path], &chosen(file, blocks))
+                    .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
+                let placed = chosen(file, blocks).into_iter().cloned().collect();
+                let oid = context.git.write_blob(&join_lines(&lines), true)?;
+                return Ok((Some((mode, oid)), Some(placed)));
+            }
+            if !exact {
+                return Err(Miss::Other(fail_hint(
+                    Code::Unsupported,
+                    format!("{}: Git filters or line-ending conversion apply", file.path),
+                    "amend it into the last commit that changed the file",
+                )));
+            }
+            // Another version of the file: each block goes where the later commits' own diffs
+            // carry it, never to a look-alike place a 3-way merge might pick.
+            let placed = context
+                .carried(file, blocks, j)
+                .map_err(|(block, k)| Miss::Clash(block, k))?;
+            let ours = context
+                .git
+                .read_blobs(std::slice::from_ref(oid))?
+                .pop()
+                .unwrap_or_default();
+            let refs: Vec<&Block> = placed.iter().collect();
+            let lines = splice(&split_lines(&ours), &refs)
+                .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
+            let oid = context.git.write_blob(&join_lines(&lines), true)?;
+            Ok((Some((mode, oid)), Some(placed)))
         }
         Kind::Untracked | Kind::Added => {
             if current.is_some() {
                 return Err(Miss::Exists);
             }
-            Ok(Some((new_mode, context.hashed[&file.path].clone())))
+            Ok((Some((new_mode, context.hashed[&file.path].clone())), None))
         }
         Kind::Deleted => {
             if current != head {
                 return Err(Miss::Differs);
             }
-            Ok(None)
+            Ok((None, None))
         }
         Kind::ModeOnly => {
             if current != head {
                 return Err(Miss::Differs);
             }
             let (_, oid) = head.ok_or(Miss::Absent)?;
-            Ok(Some((new_mode, oid.clone())))
+            Ok((Some((new_mode, oid.clone())), None))
         }
         Kind::Binary | Kind::TypeChange | Kind::Symlink => {
             if current != head {
                 return Err(Miss::Differs);
             }
-            Ok(Some((new_mode, context.hashed[&file.path].clone())))
+            Ok((Some((new_mode, context.hashed[&file.path].clone())), None))
         }
     }
 }
 
-/// Applies base -> `theirs` onto `ours`; `None` when the merge conflicts.
-pub(super) fn merge3(git: &Git, base: &str, ours: &str, theirs: &str) -> Result<Option<Vec<u8>>> {
-    let (bytes, conflicts) = git.merge_file(
-        base,
-        ours,
-        theirs,
-        ["ours", "base", "theirs"],
-        Favor::None,
-        false,
-    )?;
-    Ok((conflicts == 0).then_some(bytes))
+/// The blocks a selection names.
+fn selected_blocks(file: &FileChange, selected: &FileSel) -> BTreeSet<usize> {
+    match selected {
+        FileSel::Whole => (0..file.blocks.len()).collect(),
+        FileSel::Blocks(set) => set.clone(),
+    }
 }
 
-/// The first block that cannot be merged on its own (the first one when only the set conflicts).
-fn first_conflicting(
+/// The one `aisc amend` call that places every block: each block goes into its own target, or
+/// into the newest later commit that changes its lines (`needs`). `None` when a mode change
+/// would have to be split across commits.
+fn one_call(
+    changes: &ChangeSet,
+    chain: &[CommitInfo],
+    routes: &Routes,
+    needs: &BTreeMap<(usize, usize), usize>,
+) -> Option<String> {
+    let mut groups: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    for (index, file_routes) in routes {
+        let file = &changes.files[*index];
+        let path = shell_word(&file.path);
+        let finals: BTreeMap<usize, usize> = file_routes
+            .iter()
+            .flat_map(|(target, selected)| {
+                selected_blocks(file, selected).into_iter().map(|block| {
+                    (
+                        block,
+                        needs.get(&(*index, block)).copied().unwrap_or(*target),
+                    )
+                })
+            })
+            .collect();
+        let targets: BTreeSet<usize> = finals.values().copied().collect();
+        let whole = file_routes
+            .iter()
+            .any(|(_, selected)| *selected == FileSel::Whole);
+        if file.kind != Kind::Modified || (whole && targets.len() <= 1) {
+            let target = targets.first().copied().unwrap_or_else(|| file_routes[0].0);
+            groups.entry(target).or_default().push(path);
+            continue;
+        }
+        if whole && file.mode_changed() {
+            return None;
+        }
+        for hunk in &file.hunks {
+            let picked: Vec<usize> = hunk
+                .blocks
+                .clone()
+                .filter(|block| finals.contains_key(block))
+                .collect();
+            let into: BTreeSet<usize> = picked.iter().map(|block| finals[block]).collect();
+            if picked.len() == hunk.blocks.len() && into.len() == 1 {
+                groups
+                    .entry(finals[&picked[0]])
+                    .or_default()
+                    .push(hunk.short.clone());
+                continue;
+            }
+            for block in picked {
+                let lines = &file.blocks[block];
+                let (from, count) = if lines.added.is_empty() {
+                    (lines.old_pos + 1, lines.removed.len())
+                } else {
+                    (lines.new_pos + 1, lines.added.len())
+                };
+                let last = from + count.max(1) - 1;
+                groups
+                    .entry(finals[&block])
+                    .or_default()
+                    .push(shell_word(&format!("{}:{from}-{last}", file.path)));
+            }
+        }
+    }
+    let mut call = "aisc amend".to_owned();
+    for (target, tokens) in groups {
+        call.push_str(&format!(" --into {}", shell_word(&chain[target].short)));
+        for token in tokens {
+            call.push(' ');
+            call.push_str(&token);
+        }
+    }
+    Some(call)
+}
+
+/// A block whose lines a later commit changes: names that commit and the one call that works.
+fn retarget(
     context: &Context<'_>,
-    file: &FileChange,
-    blocks: &BTreeSet<usize>,
-    ours: &str,
-) -> Result<usize> {
-    let base = file.old_oid.as_deref().unwrap_or_default();
-    for block in blocks {
-        let lines = splice(&context.old_lines[&file.path], &[&file.blocks[*block]])
-            .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
-        let theirs = context.git.write_blob(&join_lines(&lines), true)?;
-        if merge3(context.git, base, ours, &theirs)?.is_none() {
-            return Ok(*block);
+    chain: &[CommitInfo],
+    routes: &Routes,
+    (file_index, block, at): (usize, usize, usize),
+) -> anyhow::Error {
+    let mut needs = BTreeMap::new();
+    for (index, file_routes) in routes {
+        let file = &context.changes.files[*index];
+        if file.kind != Kind::Modified {
+            continue;
+        }
+        for (target, selected) in file_routes {
+            for one in selected_blocks(file, selected) {
+                if let Err((_, k)) = context.carried(file, &BTreeSet::from([one]), *target) {
+                    needs.insert((*index, one), k);
+                }
+            }
         }
     }
-    Ok(blocks.iter().copied().next().unwrap_or(0))
+    let file = &context.changes.files[file_index];
+    let hint = match one_call(context.changes, chain, routes, &needs) {
+        Some(call) => format!("target {} instead: {call}", chain[at].short),
+        None => format!("target {} or later", chain[at].short),
+    };
+    fail_hint(
+        Code::Conflict,
+        format!(
+            "hunk {} ({}) edits lines from {}; nothing was changed",
+            hunk_name(file, block),
+            file.path,
+            short_of(&chain[at])
+        ),
+        hint,
+    )
 }
 
 fn nth(blocks: &BTreeSet<usize>, order: usize) -> usize {
@@ -689,7 +913,6 @@ fn selection_at(
     (blocks, whole)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn explain(
     context: &Context<'_>,
     chain: &[CommitInfo],
@@ -700,15 +923,6 @@ fn explain(
 ) -> anyhow::Error {
     let file = &context.changes.files[file_index];
     let here = &chain[j];
-    let target_of = |block: usize| -> usize {
-        routes[&file_index]
-            .iter()
-            .find(|(_, selected)| match selected {
-                FileSel::Whole => true,
-                FileSel::Blocks(set) => set.contains(&block),
-            })
-            .map_or(0, |(target, _)| *target)
-    };
     match miss {
         Miss::Other(error) => error,
         Miss::Absent => {
@@ -749,155 +963,98 @@ fn explain(
             format!("{} is changed again by {}", file.path, short_of(here)),
             "target that commit or a later one",
         ),
-        Miss::Apply(block) => {
-            let name = hunk_name(file, block);
-            let target = target_of(block);
-            if j > target {
-                return fail_hint(
-                    Code::Conflict,
-                    format!(
-                        "hunk {name} ({}) cannot be carried through {}",
-                        file.path,
-                        short_of(here)
-                    ),
-                    format!("target {} or later", here.short),
-                );
-            }
-            // The first later commit where this block alone finds its place.
-            let later = (j + 1..chain.len()).find(|candidate| {
-                let Ok(entries) = context
-                    .git
-                    .ls_tree(&chain[*candidate].tree, std::slice::from_ref(&file.path))
-                else {
-                    return false;
-                };
-                let Some((_, oid)) = entries.get(&file.path) else {
-                    return false;
-                };
-                let Ok(lines) = splice(&context.old_lines[&file.path], &[&file.blocks[block]])
-                else {
-                    return false;
-                };
-                let Ok(theirs) = context.git.write_blob(&join_lines(&lines), true) else {
-                    return false;
-                };
-                let base = file.old_oid.as_deref().unwrap_or_default();
-                merge3(context.git, base, oid, &theirs).is_ok_and(|merged| merged.is_some())
-            });
-            match later {
-                Some(candidate) => fail_hint(
-                    Code::Conflict,
-                    format!(
-                        "hunk {name} ({}) edits lines from {}",
-                        file.path,
-                        short_of(&chain[candidate])
-                    ),
-                    format!("target {} or later", chain[candidate].short),
-                ),
-                None => fail_hint(
-                    Code::Conflict,
-                    format!(
-                        "hunk {name} ({}) does not apply to {} or any later commit",
-                        file.path,
-                        short_of(here)
-                    ),
-                    "select a different hunk, or use PATH:START-END",
-                ),
-            }
-        }
+        Miss::Clash(block, k) => retarget(context, chain, routes, (file_index, block, k)),
+        Miss::Apply(block) => fail_hint(
+            Code::Conflict,
+            format!(
+                "hunk {} ({}) does not apply to {}",
+                hunk_name(file, block),
+                file.path,
+                short_of(here)
+            ),
+            "run aisc log and retry",
+        ),
     }
 }
 
-/// A file placed in one commit: (file index, entry before, entry after).
-type Placed = (usize, Option<Entry>, Option<Entry>);
+/// A file placed in one commit.
+struct Placed {
+    index: usize,
+    before: Option<Entry>,
+    after: Option<Entry>,
+    /// The blocks placed there (index into the file's blocks, block positioned on the commit's
+    /// version); `None` when the file is not placed line by line.
+    blocks: Option<Vec<(usize, Block)>>,
+}
 
-/// Position check, independent of how the 3-way merge aligned the two versions: where a commit
-/// holds another version of a modified file than HEAD, the merged file must be exactly that
-/// version with the selected blocks carried to it through the later commits' own diffs. When
-/// repeated lines let the merge choose a look-alike place, the two differ and nothing changes.
-/// This also checks, line by line, a file that the target commit creates.
-fn verify_placements(
+/// Proves, position-aware, every text file of every rewritten commit (see [`proves`]): each
+/// rewritten commit changes its rewritten parent by exactly its own recorded blocks plus the
+/// hunks routed into it. Returns the (chain position, path) pairs it proved.
+fn verify_commits(
     context: &Context<'_>,
     chain: &[CommitInfo],
-    routes: &Routes,
     placed: &[Vec<Placed>],
-) -> Result<()> {
-    let files = &context.changes.files;
-    // (chain position, file index, version in the commit, merged version)
-    let mut pending: Vec<(usize, usize, &String, &String)> = Vec::new();
+) -> Result<BTreeSet<(usize, String)>> {
+    let mut oids = BTreeSet::new();
+    for here in placed {
+        for item in here.iter().filter(|item| item.blocks.is_some()) {
+            oids.extend(
+                item.before
+                    .iter()
+                    .chain(&item.after)
+                    .map(|(_, oid)| oid.clone()),
+            );
+        }
+    }
+    let oids: Vec<String> = oids.into_iter().collect();
+    let blobs: BTreeMap<&String, Vec<u8>> =
+        oids.iter().zip(context.git.read_blobs(&oids)?).collect();
+    let mut proved = BTreeSet::new();
     for (j, here) in placed.iter().enumerate() {
-        for (index, before, after) in here {
-            let file = &files[*index];
-            if let (Kind::Modified, Some((_, ours)), Some((_, merged))) = (file.kind, before, after)
-                && file.old_oid.as_ref() != Some(ours)
-            {
-                pending.push((j, *index, ours, merged));
+        for item in here {
+            let Some(blocks) = &item.blocks else {
+                continue;
+            };
+            let file = &context.changes.files[item.index];
+            let unproved = || mismatch(&file.path, &chain[j], "");
+            let (Some((_, before)), Some((_, after))) = (&item.before, &item.after) else {
+                return Err(unproved());
+            };
+            // The same file in the rewritten parent, when the parent is rewritten too.
+            let previous = j
+                .checked_sub(1)
+                .and_then(|i| placed[i].iter().find(|other| other.index == item.index));
+            let (parent, had) = match previous {
+                Some(Placed {
+                    after: Some((_, oid)),
+                    blocks: Some(had),
+                    ..
+                }) => (
+                    Some(blobs[oid].as_slice()),
+                    had.iter().map(|(b, _)| *b).collect(),
+                ),
+                Some(_) => return Err(unproved()),
+                None => (None, BTreeSet::new()),
+            };
+            let ours = split_lines(&blobs[before]);
+            let rewrite = Rewrite {
+                ours: &ours,
+                delta: blocks.iter().map(|(_, block)| block.clone()).collect(),
+                fresh: blocks.iter().map(|(b, _)| !had.contains(b)).collect(),
+                own: match context.steps[j].get(&file.path) {
+                    None => Some(&[]),
+                    Some(own) => own.as_deref(),
+                },
+                rewritten: &blobs[after],
+                parent,
+            };
+            if !proves(&rewrite) {
+                return Err(unproved());
             }
+            proved.insert((j, file.path.clone()));
         }
     }
-    if pending.is_empty() {
-        return Ok(());
-    }
-    let paths: Vec<String> = pending
-        .iter()
-        .map(|(_, index, _, _)| files[*index].path.clone())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
-    let steps = recorded(context.git, chain, &paths)?;
-    let oids: Vec<String> = pending
-        .iter()
-        .flat_map(|(_, _, ours, merged)| [(*ours).clone(), (*merged).clone()])
-        .collect();
-    let blobs = context.git.read_blobs(&oids)?;
-    for ((j, index, _, _), pair) in pending.iter().zip(blobs.chunks(2)) {
-        let file = &files[*index];
-        let blocks: Vec<usize> = selection_at(file, &routes[index], *j)
-            .0
-            .into_iter()
-            .collect();
-        let refuse = |order: usize| {
-            let block = blocks.get(order).copied().unwrap_or_default();
-            no_single_place(
-                &file.path,
-                &hunk_name(file, block),
-                &chain[*j],
-                "target the commit that last changed those lines, or a later one",
-            )
-        };
-        // HEAD back to this commit: the diffs of every later commit, newest first.
-        let later: Option<Vec<&[Block]>> = (j + 1..chain.len())
-            .rev()
-            .map(|k| match steps[k].get(&file.path) {
-                None => Some(&[][..]),
-                Some(blocks) => blocks.as_deref(),
-            })
-            .collect();
-        let later = later.ok_or_else(|| refuse(0))?;
-        let ranges: Vec<(usize, usize)> = blocks
-            .iter()
-            .map(|block| {
-                let block = &file.blocks[*block];
-                (block.old_pos, block.old_pos + block.removed.len())
-            })
-            .collect();
-        let starts = carry(&ranges, &later, Way::Back).map_err(refuse)?;
-        let moved: Vec<Block> = blocks
-            .iter()
-            .zip(starts)
-            .map(|(block, old_pos)| Block {
-                old_pos,
-                ..file.blocks[*block].clone()
-            })
-            .collect();
-        let moved: Vec<&Block> = moved.iter().collect();
-        let expected =
-            splice(&split_lines(&pair[0]), &moved).map_err(|error| refuse(block_of(&error)))?;
-        if join_lines(&expected) != pair[1] {
-            return Err(refuse(0));
-        }
-    }
-    Ok(())
+    Ok(proved)
 }
 
 pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
@@ -992,41 +1149,55 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     }
     let old_blobs = git.read_blobs(&old_oids)?;
     let mut old_lines = BTreeMap::new();
+    let mut exact = BTreeSet::new();
     for (index, blob) in modified.iter().zip(old_blobs) {
         let file = &changes.files[*index];
         let lines = split_lines(&blob);
         let partial = routes[index]
             .iter()
             .any(|(_, selected)| matches!(selected, FileSel::Blocks(_)));
-        if partial {
-            // Exactness gate: all blocks together must reproduce the worktree blob exactly.
-            let every: Vec<&Block> = file.blocks.iter().collect();
-            let rebuilt = splice(&lines, &every)
-                .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
-            let oid = git.write_blob(&join_lines(&rebuilt), true)?;
-            if file.new_oid.as_deref() != Some(oid.as_str()) {
-                return Err(fail_hint(
-                    Code::Unsupported,
-                    format!("{}: Git filters or line-ending conversion apply", file.path),
-                    "select the whole file",
-                ));
-            }
+        // Exactness gate: all blocks together must reproduce the worktree blob exactly.
+        let every: Vec<&Block> = file.blocks.iter().collect();
+        let rebuilt = splice(&lines, &every).ok();
+        let oid = match &rebuilt {
+            Some(rebuilt) => Some(git.write_blob(&join_lines(rebuilt), true)?),
+            None => None,
+        };
+        if oid.is_some() && file.new_oid == oid {
+            exact.insert(file.path.clone());
+        } else if partial {
+            return Err(fail_hint(
+                Code::Unsupported,
+                format!("{}: Git filters or line-ending conversion apply", file.path),
+                "select the whole file",
+            ));
         }
         old_lines.insert(file.path.clone(), lines);
     }
+    let modified_paths: Vec<String> = modified
+        .iter()
+        .map(|index| changes.files[*index].path.clone())
+        .collect();
+    let steps = if modified_paths.is_empty() {
+        vec![BTreeMap::new(); chain.len()]
+    } else {
+        recorded(&git, &chain, &modified_paths)?
+    };
     let context = Context {
         git: &git,
         changes,
         head: head_entries,
         hashed,
         old_lines,
+        steps,
+        exact,
+        tip: chain.len() - 1,
     };
 
     // One tree per commit from the oldest target to the tip.
     let mut trees = Vec::new();
-    // Per commit: (file, entry before, entry after) of every file placed there.
+    // Per commit: every file placed there.
     let mut placed: Vec<Vec<Placed>> = Vec::new();
-    let mut memo: BTreeMap<(String, usize, Vec<usize>, bool), Option<Entry>> = BTreeMap::new();
     for (j, commit) in chain.iter().enumerate() {
         let here: Vec<usize> = routes
             .iter()
@@ -1044,24 +1215,14 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
             let file = &changes.files[index];
             let (blocks, whole) = selection_at(file, &routes[&index], j);
             let current = entries.get(&file.path);
-            let key = (
-                current
-                    .map(|(mode, oid)| format!("{mode} {oid}"))
-                    .unwrap_or_default(),
+            let (entry, at) = place(&context, index, (&blocks, whole), current, j)
+                .map_err(|miss| explain(&context, &chain, &routes, index, j, miss))?;
+            placed_here.push(Placed {
                 index,
-                blocks.iter().copied().collect::<Vec<_>>(),
-                whole,
-            );
-            let entry = match memo.get(&key) {
-                Some(entry) => entry.clone(),
-                None => {
-                    let entry = place(&context, index, &blocks, whole, current)
-                        .map_err(|miss| explain(&context, &chain, &routes, index, j, miss))?;
-                    memo.insert(key, entry.clone());
-                    entry
-                }
-            };
-            placed_here.push((index, current.cloned(), entry.clone()));
+                before: current.cloned(),
+                after: entry.clone(),
+                blocks: at.map(|at| blocks.iter().copied().zip(at).collect()),
+            });
             edits.push(TreeEdit {
                 path: file.path.clone(),
                 entry,
@@ -1070,7 +1231,7 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
         trees.push(git.tree_with(&commit.tree, &edits)?);
         placed.push(placed_here);
     }
-    verify_placements(&context, &chain, &routes, &placed)?;
+    let proved = verify_commits(&context, &chain, &placed)?;
 
     // Final verification, at line level, before any commit is created.
     let parent_tree = match chain[0].parents.first() {
@@ -1079,7 +1240,12 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     };
     let routed_at = |j: usize| {
         let mut lines: BTreeMap<String, (Vec<Line>, Vec<Line>)> = BTreeMap::new();
-        let mut skip = BTreeSet::new();
+        // Text files proved position-aware need no line-count comparison.
+        let mut skip: BTreeSet<String> = proved
+            .iter()
+            .filter(|(k, _)| *k == j)
+            .map(|(_, path)| path.clone())
+            .collect();
         for (index, file_routes) in &routes {
             let file = &changes.files[*index];
             for (target, selected) in file_routes.iter().filter(|(target, _)| *target == j) {
@@ -1218,15 +1384,64 @@ mod tests {
     }
 
     #[test]
-    fn carry_follows_every_step_and_names_the_first_range_without_a_place() {
-        let first = [block(0, 0, 0, 2)];
-        let second = [block(5, 1, 5, 1)];
-        let steps: Vec<&[Block]> = vec![&first, &second];
-        assert_eq!(
-            carry(&[(1, 2), (3, 3)], &steps, Way::Forward),
-            Ok(vec![3, 5])
-        );
-        assert_eq!(carry(&[(1, 2), (3, 4)], &steps, Way::Forward), Err(1));
-        assert_eq!(carry(&[(6, 7)], &[&second, &first], Way::Back), Ok(vec![4]));
+    fn follow_crosses_every_step_and_names_the_commit_without_a_place() {
+        let path = "f".to_owned();
+        let steps: Recorded = vec![
+            BTreeMap::new(),
+            BTreeMap::from([(path.clone(), Some(vec![block(0, 0, 0, 2)]))]),
+            BTreeMap::from([(path.clone(), Some(vec![block(5, 1, 5, 1)]))]),
+            BTreeMap::new(),
+            BTreeMap::from([(path.clone(), None)]),
+        ];
+        assert_eq!(follow(&steps, &path, 1..=3, Way::Forward, 1, 1), Ok(3));
+        assert_eq!(follow(&steps, &path, 1..=3, Way::Forward, 3, 0), Ok(5));
+        assert_eq!(follow(&steps, &path, 1..=3, Way::Forward, 3, 1), Err(2));
+        assert_eq!(follow(&steps, &path, (1..=2).rev(), Way::Back, 6, 1), Ok(4));
+        assert_eq!(follow(&steps, &path, 1..=4, Way::Forward, 3, 0), Err(4));
+        assert_eq!(follow(&steps, &path, 1..=4, Way::Forward, 0, 0), Err(1));
+        assert_eq!(follow(&steps, "other", 1..=4, Way::Forward, 7, 2), Ok(7));
+    }
+
+    fn lines(text: &str) -> Vec<Line> {
+        split_lines(text.as_bytes())
+    }
+
+    #[test]
+    fn proves_accepts_only_the_commits_own_change_in_place() {
+        // The commit turned "a b c d" into "a b C d"; the routed fix turns "a" into "A".
+        let ours = lines("a\nb\nC\nd\n");
+        let own = [Block {
+            old_pos: 2,
+            new_pos: 2,
+            removed: lines("c\n"),
+            added: lines("C\n"),
+            ..block(0, 0, 0, 0)
+        }];
+        let fix = Block {
+            old_pos: 0,
+            new_pos: 0,
+            removed: lines("a\n"),
+            added: lines("A\n"),
+            ..block(0, 0, 0, 0)
+        };
+        let check = |fresh: bool, rewritten: &str, parent: Option<&str>| {
+            proves(&Rewrite {
+                ours: &ours,
+                delta: vec![fix.clone()],
+                fresh: vec![fresh],
+                own: Some(&own),
+                rewritten: rewritten.as_bytes(),
+                parent: parent.map(str::as_bytes),
+            })
+        };
+        // Routed into this commit: the parent is the original (or rewritten without the fix).
+        assert!(check(true, "A\nb\nC\nd\n", None));
+        assert!(check(true, "A\nb\nC\nd\n", Some("a\nb\nc\nd\n")));
+        // Carried from an older commit: the rewritten parent already has it.
+        assert!(check(false, "A\nb\nC\nd\n", Some("A\nb\nc\nd\n")));
+        // A parent that differs anywhere else, or a fix in another place, is refused.
+        assert!(!check(false, "A\nb\nC\nd\n", Some("A\nb\nc\nD\n")));
+        assert!(!check(false, "a\nb\nC\nA\n", Some("A\nb\nc\nd\n")));
+        assert!(!check(true, "A\nb\nC\nd\n", Some("A\nb\nc\nd\n")));
     }
 }

@@ -1,9 +1,9 @@
 //! `aisc split` and `aisc uncommit` (algorithm 6.5): cut a commit into parts, optionally moving
 //! the rest into the worktree. Uncommit is a split whose single part is "everything but SEL".
 use super::amend::{
-    Finished, Way, block_of, carry, chain_to_tip, finish, hunk_name, index_changes, merge3,
-    mismatch, move_refs, no_single_place, position, rebuild, recorded, require_checked_out,
-    selection_hunks, short_of, signature,
+    Finished, Recorded, Rewrite, Way, chain_to_tip, finish, follow, hunk_name, index_changes,
+    mismatch, move_refs, position, proves, rebuild, recorded, require_checked_out, selection_hunks,
+    short_of, signature,
 };
 use super::apply::{join_lines, splice, split_lines, unsplice};
 use super::diff::{assign_ids, commit_diff_args, parse_patch};
@@ -372,62 +372,70 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
 
     // Descendants: re-parented; with `uncommit` rest they also lose the rest.
     let descendants = &chain[1..];
+    let strip = !keep && !rest.is_empty();
+    let rest_paths: Vec<String> = rest
+        .keys()
+        .map(|index| changes.files[*index].path.clone())
+        .collect();
+    let steps = if strip && !descendants.is_empty() {
+        recorded(&git, &chain, &rest_paths)?
+    } else {
+        Vec::new()
+    };
     let mut trees = Vec::new();
-    for commit in descendants {
-        if keep || rest.is_empty() {
+    let mut stripped: Vec<Vec<Stripped>> = Vec::new();
+    for (offset, commit) in descendants.iter().enumerate() {
+        if !strip {
             trees.push(commit.tree.clone());
             continue;
         }
-        let rest_paths: Vec<String> = rest
-            .keys()
-            .map(|index| changes.files[*index].path.clone())
-            .collect();
         let entries = git.ls_tree(&commit.tree, &rest_paths)?;
         let mut edits = Vec::new();
+        let mut here = Vec::new();
         for (index, part) in &rest {
             let file = &changes.files[*index];
             let current = entries.get(&file.path);
-            let entry = if current == builder.commit_entries.get(&file.path) {
-                after_parts[index].clone()
-            } else {
-                Some(strip_rest(
-                    file,
-                    part,
-                    current,
-                    (
-                        builder.commit_entries.get(&file.path),
-                        after_parts[index].as_ref(),
-                    ),
-                    &git,
-                    commit,
-                )?)
-            };
+            let unchanged = current == builder.commit_entries.get(&file.path);
+            let (entry, blocks) = strip_rest(
+                file,
+                part,
+                (current, after_parts[index].as_ref(), unchanged),
+                (&git, &steps, &chain, offset + 1),
+            )?;
+            if let (Some(blocks), Some((_, ours)), Some((_, after))) = (blocks, current, &entry) {
+                here.push(Stripped {
+                    index: *index,
+                    ours: ours.clone(),
+                    after: after.clone(),
+                    blocks,
+                });
+            }
             edits.push(TreeEdit {
                 path: file.path.clone(),
                 entry,
             });
         }
         trees.push(git.tree_with(&commit.tree, &edits)?);
+        stripped.push(here);
     }
     let new_tip_tree = trees.last().cloned().unwrap_or_else(|| base_tree.clone());
 
-    // Final verification at line level, before any commit is rebuilt: every descendant must
-    // differ from its new parent exactly as it did originally, and the new tip must differ from
-    // the old one by exactly the rest.
-    if !keep && !rest.is_empty() {
+    // Final verification before any commit is rebuilt: the rest's text files are proved
+    // position-aware in every descendant; every other change of a descendant must stay as it was,
+    // and the new tip must differ from the old one only in the rest's files.
+    if strip {
+        let proved = prove_rest(&git, &chain, &changes, &steps, &stripped, &after_parts)?;
         let (mut old_prev, mut new_prev) = (target.tree.clone(), base_tree.clone());
-        for (commit, tree) in descendants.iter().zip(&trees) {
+        for (offset, (commit, tree)) in descendants.iter().zip(&trees).enumerate() {
             let original = signature(&git, &old_prev, &commit.tree)?;
             let rewritten = signature(&git, &new_prev, tree)?;
-            if original != rewritten {
-                let path = original
-                    .keys()
-                    .chain(rewritten.keys())
-                    .find(|path| original.get(*path) != rewritten.get(*path))
-                    .cloned()
-                    .unwrap_or_default();
+            let altered = original.keys().chain(rewritten.keys()).find(|path| {
+                !proved.contains(&(offset + 1, (*path).clone()))
+                    && original.get(*path) != rewritten.get(*path)
+            });
+            if let Some(path) = altered {
                 return Err(mismatch(
-                    &path,
+                    path,
                     commit,
                     ": taking the rest out would alter it",
                 ));
@@ -450,7 +458,6 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
                 ));
             }
         }
-        verify_rest_positions(&git, &chain, &changes, &rest, &trees)?;
     }
     let (descendant_pairs, tip) = rebuild(&git, descendants, &trees, base.clone())?;
     let tip = tip
@@ -534,166 +541,193 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
     )
 }
 
-/// Position check for the rest, independent of how the 3-way merge aligned the versions: in every
-/// rewritten descendant (the new tip included), each text file of the rest must be exactly that
-/// commit's version with the rest's blocks taken out where the commits' own diffs carry them.
-/// Line counts cannot tell a rest taken from a look-alike line; this can, and then nothing changes.
-fn verify_rest_positions(
-    git: &Git,
-    chain: &[CommitInfo],
-    changes: &ChangeSet,
-    rest: &BTreeMap<usize, RestFile>,
-    trees: &[String],
-) -> Result<()> {
-    let text: Vec<(&FileChange, Vec<usize>)> = rest
-        .iter()
-        .filter(|(index, _)| changes.files[**index].kind == Kind::Modified)
-        .map(|(index, part)| {
-            let file = &changes.files[*index];
-            let blocks = match part {
-                RestFile::Whole => (0..file.blocks.len()).collect(),
-                RestFile::Part { blocks, .. } => blocks.iter().copied().collect(),
-            };
-            (file, blocks)
-        })
-        .filter(|(_, blocks): &(_, Vec<usize>)| !blocks.is_empty())
-        .collect();
-    if text.is_empty() || trees.is_empty() {
-        // Without descendants the parts are spliced exactly.
-        return Ok(());
-    }
-    let paths: Vec<String> = text.iter().map(|(file, _)| file.path.clone()).collect();
-    let steps = recorded(git, chain, &paths)?;
-    // (descendant position in the chain, file, its version there, the rewritten version)
-    let mut pending = Vec::new();
-    for (offset, tree) in trees.iter().enumerate() {
-        let k = offset + 1;
-        let original = git.ls_tree(&chain[k].tree, &paths)?;
-        let rewritten = git.ls_tree(tree, &paths)?;
-        for (file, blocks) in &text {
-            let (Some((_, ours)), Some((_, theirs))) =
-                (original.get(&file.path), rewritten.get(&file.path))
-            else {
-                return Err(mismatch(
-                    &file.path,
-                    &chain[k],
-                    ": the rest is not where it was",
-                ));
-            };
-            // Unchanged since the split commit: the parts' version, spliced exactly.
-            if file.new_oid.as_ref() != Some(ours) {
-                pending.push((k, *file, blocks, ours.clone(), theirs.clone()));
-            }
-        }
-    }
-    let oids: Vec<String> = pending
-        .iter()
-        .flat_map(|(_, _, _, ours, theirs)| [ours.clone(), theirs.clone()])
-        .collect();
-    let blobs = git.read_blobs(&oids)?;
-    for ((k, file, blocks, _, _), pair) in pending.iter().zip(blobs.chunks(2)) {
-        let refuse = |order: usize| {
-            let block = blocks.get(order).copied().unwrap_or_default();
-            no_single_place(
-                &file.path,
-                &hunk_name(file, block),
-                &chain[*k],
-                "split that commit first, or keep the rest with --rest keep",
-            )
-        };
-        // The split commit up to this descendant, oldest first.
-        let between: Option<Vec<&[Block]>> = (1..=*k)
-            .map(|step| match steps[step].get(&file.path) {
-                None => Some(&[][..]),
-                Some(blocks) => blocks.as_deref(),
-            })
-            .collect();
-        let between = between.ok_or_else(|| refuse(0))?;
-        let ranges: Vec<(usize, usize)> = blocks
-            .iter()
-            .map(|block| {
-                let block = &file.blocks[*block];
-                (block.new_pos, block.new_pos + block.added.len())
-            })
-            .collect();
-        let starts = carry(&ranges, &between, Way::Forward).map_err(refuse)?;
-        let moved: Vec<Block> = blocks
-            .iter()
-            .zip(starts)
-            .map(|(block, new_pos)| Block {
-                new_pos,
-                ..file.blocks[*block].clone()
-            })
-            .collect();
-        let moved: Vec<&Block> = moved.iter().collect();
-        let expected =
-            unsplice(&split_lines(&pair[0]), &moved).map_err(|error| refuse(block_of(&error)))?;
-        if join_lines(&expected) != pair[1] {
-            return Err(refuse(0));
-        }
-    }
-    Ok(())
+/// A text file of the rest in one descendant.
+struct Stripped {
+    index: usize,
+    /// The descendant's version and the version without the rest.
+    ours: String,
+    after: String,
+    /// The rest's blocks, positioned on the descendant's version.
+    blocks: Vec<Block>,
 }
 
-/// A descendant's entry for a rest file with the rest taken out: the change commit -> parts is
-/// merged (3-way) onto the descendant's version, so it is removed exactly where it was made.
+fn rest_blocks(file: &FileChange, part: &RestFile) -> BTreeSet<usize> {
+    match part {
+        RestFile::Whole => (0..file.blocks.len()).collect(),
+        RestFile::Part { blocks, .. } => blocks.clone(),
+    }
+}
+
+/// A descendant's entry for a rest file with the rest taken out, plus (for a text file) the
+/// rest's blocks on the descendant's version. Each block is carried from the split commit
+/// through the commits' own diffs, so it comes out exactly where it was made.
 fn strip_rest(
     file: &FileChange,
     part: &RestFile,
-    current: Option<&Entry>,
-    (original, parts): (Option<&Entry>, Option<&Entry>),
-    git: &Git,
-    commit: &CommitInfo,
-) -> Result<Entry> {
+    (current, parts, unchanged): (Option<&Entry>, Option<&Entry>, bool),
+    (git, steps, chain, k): (&Git, &Recorded, &[CommitInfo], usize),
+) -> Result<(Option<Entry>, Option<Vec<Block>>)> {
+    let blocks = rest_blocks(file, part);
+    let text = file.kind == Kind::Modified && !blocks.is_empty();
+    if unchanged && !text {
+        return Ok((parts.cloned(), None));
+    }
     let again = || {
         fail_hint(
             Code::Conflict,
             format!(
                 "{} is changed again by {}; its rest cannot be taken out",
                 file.path,
-                short_of(commit)
+                short_of(&chain[k])
             ),
             "split that commit first, or keep the rest with --rest keep",
         )
     };
-    if file.kind != super::model::Kind::Modified {
+    if file.kind != Kind::Modified {
         return Err(again());
     }
-    let ((mode, ours), (_, base), (_, theirs)) = (
-        current.ok_or_else(again)?,
-        original.ok_or_else(again)?,
-        parts.ok_or_else(again)?,
-    );
-    let blocks: BTreeSet<usize> = match part {
-        RestFile::Whole => (0..file.blocks.len()).collect(),
-        RestFile::Part { blocks, .. } => blocks.clone(),
-    };
+    let (mode, ours) = current.ok_or_else(again)?;
     let mode_back = match part {
         RestFile::Whole => file.mode_changed(),
         RestFile::Part { mode, .. } => *mode,
-    };
-    let Some(merged) = merge3(git, base, ours, theirs)? else {
-        let names = file
-            .hunks
-            .iter()
-            .filter(|hunk| hunk.blocks.clone().any(|block| blocks.contains(&block)))
-            .map(|hunk| hunk.short.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(fail_hint(
-            Code::Conflict,
-            format!(
-                "hunk {names} ({}) cannot be taken out of {}: it changes the same lines",
-                file.path,
-                short_of(commit)
-            ),
-            "split that commit first, or keep the rest with --rest keep",
-        ));
     };
     let mode = if mode_back && file.old_mode.is_some() {
         file.old_mode.clone().unwrap_or_else(|| mode.clone())
     } else {
         mode.clone()
     };
-    Ok((mode, git.write_blob(&merged, true)?))
+    if !text {
+        // Only the mode is the rest.
+        return Ok((Some((mode, ours.clone())), None));
+    }
+    let carried: Vec<Block> = blocks
+        .iter()
+        .map(|index| {
+            let block = &file.blocks[*index];
+            follow(
+                steps,
+                &file.path,
+                1..=k,
+                Way::Forward,
+                block.new_pos,
+                block.added.len(),
+            )
+            .map(|new_pos| Block {
+                new_pos,
+                ..block.clone()
+            })
+            .map_err(|step| {
+                fail_hint(
+                    Code::Conflict,
+                    format!(
+                        "hunk {} ({}) cannot be taken out of {}: it changes the same lines",
+                        hunk_name(file, *index),
+                        file.path,
+                        short_of(&chain[step])
+                    ),
+                    format!(
+                        "{} changes those lines; split it first, or keep the rest with --rest keep",
+                        chain[step].short
+                    ),
+                )
+            })
+        })
+        .collect::<Result<_>>()?;
+    if unchanged {
+        return Ok((parts.cloned(), Some(carried)));
+    }
+    let bytes = git
+        .read_blobs(std::slice::from_ref(ours))?
+        .pop()
+        .unwrap_or_default();
+    let refs: Vec<&Block> = carried.iter().collect();
+    let lines = unsplice(&split_lines(&bytes), &refs).map_err(|_| again())?;
+    Ok((
+        Some((mode, git.write_blob(&join_lines(&lines), true)?)),
+        Some(carried),
+    ))
+}
+
+/// Proves, position-aware, every text file of the rest in every rewritten descendant (see
+/// [`proves`]): each is its original version with the rest taken out at the carried places, and
+/// changes its rewritten parent by exactly the commit's own recorded blocks. The last one is the
+/// new tip, so the tip differs from the old tip by exactly the rest, in place. Returns the
+/// (chain position, path) pairs it proved.
+fn prove_rest(
+    git: &Git,
+    chain: &[CommitInfo],
+    changes: &ChangeSet,
+    steps: &Recorded,
+    stripped: &[Vec<Stripped>],
+    after_parts: &BTreeMap<usize, Option<Entry>>,
+) -> Result<BTreeSet<(usize, String)>> {
+    let mut oids = BTreeSet::new();
+    for item in stripped.iter().flatten() {
+        oids.insert(item.ours.clone());
+        oids.insert(item.after.clone());
+        if let Some(Some((_, oid))) = after_parts.get(&item.index) {
+            oids.insert(oid.clone());
+        }
+    }
+    let oids: Vec<String> = oids.into_iter().collect();
+    let blobs: BTreeMap<&String, Vec<u8>> = oids.iter().zip(git.read_blobs(&oids)?).collect();
+    let mut proved = BTreeSet::new();
+    for (offset, here) in stripped.iter().enumerate() {
+        let k = offset + 1;
+        for item in here {
+            let file = &changes.files[item.index];
+            let unproved = || {
+                mismatch(
+                    &file.path,
+                    &chain[k],
+                    ": taking the rest out would alter it",
+                )
+            };
+            let parent = if offset == 0 {
+                match after_parts.get(&item.index) {
+                    Some(Some((_, oid))) => oid,
+                    _ => return Err(unproved()),
+                }
+            } else {
+                match stripped[offset - 1]
+                    .iter()
+                    .find(|other| other.index == item.index)
+                {
+                    Some(other) => &other.after,
+                    None => return Err(unproved()),
+                }
+            };
+            let ours = split_lines(&blobs[&item.ours]);
+            let delta: Vec<Block> = item
+                .blocks
+                .iter()
+                .map(|block| Block {
+                    old_pos: block.new_pos,
+                    new_pos: block.old_pos,
+                    removed: block.added.clone(),
+                    added: block.removed.clone(),
+                    before: Vec::new(),
+                    after: Vec::new(),
+                    at_start: block.at_start,
+                    at_eof: block.at_eof,
+                })
+                .collect();
+            let rewrite = Rewrite {
+                ours: &ours,
+                fresh: vec![false; delta.len()],
+                delta,
+                own: match steps[k].get(&file.path) {
+                    None => Some(&[]),
+                    Some(own) => own.as_deref(),
+                },
+                rewritten: &blobs[&item.after],
+                parent: Some(&blobs[parent]),
+            };
+            if !proves(&rewrite) {
+                return Err(unproved());
+            }
+            proved.insert((k, file.path.clone()));
+        }
+    }
+    Ok(proved)
 }
