@@ -756,3 +756,243 @@ fn a_hunk_into_the_commit_that_creates_the_file_keeps_the_later_changes() {
     );
     assert_eq!(fixture.subjects("main..HEAD"), ["shout nine", "add f"]);
 }
+
+/// `l1`..`l30`, with `edit` applied to the 1-based line numbers it maps.
+fn numbered(edit: &dyn Fn(usize) -> Vec<String>) -> String {
+    (1..=30)
+        .flat_map(edit)
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
+fn plain(number: usize) -> Vec<String> {
+    vec![format!("l{number}")]
+}
+
+/// C2 rewrites lines 13-14; the worktree turns line 10 into 11 lines (new lines 10-20) and
+/// deletes C2's two lines (at new line 23).
+fn widened_and_deleted() -> Fixture {
+    let fixture = Fixture::with_files(&[("base.txt", "b\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f", &numbered(&plain));
+    fixture.commit_all("T");
+    let c2 = |n: usize| match n {
+        13 | 14 => vec![format!("c2-{n}")],
+        _ => plain(n),
+    };
+    fixture.write("f", &numbered(&c2));
+    fixture.commit_all("C2");
+    fixture.write(
+        "f",
+        &numbered(&|n| match n {
+            10 => (1..=11).map(|x| format!("X{x}")).collect(),
+            13 | 14 => Vec::new(),
+            _ => plain(n),
+        }),
+    );
+    fixture
+}
+
+#[test]
+fn a_line_range_counts_new_side_lines_only() {
+    // New lines 13-14 are inside the widened block; the deletion sits at new line 23.
+    let fixture = widened_and_deleted();
+    fixture.aisc(&["amend", "--into", "C2", "f:13-14"]).ok();
+    let committed = fixture.tree_blob("HEAD", "f").unwrap();
+    assert!(committed.contains("X11\n"), "{committed}");
+    assert!(
+        committed.contains("c2-13\n"),
+        "the deletion stays out: {committed}"
+    );
+    let fixture = widened_and_deleted();
+    fixture.aisc(&["amend", "--into", "C2", "f:23"]).ok();
+    let committed = fixture.tree_blob("HEAD", "f").unwrap();
+    assert!(!committed.contains("c2-13\n"), "{committed}");
+    assert!(
+        !committed.contains("X1\n"),
+        "the widened block stays out: {committed}"
+    );
+}
+
+#[test]
+fn the_one_call_hint_resolves_to_exactly_the_blocks_it_moves() {
+    let fixture = widened_and_deleted();
+    let worktree = fixture.read("f");
+    let run = fixture.aisc(&["amend", "--into", "T", "f"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    let hint = run
+        .stderr
+        .lines()
+        .find_map(|line| line.split_once(" instead: ").map(|(_, call)| call))
+        .unwrap_or_else(|| panic!("{}", run.stderr));
+    let args: Vec<&str> = hint.split(' ').collect();
+    let again = fixture.aisc(&args[1..]);
+    assert_eq!(again.code, 0, "{hint}: {} {}", again.stdout, again.stderr);
+    // The widened block goes into T, the deletion of C2's lines into C2; nothing stays out.
+    let t = fixture.tree_blob("HEAD~1", "f").unwrap();
+    assert!(t.contains("X11\n") && t.contains("l13\n"), "{t}");
+    assert_eq!(fixture.tree_blob("HEAD", "f").unwrap(), worktree);
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+fn mode_of(fixture: &Fixture, revision: &str, path: &str) -> String {
+    fixture.git(&["ls-tree", revision, path])[..6].to_owned()
+}
+
+fn executable(fixture: &Fixture, path: &str, on: bool) {
+    use std::os::unix::fs::PermissionsExt;
+    let bits = if on { 0o755 } else { 0o644 };
+    std::fs::set_permissions(fixture.path(path), std::fs::Permissions::from_mode(bits)).unwrap();
+}
+
+#[test]
+fn a_mode_change_never_erases_a_later_commits_own_mode_change() {
+    let fixture = Fixture::with_files(&[("base.txt", "b\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f", &numbered(&plain));
+    fixture.commit_all("T");
+    executable(&fixture, "f", true);
+    fixture.write(
+        "f",
+        &numbered(&|n| {
+            if n == 30 {
+                vec!["L30".into()]
+            } else {
+                plain(n)
+            }
+        }),
+    );
+    fixture.commit_all("C2");
+    executable(&fixture, "f", false);
+    fixture.write(
+        "f",
+        &numbered(&|n| match n {
+            2 => vec!["FIX2".into()],
+            30 => vec!["L30".into()],
+            _ => plain(n),
+        }),
+    );
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["amend", "--into", "T", "f"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("C2"), "{}", run.stderr);
+    assert_eq!(before, fixture.snapshot());
+    let hint = run
+        .stderr
+        .lines()
+        .find_map(|line| line.split_once(" instead: ").map(|(_, call)| call))
+        .unwrap_or_else(|| panic!("{}", run.stderr));
+    let args: Vec<&str> = hint.split(' ').collect();
+    fixture.aisc(&args[1..]).ok();
+    assert_eq!(mode_of(&fixture, "HEAD~1", "f"), "100644");
+    assert_eq!(mode_of(&fixture, "HEAD", "f"), "100644");
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+#[test]
+fn a_mode_change_goes_into_the_target_with_its_content() {
+    let fixture = Fixture::with_files(&[("base.txt", "b\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f", &numbered(&plain));
+    fixture.commit_all("T");
+    fixture.write(
+        "f",
+        &numbered(&|n| {
+            if n == 30 {
+                vec!["L30".into()]
+            } else {
+                plain(n)
+            }
+        }),
+    );
+    fixture.commit_all("C2");
+    executable(&fixture, "f", true);
+    fixture.write(
+        "f",
+        &numbered(&|n| match n {
+            2 => vec!["FIX2".into()],
+            30 => vec!["L30".into()],
+            _ => plain(n),
+        }),
+    );
+    fixture.aisc(&["amend", "--into", "T", "f"]).ok();
+    assert_eq!(mode_of(&fixture, "HEAD~1", "f"), "100755");
+    assert_eq!(mode_of(&fixture, "HEAD", "f"), "100755");
+    assert!(fixture.tree_blob("HEAD~1", "f").unwrap().contains("FIX2\n"));
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+/// Commits a..h then a..i, and returns the fixture with `setup` applied before the commits.
+fn filtered(setup: &dyn Fn(&Fixture)) -> Fixture {
+    let fixture = Fixture::bare();
+    setup(&fixture);
+    fixture.write("base.txt", "b\n");
+    fixture.commit_all("base");
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f", "a\nb\nc\nd\ne\nf\ng\nh\n");
+    fixture.commit_all("v0");
+    fixture.write("f", "a\nb\nc\nd\ne\nf\ng\nh\ni\n");
+    fixture.commit_all("v1");
+    fixture
+}
+
+fn assert_whole_file_amend_with_filters(fixture: &Fixture, worktree: &str) {
+    fixture.write("f", worktree);
+    let run = fixture.aisc(&["amend", "--into", "v0", "f"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        fixture.git_bytes(&["show", "HEAD~1:f"]),
+        b"A\nb\nc\nd\ne\nf\ng\nh\n"
+    );
+    assert_eq!(
+        fixture.git_bytes(&["show", "HEAD:f"]),
+        b"A\nb\nc\nd\ne\nf\ng\nh\ni\n"
+    );
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+#[test]
+fn a_whole_file_amend_with_eol_crlf_commits_normalized_lines() {
+    let fixture = filtered(&|fixture| fixture.write(".gitattributes", "f text eol=crlf\n"));
+    assert_whole_file_amend_with_filters(&fixture, "A\r\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\nh\r\ni\r\n");
+}
+
+#[test]
+fn a_whole_file_amend_with_autocrlf_commits_normalized_lines() {
+    let fixture = filtered(&|fixture| {
+        fixture.git(&["config", "core.autocrlf", "true"]);
+    });
+    assert_whole_file_amend_with_filters(&fixture, "A\r\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\nh\r\ni\r\n");
+}
+
+#[test]
+fn a_whole_file_amend_through_a_clean_filter_commits_the_cleaned_lines() {
+    let fixture = filtered(&|fixture| {
+        fixture.write(".gitattributes", "f filter=up\n");
+        fixture.git(&["config", "filter.up.clean", "sed s/secret//"]);
+        fixture.git(&["config", "filter.up.smudge", "cat"]);
+    });
+    assert_whole_file_amend_with_filters(&fixture, "Asecret\nb\nc\nd\ne\nf\ng\nh\ni\n");
+}
+
+#[test]
+fn autocrlf_on_a_file_committed_with_crlf_is_not_a_concurrent_change() {
+    // Git keeps CRLF for a file whose committed version has CRLF; so must the change check.
+    let fixture = Fixture::with_files(&[("base.txt", "b\n")]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f", "a\r\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\nh\r\n");
+    fixture.commit_all("v0");
+    fixture.write("f", "a\r\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\nh\r\ni\r\n");
+    fixture.commit_all("v1");
+    fixture.git(&["config", "core.autocrlf", "true"]);
+    fixture.write(".git/info/attributes", "* text=auto\n");
+    fixture.write("f", "A\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\nh\r\ni\r\n");
+    let run = fixture.aisc(&["amend", "--into", "v0", "f"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(
+        fixture.git_bytes(&["show", "HEAD~1:f"]),
+        b"A\nb\r\nc\r\nd\r\ne\r\nf\r\ng\r\nh\r\n"
+    );
+    // Git sees the worktree as the new tip.
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}

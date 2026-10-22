@@ -1,5 +1,5 @@
 //! Selector resolution against a change set (uncommitted changes or one commit's diff).
-use super::model::{ChangeSet, FileChange, Kind};
+use super::model::{Block, ChangeSet, FileChange, Kind};
 use super::{Code, fail, fail_hint};
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
@@ -139,6 +139,18 @@ fn hunk_selection(file: &FileChange, hunks: &[usize]) -> FileSel {
     FileSel::Blocks(blocks)
 }
 
+/// Whether `PATH:start-end` (new-side line numbers, 1-based) selects `block`: its added lines
+/// intersect the range, or, for a pure deletion, the new-side line it falls at (the line that
+/// follows the deleted lines) lies within `start..=end + 1`.
+pub(crate) fn in_lines(block: &Block, start: usize, end: usize) -> bool {
+    let from = block.new_pos + 1;
+    if block.added.is_empty() {
+        (start..=end + 1).contains(&from)
+    } else {
+        from <= end && from + block.added.len() > start
+    }
+}
+
 fn parse_lines(spec: &str) -> Option<(usize, usize)> {
     let (start, end) = match spec.split_once('-') {
         Some((start, end)) => (start, end),
@@ -215,15 +227,7 @@ fn resolve_token(
             .blocks
             .iter()
             .enumerate()
-            .filter(|(_, block)| {
-                let (from, count) = if block.added.is_empty() {
-                    (block.old_pos + 1, block.removed.len())
-                } else {
-                    (block.new_pos + 1, block.added.len())
-                };
-                let last = from + count.max(1) - 1;
-                from <= end && last >= start
-            })
+            .filter(|(_, block)| in_lines(block, start, end))
             .map(|(position, _)| position)
             .collect();
         if blocks.is_empty() {
@@ -428,5 +432,32 @@ mod tests {
         assert!(check_disjoint(&changes, &[one.clone(), two]).is_err());
         let other = select(&["f.txt~omega"]).unwrap();
         assert!(check_disjoint(&changes, &[one, other]).is_ok());
+    }
+
+    #[test]
+    fn line_ranges_count_new_side_lines_and_deletions_by_where_they_fall() {
+        let block = |old_pos: usize, removed: usize, new_pos: usize, added: usize| Block {
+            old_pos,
+            new_pos,
+            removed: vec![b"r\n".to_vec(); removed],
+            added: vec![b"a\n".to_vec(); added],
+            before: Vec::new(),
+            after: Vec::new(),
+            at_start: false,
+            at_eof: false,
+        };
+        // New lines 10-20.
+        let widened = block(9, 1, 9, 11);
+        assert!(in_lines(&widened, 13, 14));
+        assert!(in_lines(&widened, 20, 25));
+        assert!(!in_lines(&widened, 21, 25));
+        assert!(!in_lines(&widened, 1, 9));
+        // Old lines 13-14 deleted; they fell before new line 23. Old numbers never count.
+        let deleted = block(12, 2, 22, 0);
+        assert!(!in_lines(&deleted, 13, 14));
+        assert!(in_lines(&deleted, 23, 23));
+        assert!(in_lines(&deleted, 22, 22));
+        assert!(!in_lines(&deleted, 24, 30));
+        assert!(!in_lines(&deleted, 1, 21));
     }
 }
