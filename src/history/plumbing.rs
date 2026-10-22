@@ -574,7 +574,14 @@ impl Git {
             Some(None) => false,
             Some(Some(value)) => crate::runner::parse_bool(value) == Some(false),
         };
-        if !autocrlf_off || config.get("core.attributesfile").is_some() {
+        // Other attribute sources (attr.tree, GIT_ATTR_SOURCE) are left to Git.
+        let Some(no_system) = attribute_env(&|name| std::env::var_os(name)) else {
+            return false;
+        };
+        if !autocrlf_off
+            || config.get("core.attributesfile").is_some()
+            || config.get("attr.tree").is_some()
+        {
             return false;
         }
         let rules = |file: &Path| -> bool {
@@ -586,13 +593,42 @@ impl Git {
                 Err(error) => error.kind() != std::io::ErrorKind::NotFound,
             }
         };
-        let mut files = vec![self.root.join(".gitattributes")];
-        let mut directory = PathBuf::new();
+        // In-tree files: Git reads the worktree copy, or the index copy when the worktree one is
+        // missing, so both must be absent or the same bytes.
+        let mut in_tree = vec![".gitattributes".to_owned()];
         let components: Vec<&str> = path.split('/').collect();
+        let mut directory = String::new();
         for component in &components[..components.len().saturating_sub(1)] {
-            directory.push(component);
-            files.push(self.root.join(&directory).join(".gitattributes"));
+            directory.push_str(component);
+            directory.push('/');
+            in_tree.push(format!("{directory}.gitattributes"));
         }
+        let Ok(index) = store::read_index(&self.dir) else {
+            return false;
+        };
+        for relative in &in_tree {
+            let staged = index
+                .iter()
+                .find(|entry| entry.path == *relative && entry.stage == 0);
+            let worktree = match std::fs::read(self.root.join(relative)) {
+                Ok(bytes) => Some(bytes),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(_) => return false,
+            };
+            match (staged, worktree) {
+                (None, _) => {}
+                (Some(_), None) => return false,
+                (Some(entry), Some(bytes)) => {
+                    if self.blob_id(&bytes).ok().as_deref() != Some(entry.oid.as_str()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        let mut files: Vec<PathBuf> = in_tree
+            .iter()
+            .map(|relative| self.root.join(relative))
+            .collect();
         let Ok(common) = self.common_dir() else {
             return false;
         };
@@ -605,7 +641,7 @@ impl Git {
                 }
             }
         }
-        if std::env::var_os("GIT_ATTR_NOSYSTEM").is_none() {
+        if !no_system {
             match crate::runner::system_attributes_path(&self.root) {
                 Some(system) => files.push(system),
                 None => return false,
@@ -1189,6 +1225,19 @@ impl Git {
             }
             _ => Err(Self::failure(&args, &output)),
         }
+    }
+}
+
+/// The attribute environment: `Some(skip the system file)` per `GIT_ATTR_NOSYSTEM` (Git's
+/// boolean rules), `None` when `GIT_ATTR_SOURCE` names another source or the flag is not a
+/// boolean (then Git decides).
+fn attribute_env(env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> Option<bool> {
+    if env("GIT_ATTR_SOURCE").is_some() {
+        return None;
+    }
+    match env("GIT_ATTR_NOSYSTEM") {
+        None => Some(false),
+        Some(value) => crate::runner::parse_bool(value.to_str()?),
     }
 }
 
@@ -1893,6 +1942,58 @@ mod tests {
             git.tree_of_entries(&entries).unwrap(),
             git.tree_with_git(&empty, &edits).unwrap()
         );
+    }
+
+    #[test]
+    fn the_raw_byte_shortcut_needs_every_attribute_source_empty() {
+        let (_guard, git) = repo();
+        if !git.no_conversion("a.txt") {
+            return; // a system attributes file with rules: nothing to compare against
+        }
+        // A rule only in the index copy (the worktree file is deleted) still applies.
+        std::fs::write(git.root.join(".gitattributes"), "*.txt filter=x\n").unwrap();
+        sh(&git.root, &["add", ".gitattributes"]);
+        std::fs::remove_file(git.root.join(".gitattributes")).unwrap();
+        assert!(!git.no_conversion("a.txt"), "index copy of .gitattributes");
+        // A worktree copy that differs from the index copy: Git may read either.
+        std::fs::write(git.root.join(".gitattributes"), "").unwrap();
+        assert!(
+            !git.no_conversion("a.txt"),
+            "worktree and index copies differ"
+        );
+        sh(&git.root, &["rm", "-q", "-f", "--cached", ".gitattributes"]);
+        std::fs::remove_file(git.root.join(".gitattributes")).unwrap();
+        assert!(git.no_conversion("a.txt"), "back to no attributes");
+        // attr.tree names another source of attributes.
+        crate::git::run_git(&git.root, &["config", "attr.tree", "HEAD"], None).unwrap();
+        assert!(!git.no_conversion("a.txt"), "attr.tree");
+    }
+
+    #[test]
+    fn attribute_environment_follows_git() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| std::ffi::OsString::from(value))
+            }
+        };
+        assert_eq!(attribute_env(&env(&[])), Some(false));
+        assert_eq!(
+            attribute_env(&env(&[("GIT_ATTR_NOSYSTEM", "1")])),
+            Some(true)
+        );
+        assert_eq!(
+            attribute_env(&env(&[("GIT_ATTR_NOSYSTEM", "Yes")])),
+            Some(true)
+        );
+        assert_eq!(
+            attribute_env(&env(&[("GIT_ATTR_NOSYSTEM", "false")])),
+            Some(false)
+        );
+        assert_eq!(attribute_env(&env(&[("GIT_ATTR_NOSYSTEM", "maybe")])), None);
+        assert_eq!(attribute_env(&env(&[("GIT_ATTR_SOURCE", "HEAD")])), None);
     }
 
     #[test]
