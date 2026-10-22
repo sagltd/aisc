@@ -455,6 +455,33 @@ fn a_staged_copy_with_the_discarded_hunk_loses_it_too() {
 }
 
 #[test]
+fn discarding_a_whole_file_never_drops_a_staged_version_that_differs_from_both() {
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(5, "S5")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(5, "W5")]));
+    let before = fixture.snapshot();
+    for selector in ["f:5", "f"] {
+        let run = fixture.aisc(&["discard", selector]);
+        assert_eq!(run.code, 1, "{selector}: {} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains("git add"), "{}", run.stderr);
+        assert_eq!(before, fixture.snapshot(), "{selector}");
+    }
+}
+
+#[test]
+fn discarding_a_whole_file_also_takes_its_hunks_out_of_a_partly_staged_copy() {
+    // Staged S3; the worktree adds W25: the whole file goes back to HEAD, index included.
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(3, "S3")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(3, "S3"), (25, "W25")]));
+    fixture.aisc(&["discard", "f"]).ok();
+    assert_eq!(fixture.read("f"), numbered(&[]));
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+#[test]
 fn a_staged_change_that_really_overlaps_is_refused() {
     let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
     fixture.write("f", &numbered(&[(25, "STAGED25")]));

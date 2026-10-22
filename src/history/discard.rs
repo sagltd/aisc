@@ -359,6 +359,19 @@ pub(super) fn removal(
                     continue;
                 }
                 let present = index.get(&file.path);
+                // Staged as neither HEAD nor the worktree: never drop that version.
+                if let Some(staged @ (_, oid)) = present
+                    && head.is_none_or(|(_, head_oid)| head_oid != oid)
+                    && file.new_oid.as_deref() != Some(oid.as_str())
+                {
+                    if file.kind != Kind::Modified {
+                        return Err(staged_apart(file));
+                    }
+                    let every: Vec<&Block> = file.blocks.iter().collect();
+                    out.index
+                        .extend(staged_without(git, file, &every, head, staged)?);
+                    continue;
+                }
                 if present != head {
                     out.index.push(IndexChange {
                         path: file.path.clone(),
@@ -542,63 +555,77 @@ fn partial(
             })
         }
         Some((_, oid)) if oid == head_oid => None,
-        Some((mode, oid)) => {
-            // Staged differently (`git add -p`): a reverted hunk the staged copy also holds
-            // leaves it too; one it does not hold leaves the index alone; any other staged
-            // change to the same lines is a real overlap.
-            let overlap = || {
-                fail_hint(
-                    Code::Dirty,
-                    format!(
-                        "{} has staged changes that overlap the discarded hunks",
-                        file.path
-                    ),
-                    format!("unstage it first: git restore --staged {}", file.path),
-                )
-            };
-            let head_mode = head.map_or(mode, |(head_mode, _)| head_mode);
-            let staged_blocks = blob_blocks(git, &file.path, (head_mode, head_oid), (mode, oid))?;
-            let steps: Recorded = vec![
-                BTreeMap::new(),
-                BTreeMap::from([(file.path.clone(), Some(staged_blocks.clone()))]),
-            ];
-            let mut revert = Vec::new();
-            for block in &chosen {
-                let untouched = follow(
-                    &steps,
-                    &file.path,
-                    [1],
-                    Way::Forward,
-                    block.old_pos,
-                    block.removed.len(),
-                )
-                .is_ok();
-                if untouched {
-                    continue;
-                }
-                let same = staged_blocks.iter().find(|staged| {
-                    staged.old_pos == block.old_pos
-                        && staged.removed == block.removed
-                        && staged.added == block.added
-                });
-                revert.push(same.ok_or_else(overlap)?);
-            }
-            if revert.is_empty() {
-                None
-            } else {
-                let staged = git
-                    .read_blobs(std::slice::from_ref(oid))?
-                    .pop()
-                    .unwrap_or_default();
-                let placed = unsplice(&split_lines(&staged), &revert).map_err(|_| overlap())?;
-                Some(IndexChange {
-                    path: file.path.clone(),
-                    from: Some((mode.clone(), oid.clone())),
-                    to: Some((mode.clone(), git.write_blob(&join_lines(&placed), true)?)),
-                })
-            }
-        }
+        Some(staged) => staged_without(git, file, &chosen, head, staged)?,
         None => None,
     };
     Ok((write, change))
+}
+
+/// The index change for a staged copy that differs from both HEAD and the worktree (as after
+/// `git add -p`) when `chosen` (worktree blocks against HEAD) are reverted: a block the staged
+/// copy holds exactly leaves it too, one it does not touch leaves it alone, and any other staged
+/// change to the same lines is refused, so a staged version is never dropped.
+fn staged_without(
+    git: &Git,
+    file: &FileChange,
+    chosen: &[&Block],
+    head: Option<&Entry>,
+    (mode, oid): &Entry,
+) -> Result<Option<IndexChange>> {
+    let overlap = || staged_apart(file);
+    let (head_mode, head_oid) = head.ok_or_else(overlap)?;
+    let staged_blocks = blob_blocks(git, &file.path, (head_mode, head_oid), (mode, oid))?;
+    let steps: Recorded = vec![
+        BTreeMap::new(),
+        BTreeMap::from([(file.path.clone(), Some(staged_blocks.clone()))]),
+    ];
+    let mut revert = Vec::new();
+    for block in chosen {
+        let untouched = follow(
+            &steps,
+            &file.path,
+            [1],
+            Way::Forward,
+            block.old_pos,
+            block.removed.len(),
+        )
+        .is_ok();
+        if untouched {
+            continue;
+        }
+        let same = staged_blocks.iter().find(|staged| {
+            staged.old_pos == block.old_pos
+                && staged.removed == block.removed
+                && staged.added == block.added
+        });
+        revert.push(same.ok_or_else(overlap)?);
+    }
+    if revert.is_empty() {
+        return Ok(None);
+    }
+    let staged = git
+        .read_blobs(std::slice::from_ref(oid))?
+        .pop()
+        .unwrap_or_default();
+    let placed = unsplice(&split_lines(&staged), &revert).map_err(|_| overlap())?;
+    Ok(Some(IndexChange {
+        path: file.path.clone(),
+        from: Some((mode.clone(), oid.clone())),
+        to: Some((mode.clone(), git.write_blob(&join_lines(&placed), true)?)),
+    }))
+}
+
+/// A staged version that differs from both HEAD and the worktree where the selection changes.
+fn staged_apart(file: &FileChange) -> anyhow::Error {
+    fail_hint(
+        Code::Dirty,
+        format!(
+            "{} has staged changes that overlap the selected hunks",
+            file.path
+        ),
+        format!(
+            "stage it (git add {0}) or unstage it (git restore --staged {0}) first",
+            file.path
+        ),
+    )
 }

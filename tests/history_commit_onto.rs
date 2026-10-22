@@ -459,3 +459,21 @@ fn a_branch_named_like_a_tag_is_created_with_a_warning() {
     assert!(run.stderr.contains("ambiguous"), "{}", run.stderr);
     assert_eq!(fixture.subjects("main..refs/heads/v1"), ["update guide"]);
 }
+
+#[test]
+fn a_staged_version_that_differs_from_both_is_never_dropped() {
+    // Staged S5, then the same line edited again to W5: the selection covers the whole file.
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(5, "S5")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(5, "W5")]));
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["commit", "-b", "side", "--onto", "main", "-m", "t", "f:5"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(
+        run.stderr.contains("staged") && run.stderr.contains("git add"),
+        "{}",
+        run.stderr
+    );
+    assert_eq!(before, fixture.snapshot());
+}
