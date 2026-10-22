@@ -14,7 +14,7 @@ use crate::output::escape_line;
 use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 // ---------------------------------------------------------------------------------------------
 // Helpers shared with split.rs
@@ -1198,12 +1198,45 @@ pub(super) fn stored_blocks(
         })
 }
 
+/// With no conversion for any of `paths` ([`Git::no_conversion_all`]), `git add` stores a regular
+/// file's bytes as they are: store them in process. `None` (a symlink, directory or unreadable
+/// path, an index entry flagged assume-valid or skip-worktree, or any attribute or autocrlf
+/// rule) leaves every path to Git.
+fn stored_raw(git: &Git, paths: &[String]) -> Option<Vec<String>> {
+    let names: Vec<&str> = paths.iter().map(String::as_str).collect();
+    // Without in-process writes each file would cost a `hash-object` instead of one shared run.
+    if !git.writes_in_process() || !git.no_conversion_all(&names) {
+        return None;
+    }
+    let index = crate::store::read_index(&git.dir).ok()?;
+    let wanted: HashSet<&str> = names.iter().copied().collect();
+    if index.iter().any(|entry| {
+        wanted.contains(entry.path.as_str()) && (entry.assume_valid || entry.skip_worktree)
+    }) {
+        return None;
+    }
+    paths
+        .iter()
+        .map(|path| {
+            let full = git.root.join(path);
+            if !std::fs::symlink_metadata(&full).ok()?.is_file() {
+                return None;
+            }
+            let bytes = std::fs::read(&full).ok()?;
+            git.write_object(ObjectKind::Blob, &bytes).ok()
+        })
+        .collect()
+}
+
 /// Blob ids of worktree files exactly as `git add` would store them: through Git's filters and
 /// line-ending rules, several of which consult the index (a file whose staged version has CRLF
 /// keeps it under `core.autocrlf`). Works on a copy of the index; the real one is untouched.
 pub(super) fn hash_as_staged(git: &Git, paths: &[String]) -> Result<Vec<String>> {
     if paths.is_empty() {
         return Ok(Vec::new());
+    }
+    if let Some(oids) = stored_raw(git, paths) {
+        return Ok(oids);
     }
     let real = git.dir.join("index");
     let copy = git
