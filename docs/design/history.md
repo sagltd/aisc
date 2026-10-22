@@ -170,7 +170,7 @@ One result line, then the compact log. The compact log lists uncommitted changes
 - `picked 1 onto revive-worktree-no-graph (new, from main); op …`
 - `synced notify-retry onto main a91c (2 commits, 0 dropped); op …`
 - `discarded 3 files; op …`
-- `undid 1a7f (amend); op 2b8c`
+- `undid amend 1a7f`, then one `<branch> <id7> <subject>` line per restored tip (`<branch> deleted` for a removed one). Undo prints nothing else: the rest is the state an earlier command reported, and a redo is `aisc undo` again (the new op id is in JSON and `aisc oplog`). `--stack` prints the compact log.
 
 Dependent branch moves are listed as `moved branch stacked: 3e1a→9b0c`.
 

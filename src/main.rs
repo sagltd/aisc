@@ -1,3 +1,4 @@
+mod agent;
 mod cli;
 mod context;
 mod git;
@@ -74,6 +75,11 @@ fn main() {
         emit(&presentation.help(&help.to_string(), &help.ansi().to_string()));
         return;
     };
+    // Plain text however stdout is connected: it is pasted into an instruction file.
+    if let Operation::Agent { .. } = command {
+        emit(agent::SETUP_BLOCK.trim_end());
+        return;
+    }
     let operation = command.name();
     let presentation = presentation.for_operation(&command);
     history::summary::configure(presentation.json, command.stack(), command.quiet());

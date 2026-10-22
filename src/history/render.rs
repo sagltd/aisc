@@ -206,8 +206,18 @@ pub(crate) fn log_text(view: &View, hunks: bool) -> String {
             let _ = writeln!(out, "uncommitted: {}", path_line(changes));
         }
     }
-    state_lines(view, &mut out);
+    state_or_clean(view, &mut out);
     out.trim_end().to_owned()
+}
+
+/// The state lines, or `clean` when the worktree has no changes and nothing is paused, so an
+/// agent need not run `git status` to confirm.
+fn state_or_clean(view: &View, out: &mut String) {
+    let before = out.len();
+    state_lines(view, out);
+    if out.len() == before && view.changes.as_ref().is_some_and(|c| c.files.is_empty()) {
+        out.push_str("clean: nothing uncommitted, no paused sync\n");
+    }
 }
 
 /// Compact log printed after a mutation: uncommitted changes as one line of paths.
@@ -242,7 +252,7 @@ pub(crate) fn changes_and_state(view: &View) -> String {
     {
         let _ = writeln!(out, "uncommitted: {}", path_line(changes));
     }
-    state_lines(view, &mut out);
+    state_or_clean(view, &mut out);
     out.trim_end().to_owned()
 }
 

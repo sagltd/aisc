@@ -38,8 +38,13 @@ pub(crate) struct Pick {
 
 /// Commits reachable from `tip` but not from `exclude`, oldest first. Merges and roots are refused.
 pub(crate) fn load_picks(git: &Git, tip: &str, exclude: &str) -> Result<Vec<Pick>> {
-    let negative = format!("^{exclude}");
-    let output = git.run(&[
+    load_picks_excluding(git, tip, &[exclude])
+}
+
+/// The commits of `tip` that none of `excludes` contain, oldest first.
+pub(crate) fn load_picks_excluding(git: &Git, tip: &str, excludes: &[&str]) -> Result<Vec<Pick>> {
+    let negatives: Vec<String> = excludes.iter().map(|oid| format!("^{oid}")).collect();
+    let mut args = vec![
         "log",
         "--reverse",
         "--topo-order",
@@ -47,9 +52,10 @@ pub(crate) fn load_picks(git: &Git, tip: &str, exclude: &str) -> Result<Vec<Pick
         "--abbrev=4",
         "--format=%H%x1f%h%x1f%T%x1f%P%x1f%s",
         tip,
-        &negative,
-        "--",
-    ])?;
+    ];
+    args.extend(negatives.iter().map(String::as_str));
+    args.push("--");
+    let output = git.run(&args)?;
     let mut picks = Vec::new();
     for record in output.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
         let record = String::from_utf8_lossy(record).into_owned();
@@ -386,6 +392,23 @@ struct State {
     resolutions: Resolutions,
     materialized: Vec<Materialized>,
     restore: Vec<Restore>,
+    /// The branch's upstream (`origin/NAME`) when it has commits the branch lacks: they are
+    /// replayed first, then the branch's own commits.
+    #[serde(default)]
+    upstream: Option<Upstream>,
+}
+
+/// Commits someone else pushed to the branch's upstream, to replay before the branch's own.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Upstream {
+    /// `origin/NAME`.
+    label: String,
+    oid: String,
+    /// Merge base of the branch and the upstream: commits below it are shared.
+    base: String,
+    /// Earlier tips of the local branch (its reflog). Upstream commits they contain were the
+    /// user's own before a local rewrite (squash, amend) and are not taken back.
+    seen: Vec<String>,
 }
 
 impl State {
@@ -595,9 +618,14 @@ fn start(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
             (base.label.clone(), base.oid.clone())
         }
     };
-    if git
-        .probe(&["merge-base", "--is-ancestor", &onto_oid, &old_tip])?
-        .is_some()
+    let upstream = match &branch {
+        Some(name) => new_upstream_commits(git, name, &old_tip, &onto_oid)?,
+        None => None,
+    };
+    if upstream.is_none()
+        && git
+            .probe(&["merge-base", "--is-ancestor", &onto_oid, &old_tip])?
+            .is_some()
     {
         let label = branch
             .clone()
@@ -623,8 +651,108 @@ fn start(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
         resolutions: BTreeMap::new(),
         materialized: Vec::new(),
         restore: Vec::new(),
+        upstream,
     };
     drive(git, session, state, args.opts.quiet)
+}
+
+/// `NAME@{upstream}` when it holds commits that the branch never had: someone else pushed to
+/// it. Commits the branch had before a local rewrite (in its reflog) do not count, so a squash
+/// or amend of pushed work is never undone. `None` without an upstream, a reflog or new commits.
+fn new_upstream_commits(git: &Git, name: &str, tip: &str, onto: &str) -> Result<Option<Upstream>> {
+    let spec = format!("{name}@{{upstream}}");
+    let Some(refname) =
+        git.probe(&["rev-parse", "--verify", "-q", "--symbolic-full-name", &spec])?
+    else {
+        return Ok(None);
+    };
+    let refname = refname.trim().to_owned();
+    let Some(oid) = git.ref_oid(&refname)? else {
+        return Ok(None);
+    };
+    if oid == onto
+        || git
+            .probe(&["merge-base", "--is-ancestor", &oid, tip])?
+            .is_some()
+        || git
+            .probe(&["merge-base", "--is-ancestor", &oid, onto])?
+            .is_some()
+    {
+        return Ok(None);
+    }
+    // Without the branch's reflog a local rewrite cannot be told from a foreign push.
+    let Ok(log) = std::fs::read_to_string(git.common_dir()?.join("logs/refs/heads").join(name))
+    else {
+        return Ok(None);
+    };
+    // Tips the branch reached by importing other people's commits (a sync, pull, merge, reset or
+    // undo) do not make those commits the user's own.
+    let imported = |message: &str| {
+        [
+            "aisc sync",
+            "aisc undo",
+            "aisc land",
+            "pull",
+            "merge",
+            "reset",
+            "rebase",
+            "fetch",
+            "branch: Reset",
+        ]
+        .iter()
+        .any(|prefix| message.starts_with(prefix))
+    };
+    let mut seen: Vec<String> = log
+        .lines()
+        .filter(|line| {
+            !line
+                .split_once('\t')
+                .is_some_and(|(_, message)| imported(message))
+        })
+        .filter_map(|line| line.split(' ').nth(1))
+        .filter(|oid| oid.len() >= 40 && oid.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .filter(|oid| !oid.bytes().all(|byte| byte == b'0'))
+        .map(str::to_owned)
+        .collect();
+    // Whatever the user pushed to the upstream is theirs too, even if only a sync or rebase
+    // made it locally: Git records each push in the remote-tracking reflog.
+    if let Ok(remote_log) = std::fs::read_to_string(git.common_dir()?.join("logs").join(&refname)) {
+        seen.extend(
+            remote_log
+                .lines()
+                .filter(|line| {
+                    line.split_once('\t')
+                        .is_some_and(|(_, message)| message.starts_with("update by push"))
+                })
+                .filter_map(|line| line.split(' ').nth(1))
+                .filter(|oid| oid.len() >= 40 && oid.bytes().all(|byte| byte.is_ascii_hexdigit()))
+                .filter(|oid| !oid.bytes().all(|byte| byte == b'0'))
+                .map(str::to_owned),
+        );
+    }
+    seen.sort();
+    seen.dedup();
+    if seen.len() > 512 {
+        return Ok(None);
+    }
+    let Some(base) = git.probe(&["merge-base", tip, &oid])? else {
+        return Ok(None);
+    };
+    let mut excludes: Vec<&str> = vec![base.as_str(), onto, tip];
+    excludes.extend(seen.iter().map(String::as_str));
+    if load_picks_excluding(git, &oid, &excludes)?.is_empty() {
+        return Ok(None);
+    }
+    let label = refname
+        .strip_prefix("refs/remotes/")
+        .unwrap_or(&refname)
+        .to_owned();
+    Ok(Some(Upstream {
+        label,
+        oid,
+        base,
+        seen,
+    }))
 }
 
 fn resume(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
@@ -752,7 +880,34 @@ fn abort(repo: &Repo, git: &Git) -> Result<Outcome> {
 
 /// Replays with the current resolutions, then pauses on conflicts or finishes the rewrite.
 fn drive(git: &Git, session: Session, mut state: State, quiet: bool) -> Result<Outcome> {
-    let picks = load_picks(git, &state.old_tip, &state.onto_oid)?;
+    let picks = match &state.upstream {
+        Some(upstream) => {
+            // Shared history, then the foreign upstream commits, then the branch's own.
+            let mut picks = load_picks(git, &upstream.base, &state.onto_oid)?;
+            let mut excludes: Vec<&str> = vec![&upstream.base, &state.onto_oid, &state.old_tip];
+            excludes.extend(upstream.seen.iter().map(String::as_str));
+            let foreign = load_picks_excluding(git, &upstream.oid, &excludes)?;
+            let own =
+                load_picks_excluding(git, &state.old_tip, &[&upstream.base, &state.onto_oid])?;
+            // Foreign commits built on the shared history go first, as `git pull --rebase` does.
+            // Built on commits the user has since rewritten, they go after the user's own.
+            let on_shared = foreign.first().is_none_or(|first| {
+                first.parent == upstream.base
+                    || git
+                        .probe(&["merge-base", "--is-ancestor", &first.parent, &upstream.base])
+                        .is_ok_and(|found| found.is_some())
+            });
+            if on_shared {
+                picks.extend(foreign);
+                picks.extend(own);
+            } else {
+                picks.extend(own);
+                picks.extend(foreign);
+            }
+            picks
+        }
+        None => load_picks(git, &state.old_tip, &state.onto_oid)?,
+    };
     let onto_tree = git.commit_tree_of(&state.onto_oid)?;
     let old_tree = git.commit_tree_of(&state.old_tip)?;
     let opts = ReplayOpts {
@@ -1198,8 +1353,13 @@ fn finish(
     unpin(git);
 
     let after = super::summary::after(git, state.branch.as_deref(), state.is_head)?;
+    let with_upstream = state
+        .upstream
+        .as_ref()
+        .map(|upstream| format!(" with {}", upstream.label))
+        .unwrap_or_default();
     let mut result = format!(
-        "synced {} onto {onto_label} ({kept} commits, {} dropped); op {}",
+        "synced {}{with_upstream} onto {onto_label} ({kept} commits, {} dropped); op {}",
         state.label(),
         built.dropped.len(),
         applied.op

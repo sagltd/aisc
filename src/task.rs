@@ -78,7 +78,7 @@ fn environment_digests() -> BTreeMap<String, String> {
             feed(&mut hash, os_bytes(&value));
             (
                 name.to_string_lossy().into_owned(),
-                format!("{:x}", hash.finalize()),
+                lower_hex(&hash.finalize()),
             )
         })
         .collect()
@@ -620,7 +620,7 @@ fn fingerprint(repo: &Repo) -> Result<String> {
             bail!("unsupported tracked file type");
         }
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(lower_hex(&hash.finalize()))
 }
 
 fn resolve_executable(root: &Path, program: &str) -> Result<PathBuf> {
@@ -651,11 +651,22 @@ fn is_executable(path: &Path) -> bool {
     unsafe { libc::access(path.as_ptr(), libc::X_OK) == 0 }
 }
 
+/// Lowercase hex of a digest, as `{:x}` printed it with sha2 0.10.
+fn lower_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
+}
+
 fn executable_digest(path: &Path) -> Result<String> {
     let mut hash = Sha256::new();
     feed(&mut hash, os_bytes(path.as_os_str()));
     hash_file(&mut hash, path)?;
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(lower_hex(&hash.finalize()))
 }
 
 fn hash_file(hash: &mut Sha256, path: &Path) -> Result<()> {
@@ -730,4 +741,18 @@ fn git_at(path: &Path, args: &[&str]) -> Result<Vec<u8>> {
         bail!("could not inspect created Git worktree");
     }
     Ok(output.stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lower_hex;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn digests_keep_the_sha2_0_10_hex_format() {
+        assert_eq!(
+            lower_hex(&Sha256::digest(b"abc")),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 }

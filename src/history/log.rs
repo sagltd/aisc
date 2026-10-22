@@ -18,7 +18,8 @@ pub(crate) fn run(args: &cli::Log) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
     super::rewrite::recover_before_read(&git);
-    let view = view::read(&git, args.branch.as_deref(), args.limit, true)?;
+    let branch = args.branch.as_deref().or(args.target.as_deref());
+    let view = view::read_any(&git, branch, args.limit, true)?;
     let hunks = !args.no_hunks && !args.quiet;
     let text = if args.quiet {
         render::quiet_log_text(&view)
@@ -206,7 +207,7 @@ pub(crate) fn show(args: &cli::Show) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
     super::rewrite::recover_before_read(&git);
-    let view = view::read(&git, args.branch.as_deref(), 1_000, true)?;
+    let view = view::read_any(&git, args.branch.as_deref(), 1_000, true)?;
     let (target, skip) = subject(&git, &view, view.changes.as_ref(), &args.args)?;
     let tokens = &args.args[skip..];
     let mut text = String::new();

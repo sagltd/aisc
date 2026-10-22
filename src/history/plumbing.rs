@@ -5,7 +5,7 @@ use crate::output::escape_block;
 use crate::process::Output;
 use crate::store::{self, Store};
 use anyhow::{Context, Result, bail};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -225,7 +225,7 @@ impl Git {
 
     /// Whether loose objects may be written in process: Git applies `core.sharedRepository`
     /// permissions that the in-process writer does not.
-    fn writes_in_process(&self) -> bool {
+    pub fn writes_in_process(&self) -> bool {
         self.fast(|_| Ok(())).is_some()
             && crate::runner::config(&self.root)
                 .is_ok_and(|config| config.get("core.sharedrepository").is_none())
@@ -563,6 +563,11 @@ impl Git {
     /// filter, end-of-line or encoding conversion can apply. Only then may raw bytes stand in for
     /// Git's filtered hash.
     pub fn no_conversion(&self, path: &str) -> bool {
+        self.no_conversion_all(&[path])
+    }
+
+    /// [`Self::no_conversion`] for every one of `paths` (the index and config are read once).
+    pub fn no_conversion_all(&self, paths: &[&str]) -> bool {
         if self.fast(|_| Ok(())).is_none() {
             return false;
         }
@@ -595,13 +600,15 @@ impl Git {
         };
         // In-tree files: Git reads the worktree copy, or the index copy when the worktree one is
         // missing, so both must be absent or the same bytes.
-        let mut in_tree = vec![".gitattributes".to_owned()];
-        let components: Vec<&str> = path.split('/').collect();
-        let mut directory = String::new();
-        for component in &components[..components.len().saturating_sub(1)] {
-            directory.push_str(component);
-            directory.push('/');
-            in_tree.push(format!("{directory}.gitattributes"));
+        let mut in_tree = BTreeSet::from([".gitattributes".to_owned()]);
+        for path in paths {
+            let components: Vec<&str> = path.split('/').collect();
+            let mut directory = String::new();
+            for component in &components[..components.len().saturating_sub(1)] {
+                directory.push_str(component);
+                directory.push('/');
+                in_tree.insert(format!("{directory}.gitattributes"));
+            }
         }
         let Ok(index) = store::read_index(&self.dir) else {
             return false;
@@ -885,11 +892,31 @@ impl Git {
     pub fn hash_worktree(&self, paths: &[String]) -> Result<Vec<String>> {
         let mut oids = vec![String::new(); paths.len()];
         let mut regular = Vec::new();
+        let mut files = Vec::new();
+        for path in paths {
+            let full = self.root.join(path);
+            let metadata = std::fs::symlink_metadata(&full)
+                .with_context(|| format!("{path}: cannot read file"))?;
+            if !metadata.file_type().is_symlink() {
+                files.push(path.clone());
+            }
+        }
+        // `git hash-object` reads .gitattributes from the worktree only; `git add` also reads the
+        // index copy. When an index copy is missing from or differs in the worktree, hash the way
+        // `git add` does (update-index on a copy of the index).
+        let staged = if self.attributes_only_in_index(&files) {
+            let hashed = super::amend::hash_as_staged(self, &files)?;
+            files.into_iter().zip(hashed).collect::<BTreeMap<_, _>>()
+        } else {
+            BTreeMap::new()
+        };
         for (index, path) in paths.iter().enumerate() {
             let full = self.root.join(path);
             let metadata = std::fs::symlink_metadata(&full)
                 .with_context(|| format!("{path}: cannot read file"))?;
-            if metadata.file_type().is_symlink() {
+            if let Some(oid) = staged.get(path) {
+                oids[index] = oid.clone();
+            } else if metadata.file_type().is_symlink() {
                 let target = std::fs::read_link(&full)?;
                 oids[index] = self.write_blob(target.as_os_str().as_encoded_bytes(), true)?;
             } else if path.contains(['\n', '\r']) || path.starts_with('"') {
@@ -921,6 +948,52 @@ impl Git {
             }
         }
         Ok(oids)
+    }
+
+    /// Whether an in-tree `.gitattributes` that applies to one of `paths` exists in the index but
+    /// is missing from the worktree or differs there (an unreadable index counts as yes).
+    fn attributes_only_in_index(&self, paths: &[String]) -> bool {
+        if paths.is_empty() {
+            return false;
+        }
+        let Ok(index) = store::read_index(&self.dir) else {
+            return true;
+        };
+        let staged: HashMap<&str, &str> = index
+            .iter()
+            .filter(|entry| {
+                entry.stage == 0
+                    && (entry.path == ".gitattributes" || entry.path.ends_with("/.gitattributes"))
+            })
+            .map(|entry| (entry.path.as_str(), entry.oid.as_str()))
+            .collect();
+        if staged.is_empty() {
+            return false;
+        }
+        let mut checked = HashSet::new();
+        for path in paths {
+            let components: Vec<&str> = path.split('/').collect();
+            let mut directory = String::new();
+            for position in 0..components.len() {
+                let relative = format!("{directory}.gitattributes");
+                if checked.insert(relative.clone())
+                    && let Some(oid) = staged.get(relative.as_str())
+                {
+                    let same = std::fs::read(self.root.join(&relative))
+                        .ok()
+                        .and_then(|bytes| store::hash_object(store::Kind::Blob, &bytes).ok())
+                        .is_some_and(|found| found == *oid);
+                    if !same {
+                        return true;
+                    }
+                }
+                if position + 1 < components.len() {
+                    directory.push_str(components[position]);
+                    directory.push('/');
+                }
+            }
+        }
+        false
     }
 
     /// `ls-tree -r --full-tree TREE -- PATHS` (literal pathspecs: a path or a directory prefix).
@@ -1144,7 +1217,7 @@ impl Git {
                 messages: String::new(),
             });
         }
-        require_git(2, 43)?;
+        require_git(&self.root, 2, 43)?;
         let base_argument = format!("--merge-base={base}");
         let args = [
             "merge-tree",
@@ -1203,7 +1276,7 @@ impl Git {
         favor: Favor,
         diff3: bool,
     ) -> Result<(Vec<u8>, usize)> {
-        require_git(2, 43)?;
+        require_git(&self.root, 2, 43)?;
         let mut args = vec!["merge-file", "--object-id", "-p"];
         match favor {
             Favor::None => {}
@@ -1373,18 +1446,20 @@ fn split_tab(record: &[u8]) -> Result<(&str, String)> {
     ))
 }
 
-/// Requires Git `major.minor` or newer (cached after the first call).
-pub(crate) fn require_git(major: u32, minor: u32) -> Result<()> {
+/// Requires Git `major.minor` or newer (asked once per Git executable, see
+/// [`crate::runner::git_version`], and cached in the process).
+pub(crate) fn require_git(root: &Path, major: u32, minor: u32) -> Result<()> {
     use std::sync::OnceLock;
     static VERSION: OnceLock<(u32, u32)> = OnceLock::new();
     let version = VERSION.get_or_init(|| {
-        let output = std::process::Command::new(crate::runner::program())
-            .arg("--version")
-            .stdin(std::process::Stdio::null())
-            .output();
-        let text = output
-            .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-            .unwrap_or_default();
+        let text = crate::runner::git_version(root).unwrap_or_else(|| {
+            std::process::Command::new(crate::runner::program())
+                .arg("--version")
+                .stdin(std::process::Stdio::null())
+                .output()
+                .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+                .unwrap_or_default()
+        });
         let mut numbers = text
             .split_whitespace()
             .nth(2)

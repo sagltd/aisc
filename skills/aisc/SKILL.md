@@ -1,34 +1,29 @@
 ---
 name: aisc
-description: One-call Git history edits for agents: commit hunks, amend into older commits, split, squash, reorder, sync dirty branches, undo.
-license: MIT
-compatibility: Requires Git and the AISC command-line tool (sagltd/aisc).
+description: One-call Git history edits: commit hunks, amend older commits, split, squash, reorder, sync, undo.
 ---
+Use `aisc` for all version-control writes. Run `aisc log` first for ids and state. One command per task:
 
-# AISC
+- read: `aisc show REV` or `A..B` (on this branch); another branch: `aisc log BRANCH` (local or `origin/NAME`)
+- commit: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` switches to it; `-b NEW --onto BASE` stays here, runs no hooks)
+- amend older: `aisc amend --into COMMIT SEL...` (repeatable)
+- split: `aisc split COMMIT --into MSG SEL...` (repeatable)
+- uncommit, keep on disk: `aisc uncommit COMMIT SEL...`
+- squash: `aisc squash --into MSG COMMIT COMMIT...`
+- reorder: `aisc move COMMIT... --before|--after COMMIT`
+- rebase, keep dirty work: `aisc sync [ONTO] [--fetch] [--prefer-branch|--prefer-onto PATH]`
+- copy: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be a branch; BRANCH may be `origin/NAME`)
+- integrate: `aisc land BRANCH... --into main --switch`
+- discard: `aisc discard SEL...`; switch: `aisc switch [-c] BRANCH`
+- undo (again = redo): `aisc undo`
 
-Use `aisc` for every version-control write. Run `aisc log` once: it shows the branch's commits (hex ids) and uncommitted hunks (letter ids). Don't also run git status/log/diff.
+COMMIT: hex id or exact subject. SEL: `PATH`, `"PATH~text"` (hunk containing text), `PATH:A-B` (new-side lines) or a hunk id from `aisc log`.
 
-Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:START-END (new-side lines; a deletion counts at the line after it, so a range ending on the line just before a deletion also selects it) | "PATH~text in the change".
+Rules:
+- Writes print the result (`-q`: one line); don't re-check. Unselected changes stay uncommitted.
+- Exit 1, 2 or 4: nothing changed, except a reported partial failure, which prints `aisc undo OP`. Read `error:`/`hint:`, fix, rerun (4: `aisc log` first).
+- Sync conflicts exit 0 with CONFLICTS: edit the marked files, then `aisc sync --continue` (or `--abort`). Other verbs refuse while it is paused. Commits already on the base branch are refused.
+- Raw git rebase, reset or commit --amend makes undo and ids stale; use aisc verbs.
+- Keep unrelated changes; never reset, clean or push unless asked.
 
-- Commit: `aisc commit -m MSG [-b NEW_BRANCH] SEL...` (`--all` = everything)
-- Parallel branch: `aisc commit -b NAME --onto BASE -m MSG PATHS` (HEAD stays; the changes move to NAME; no Git hooks run)
-- Fold changes into existing commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]`
-- Split: `aisc split COMMIT --into MSG SEL... [--into MSG SEL...]` (unselected parts become uncommitted)
-- Remove part of a commit: `aisc uncommit COMMIT SEL...`
-- Squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG ...]`
-- Reorder: `aisc move COMMIT... --before|--after COMMIT`
-- Rebase onto a moved base, keeping uncommitted work: `aisc sync [ONTO] [--fetch] [--prefer-branch PATH]... [--prefer-onto PATH]...`; `--abort` cancels. On CONFLICTS, edit the marked files, then `aisc sync --continue`
-- Copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be `origin/BRANCH`); integrate: `aisc land BRANCH... --into main --switch`
-- Discard uncommitted changes: `aisc discard SEL...`; undo the last operation: `aisc undo`
-
-Every write prints the resulting log; don't re-check. Anything not selected stays uncommitted. Use `aisc show COMMIT` to see a commit's hunks.
-
-## Safety
-
-- Follow the repository's `AGENTS.md`. Touch only what the task names; keep other staged, unstaged and untracked changes.
-- Never reset, clean, force-push or publish unless asked. Read `aisc --help` if a flag here is rejected.
-- Codex non-interactive runs need `--add-dir` for the repository's Git directories; never disable the sandbox.
-- Parallel work: `aisc start NAME --path PATH` (new ignored path) or `--in-place` (clean tree only).
-- Read-only context: `aisc github` / `aisc gitlab` (need `gh` / `glab`).
-- Keep transcripts, credentials and machine paths private.
+Parallel agents, worktrees, verify/finish, PRs or Codex sandbox: read `references/lifecycle.md`.
