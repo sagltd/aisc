@@ -885,11 +885,31 @@ impl Git {
     pub fn hash_worktree(&self, paths: &[String]) -> Result<Vec<String>> {
         let mut oids = vec![String::new(); paths.len()];
         let mut regular = Vec::new();
+        let mut files = Vec::new();
+        for path in paths {
+            let full = self.root.join(path);
+            let metadata = std::fs::symlink_metadata(&full)
+                .with_context(|| format!("{path}: cannot read file"))?;
+            if !metadata.file_type().is_symlink() {
+                files.push(path.clone());
+            }
+        }
+        // `git hash-object` reads .gitattributes from the worktree only; `git add` also reads the
+        // index copy. When an index copy is missing from or differs in the worktree, hash the way
+        // `git add` does (update-index on a copy of the index).
+        let staged = if self.attributes_only_in_index(&files) {
+            let hashed = super::amend::hash_as_staged(self, &files)?;
+            files.into_iter().zip(hashed).collect::<BTreeMap<_, _>>()
+        } else {
+            BTreeMap::new()
+        };
         for (index, path) in paths.iter().enumerate() {
             let full = self.root.join(path);
             let metadata = std::fs::symlink_metadata(&full)
                 .with_context(|| format!("{path}: cannot read file"))?;
-            if metadata.file_type().is_symlink() {
+            if let Some(oid) = staged.get(path) {
+                oids[index] = oid.clone();
+            } else if metadata.file_type().is_symlink() {
                 let target = std::fs::read_link(&full)?;
                 oids[index] = self.write_blob(target.as_os_str().as_encoded_bytes(), true)?;
             } else if path.contains(['\n', '\r']) || path.starts_with('"') {
@@ -921,6 +941,52 @@ impl Git {
             }
         }
         Ok(oids)
+    }
+
+    /// Whether an in-tree `.gitattributes` that applies to one of `paths` exists in the index but
+    /// is missing from the worktree or differs there (an unreadable index counts as yes).
+    fn attributes_only_in_index(&self, paths: &[String]) -> bool {
+        if paths.is_empty() {
+            return false;
+        }
+        let Ok(index) = store::read_index(&self.dir) else {
+            return true;
+        };
+        let staged: HashMap<&str, &str> = index
+            .iter()
+            .filter(|entry| {
+                entry.stage == 0
+                    && (entry.path == ".gitattributes" || entry.path.ends_with("/.gitattributes"))
+            })
+            .map(|entry| (entry.path.as_str(), entry.oid.as_str()))
+            .collect();
+        if staged.is_empty() {
+            return false;
+        }
+        let mut checked = HashSet::new();
+        for path in paths {
+            let components: Vec<&str> = path.split('/').collect();
+            let mut directory = String::new();
+            for position in 0..components.len() {
+                let relative = format!("{directory}.gitattributes");
+                if checked.insert(relative.clone())
+                    && let Some(oid) = staged.get(relative.as_str())
+                {
+                    let same = std::fs::read(self.root.join(&relative))
+                        .ok()
+                        .and_then(|bytes| store::hash_object(store::Kind::Blob, &bytes).ok())
+                        .is_some_and(|found| found == *oid);
+                    if !same {
+                        return true;
+                    }
+                }
+                if position + 1 < components.len() {
+                    directory.push_str(components[position]);
+                    directory.push('/');
+                }
+            }
+        }
+        false
     }
 
     /// `ls-tree -r --full-tree TREE -- PATHS` (literal pathspecs: a path or a directory prefix).

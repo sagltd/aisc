@@ -135,3 +135,24 @@ fn squash_tip(output: &str) -> String {
         .map(|rest| rest.chars().take(7).collect())
         .unwrap_or_else(|| panic!("no topic line: {output}"))
 }
+
+#[test]
+fn an_attributes_file_only_in_the_index_still_filters_the_hash() {
+    let fixture = Fixture::with_files(&[("README", "r\n")]);
+    fixture.git(&["config", "filter.shift.clean", "tr a-y b-z"]);
+    fixture.write(".gitattributes", "f.txt filter=shift\n");
+    fixture.write("f.txt", "xyy\n");
+    fixture.commit_all("filtered");
+    fixture.git(&["switch", "-q", "-c", "mod"]);
+    fixture.write("f.txt", "abc\n");
+    fixture.commit_all("mod");
+    fixture.git(&["switch", "-q", "main"]);
+    // The worktree holds the stored blob's bytes; the rules now exist only in the index.
+    fixture.git(&["checkout", "--", "f.txt"]);
+    std::fs::remove_file(fixture.path(".gitattributes")).unwrap();
+    assert_eq!(fixture.read("f.txt"), "yzz\n");
+    assert!(fixture.git(&["status", "--porcelain"]).contains(" M f.txt"));
+    let run = fixture.aisc(&["switch", "mod"]);
+    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.read("f.txt"), "yzz\n", "the modified file is kept");
+}
