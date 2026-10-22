@@ -6,7 +6,7 @@ use std::path::PathBuf;
     name = "aisc",
     version,
     about = "Task-oriented source control, backed by Git",
-    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nNo automatic push, merge, or cleanup. Configured Git hooks/signing run normally for checkpoint."
+    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix --sparse src\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nNo automatic push or merge. finish removes the worktree `start --path` created (its branch stays; --keep opts out); aisc gc lists leftovers.\nConfigured Git hooks/signing run normally for checkpoint."
 )]
 pub(crate) struct Cli {
     /// Emit stable, ANSI-free JSON, including errors and help
@@ -64,9 +64,14 @@ pub(crate) enum Operation {
     },
     /// Return the verified commit/ref for review, without pushing or merging
     Finish {
-        /// Keep an isolated worktree after finishing (worktrees are currently always kept)
+        /// Keep the worktree created by `start --path` (by default it is removed; the branch stays)
         #[arg(long)]
         keep: bool,
+        /// Remove the worktree even if it holds ignored files that are not known to be regenerable
+        /// (tool dirs like node_modules/.venv anywhere; build/dist/target/... only at the root or
+        /// next to a project manifest), secret-like files or nested repositories
+        #[arg(long, conflicts_with = "keep", aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
+        delete_ignored: bool,
     },
     /// Read a bounded GitHub PR/review/check overview using existing gh auth
     Github {
@@ -317,8 +322,14 @@ pub(crate) struct Gc {
     /// Remove reclaimable worktrees (default is a dry run)
     #[arg(long)]
     pub apply: bool,
+    /// Keep worktrees with Git activity within this many hours
     #[arg(long, default_value = "24", value_name = "HOURS")]
     pub min_age: u64,
+    /// Also remove worktrees holding ignored files that are not known to be regenerable (tool
+    /// dirs like node_modules/.venv anywhere; build/dist/target/... only at the root or next to
+    /// a project manifest), secret-like files or nested repositories
+    #[arg(long, aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
+    pub delete_ignored: bool,
 }
 
 #[derive(Args)]
@@ -331,7 +342,9 @@ pub(crate) struct Start {
     /// Keep this directory and branch; requires a clean committed checkout (the default)
     #[arg(long, group = "location")]
     pub in_place: bool,
-    /// Cone-mode sparse directories for a new worktree (requires --path)
+    /// Cone-mode sparse directories for a new worktree (requires --path). Like `git
+    /// sparse-checkout`, this enables extensions.worktreeConfig in the shared Git config; AISC
+    /// says so when it does and never reverts it
     #[arg(long, requires = "path", num_args = 1.., value_name = "DIR")]
     pub sparse: Vec<String>,
 }

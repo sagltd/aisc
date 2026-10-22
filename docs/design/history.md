@@ -337,14 +337,24 @@ Steps:
    - Runs `git worktree remove P` (never `--force`) from the main checkout's cwd.
    - Keeps the `aisc/NAME` branch (commits are not lost) and deletes the registry entry.
    - Output adds `removed_worktree`, `freed_bytes` and `main_checkout` ("continue in …").
-   - Ignored build output is deleted by design; the freed bytes are reported.
+   - Ignored files go with the worktree, so removal is automatic only when **all** ignored content is known to be regenerable (an anchored allowlist):
+     - Tool dirs count anywhere: `node_modules`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.venv`, `.gradle`, `.next`, `.nuxt`, `.svelte-kit`, `.turbo`, `.parcel-cache`, `DerivedData`, `.dart_tool`. So do `*.pyc`, `*.pyo` and `*.o` files, and OS/package-manager junk (`.DS_Store`, `Thumbs.db`, `desktop.ini`, `npm-debug.log*`, `yarn-debug.log*`, `yarn-error.log*`, `pnpm-debug.log*`, `lerna-debug.log*`). Other `*.log` files do not count.
+     - Generic names (`build`, `dist`, `out`, `target`, `coverage`, `.cache`, `bin`, `obj`) count only at the worktree root or as a direct child of a directory holding a project manifest (`Cargo.toml`, `package.json`, `pyproject.toml`, `setup.py`, `setup.cfg`, `go.mod`, `pom.xml`, `build.gradle(.kts)`, `settings.gradle(.kts)`, `Package.swift`, `Gemfile`, `composer.json`, `mix.exs`, `CMakeLists.txt`, `*.csproj`, `*.sln`). So `src/build/notes.txt` or `docs/dist/x.md` keeps the worktree.
+     - Any other ignored file keeps the worktree with `ignored files not known to be regenerable: <first 3>`.
+   - Secret-like content keeps the worktree, inside allowlisted dirs too. That covers secret-like names (`.env`, `.env.*`, `*.env`, `.envrc`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.ovpn`, `*.kdbx`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, `id_dsa*`, `credentials*`/`*credential*`, `service-account*`, `secrets.*`, `terraform.tfstate*`, `.npmrc`, `.netrc`, `.pgpass`, `.git-credentials`; all case-insensitive) and anything under `.aws`, `.kube`, `.ssh`, `.gnupg`, `.docker`, `gcloud`, `secrets` or `secret`. Exception: names are not checked inside installed third-party packages (`node_modules`, `.venv/**/site-packages`, `.gradle`, an anchored `target`, `.dart_tool`), because lockfiles bring names like `.env.example` and `server.key`. Root-level `build/` and `dist/` are still checked.
+   - Nested repositories keep the worktree too: a `.git` dir or file, or a bare repo with `HEAD` + `objects/` + `refs/`. Exception: `node_modules/**` is not checked for nested repos, because git dependencies carry `.git` dirs.
+   - Ignored dirs are listed with `git ls-files --others --ignored --exclude-standard --directory` and walked without following symlinks. The walk is bounded at 2,000,000 entries or 30 s; `AISC_IGNORED_SCAN_LIMIT` overrides the entry count and, like `AISC_GIT_TIMEOUT` and `AISC_OUTPUT`, is not part of the verify evidence. If the walk hits the bound, it sets `ignored_scan_truncated: true` and keeps the worktree (fails closed).
+   - `--delete-ignored` (finish and gc) overrides all of the above; `--delete-ignored-secrets` and `--delete-nested-repos` are hidden aliases. The output always reports `ignored_files`, `ignored_bytes` and `ignored_scan_truncated`.
+   - A HEAD that no branch, tag, remote or `refs/aisc/*` ref contains (detached work) is saved as `refs/aisc/rescue/<name>` before removal; output field `rescue_ref`.
+   - If Git deletes only part of the files (it drops its admin dir anyway), the output says "partially removed" with the leftover path to delete by hand, and the registry entry is flagged `partially_removed`. gc lists an unlisted registered directory as `leftover` only if it has that flag or a `.git` file pointing at the admin dir recorded at start (`gitdir`). Otherwise it is `unknown`: never sized, and never given "delete by hand" advice.
 4. **`aisc gc [--apply] [--min-age H]`.**
    - Lists only registry entries that are cross-checked: the path appears in `git worktree list --porcelain`, and that worktree's gitdir has an `aisc-session.json` with the same name. Unverified or foreign worktrees are never touched; they are counted as "N foreign worktrees ignored".
    - Per entry:
      - Size: a std::fs walk without following symlinks, apparent and allocated (`st_blocks*512`), 10 s budget, `≥` if partial.
      - Age, branch.
      - State: missing / dirty / clean, plus merged (tip is an ancestor of the base) or finished.
-   - Candidates are clean and (merged or finished) and at least min-age old, or missing.
+   - Candidates are clean and (merged or finished) and at least min-age old, or missing and at least min-age old (their HEAD is rescued first).
+   - Registry names must match `[A-Za-z0-9._-]` (no `..`) and the file name; registered paths that are relative, contain `.`/`..` components, are `/`, `$HOME` or one of its ancestors, a system dir (`/Users`, `/home`, `/Volumes`, `/private`, `/var`, `/tmp`, `/System`, `/opt`, `/usr`), or contain the main worktree or Git dir (checked lexically, with the parent resolved, and by file identity so case variants on case-insensitive filesystems match) are `invalid`, never walked or acted on; the reason names the registry file to remove. A registered path that is a symlink is `unverified` and kept; paths are compared with only the parent resolved.
    - Dry run by default. `--apply` runs `git worktree remove` on candidates, then `git worktree prune`, then deletes their registry entries.
    - Text example:
      ```
@@ -354,6 +364,7 @@ Steps:
      ```
 5. **Sparse.**
    - `start NAME --path P --sparse DIR…` runs `git worktree add --no-checkout -b aisc/NAME P BASE`, then `git -C P sparse-checkout set --cone DIR…`, then `git -C P checkout`.
+   - Like Git's own `sparse-checkout` in a linked worktree, this sets `extensions.worktreeConfig=true` in the shared config. AISC adds a `note` when it is the one enabling it and never reverts it (other worktrees may depend on it).
    - S4 relaxes `Repo::writable()` to allow sparse checkouts, `paths()` to reject paths outside the cone, and the `task.rs` fingerprint to skip skip-worktree entries.
    - History Keep verbs work unchanged; Carry updates only the index for skip-worktree entries (already handled by slice 0).
 6. **Disk metric.**

@@ -75,7 +75,6 @@ impl Repo {
     pub fn git(&self, args: &[&str]) -> Result<Vec<u8>> {
         run_git(&self.root, args, None)
     }
-    #[allow(dead_code)] // the worktree registry (a later slice) lives under the common dir
     pub fn common_dir(&self) -> Result<PathBuf> {
         let output = self.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
         Ok(PathBuf::from(
@@ -144,15 +143,25 @@ impl Repo {
         {
             bail!("submodule checkouts are unsupported for task writes");
         }
+        let cone = self.sparse_cone()?;
         let flags = self.git(&["ls-files", "-v", "-z"])?;
-        if flags.split(|byte| *byte == 0).any(|record| {
-            record
-                .first()
-                .is_some_and(|flag| flag.is_ascii_lowercase() || *flag == b'S')
-        }) {
-            bail!(
-                "assume-unchanged and skip-worktree entries are unsupported for task writes and verification"
-            );
+        for record in flags.split(|byte| *byte == 0) {
+            let Some(flag) = record.first() else {
+                continue;
+            };
+            // Skip-worktree is how a cone checkout hides paths outside the cone; inside it, or
+            // without a cone, the flag would hide edits from verification.
+            let hidden = flag.is_ascii_lowercase()
+                || (*flag == b'S'
+                    && match &cone {
+                        None => true,
+                        Some(cone) => in_cone(text(record.get(2..).unwrap_or_default())?, cone),
+                    });
+            if hidden {
+                bail!(
+                    "assume-unchanged and skip-worktree entries are unsupported for task writes and verification"
+                );
+            }
         }
         for marker in [
             "MERGE_HEAD",
@@ -173,19 +182,38 @@ impl Repo {
         {
             bail!("resolve Git conflicts before task writes");
         }
-        if text(
+        Ok(())
+    }
+    fn config_flag(&self, name: &str) -> Result<bool> {
+        Ok(text(
             &self
-                .git(&["config", "--bool", "--get", "core.sparseCheckout"])
+                .git(&["config", "--bool", "--get", name])
                 .unwrap_or_default(),
         )?
         .trim()
-            == "true"
-        {
-            bail!("sparse checkouts are unsupported for task writes");
+            == "true")
+    }
+    /// Directories of a cone-mode sparse checkout; `None` for a full checkout. Non-cone sparse
+    /// patterns cannot be checked path by path, so they are refused.
+    pub fn sparse_cone(&self) -> Result<Option<Vec<String>>> {
+        if !self.config_flag("core.sparseCheckout")? {
+            return Ok(None);
         }
-        Ok(())
+        if !self.config_flag("core.sparseCheckoutCone")? {
+            bail!("non-cone sparse checkouts are unsupported for task writes");
+        }
+        let list = self.git(&["sparse-checkout", "list"])?;
+        Ok(Some(text(&list)?.lines().map(str::to_owned).collect()))
     }
     pub fn paths(&self, paths: &[String]) -> Result<()> {
+        if let Some(cone) = self.sparse_cone()?
+            && let Some(outside) = paths.iter().find(|path| !in_cone(path, &cone))
+        {
+            bail!(
+                "path is outside the sparse checkout ({}): {outside:?}",
+                cone.join(", ")
+            );
+        }
         for path in paths {
             if path.is_empty()
                 || path.starts_with(['-', ':'])
@@ -247,6 +275,17 @@ impl Repo {
             json!({"diff": text(&output[..end])?, "omitted_bytes": output.len() - end, "scope": "tracked working tree versus HEAD; untracked files are listed by context"}),
         )
     }
+}
+
+/// Cone-mode membership: root files, everything below a cone directory, and the files directly
+/// inside each ancestor of a cone directory.
+pub(crate) fn in_cone(path: &str, cone: &[String]) -> bool {
+    let Some((parent, _)) = path.rsplit_once('/') else {
+        return true;
+    };
+    cone.iter().any(|directory| {
+        path.starts_with(&format!("{directory}/")) || directory.starts_with(&format!("{parent}/"))
+    })
 }
 
 pub(crate) fn text(bytes: &[u8]) -> Result<&str> {
@@ -368,6 +407,19 @@ pub(crate) fn validate_environment() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cone_membership_follows_git_cone_mode() {
+        let cone = vec!["src/a".to_owned()];
+        for inside in ["top.txt", "src/y.txt", "src/a/x.txt", "src/a/deep/z.txt"] {
+            assert!(in_cone(inside, &cone), "{inside}");
+        }
+        for outside in ["docs/d.txt", "src/b/x.txt", "src/ab/x.txt", "srcx/y.txt"] {
+            assert!(!in_cone(outside, &cone), "{outside}");
+        }
+        assert!(!in_cone("docs/d.txt", &[]));
+        assert!(in_cone("root.txt", &[]));
+    }
 
     #[test]
     fn hook_running_and_ref_commands_are_not_killed_after_thirty_seconds() {

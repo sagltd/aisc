@@ -117,16 +117,16 @@ fn run_task(command: &Operation) -> Result<Value> {
     let repo = git::Repo::discover()?;
     match command {
         Operation::Start(start) => {
-            if !start.sparse.is_empty() {
-                return Err(history::not_implemented("start --sparse"));
-            }
-            task::start(&repo, &start.name, start.path.clone())
+            task::start(&repo, &start.name, start.path.clone(), &start.sparse)
         }
         Operation::Context { .. } => unreachable!("context is handled before checkout discovery"),
         Operation::Diff { max_bytes, paths } => repo.diff(paths, *max_bytes),
         Operation::Checkpoint { message, paths } => task::checkpoint(&repo, message, paths),
         Operation::Verify { timeout, command } => task::verify(&repo, command, *timeout),
-        Operation::Finish { .. } => task::finish(&repo),
+        Operation::Finish {
+            keep,
+            delete_ignored,
+        } => task::finish(&repo, *keep, *delete_ignored),
         Operation::Github { limit } => github::overview(&repo, *limit),
         Operation::Gitlab { limit } => gitlab::overview(&repo, *limit),
         _ => unreachable!("history verbs are dispatched before task verbs"),

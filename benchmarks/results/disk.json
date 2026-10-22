@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "agents": 4,
+  "tools": {
+    "git": "git version 2.50.1 (Apple Git-155)",
+    "aisc": "aisc 0.1.0",
+    "gitbutler": "but 0.22.3",
+    "jj": "jj 0.42.0-b8f7c455170e3273897aaf94431f8ccfb1afa7ad"
+  },
+  "platform": "darwin",
+  "scenarios": [
+    {
+      "name": "git worktree add",
+      "note": "N full checkouts",
+      "added_apparent_bytes": 207357536,
+      "added_allocated_bytes": 247791616,
+      "per_agent_allocated_bytes": 61947904,
+      "seconds": 4.22,
+      "settled": true,
+      "settle_seconds": 1.74
+    },
+    {
+      "name": "git worktree add --no-checkout",
+      "note": "N worktrees with Git metadata only (no index, no files); not usable until checked out",
+      "added_apparent_bytes": 4848,
+      "added_allocated_bytes": 114688,
+      "per_agent_allocated_bytes": 28672,
+      "seconds": 0.14,
+      "settled": true,
+      "settle_seconds": 1.14
+    },
+    {
+      "name": "git worktree add + sparse-checkout src",
+      "note": "plain-Git equivalent of aisc start --sparse src",
+      "added_apparent_bytes": 42991760,
+      "added_allocated_bytes": 51200000,
+      "per_agent_allocated_bytes": 12800000,
+      "seconds": 0.98,
+      "settled": true,
+      "settle_seconds": 1.25
+    },
+    {
+      "name": "aisc start --path",
+      "note": "N full checkouts plus registry",
+      "added_apparent_bytes": 207360800,
+      "added_allocated_bytes": 247824384,
+      "per_agent_allocated_bytes": 61956096,
+      "seconds": 5.73,
+      "settled": true,
+      "settle_seconds": 1.61
+    },
+    {
+      "name": "aisc start --path --sparse src",
+      "note": "N checkouts of the src cone only",
+      "added_apparent_bytes": 42995200,
+      "added_allocated_bytes": 51232768,
+      "per_agent_allocated_bytes": 12808192,
+      "seconds": 2.84,
+      "settled": true,
+      "settle_seconds": 1.22
+    },
+    {
+      "name": "aisc finish (worktrees removed)",
+      "note": "start, checkpoint, verify, finish; branches kept",
+      "added_apparent_bytes": 19581,
+      "added_allocated_bytes": 114688,
+      "per_agent_allocated_bytes": 28672,
+      "seconds": 16.77,
+      "settled": true,
+      "settle_seconds": 1.15
+    },
+    {
+      "name": "aisc gc --apply (after finish --keep)",
+      "note": "finished worktrees reclaimed by gc",
+      "added_apparent_bytes": 19581,
+      "added_allocated_bytes": 114688,
+      "per_agent_allocated_bytes": 28672,
+      "seconds": 16.67,
+      "settled": true,
+      "settle_seconds": 1.12
+    },
+    {
+      "name": "aisc start (in-place default) x N lanes",
+      "note": "one shared checkout, N sequential start/checkpoint/verify/finish lanes; no parallel file isolation, same trade-off as GitButler",
+      "added_apparent_bytes": 26252,
+      "added_allocated_bytes": 122880,
+      "per_agent_allocated_bytes": 30720,
+      "seconds": 9.06,
+      "settled": true,
+      "settle_seconds": 1.17
+    },
+    {
+      "name": "aisc commit in place",
+      "note": "one checkout, N sequential history commits; object growth only",
+      "added_apparent_bytes": 24274,
+      "added_allocated_bytes": 172032,
+      "per_agent_allocated_bytes": 43008,
+      "seconds": 4.36,
+      "settled": true,
+      "settle_seconds": 1.14
+    },
+    {
+      "name": "gitbutler but branch new",
+      "note": "but setup plus N virtual branches in one shared workspace; no parallel file isolation; app data included",
+      "added_apparent_bytes": 257400,
+      "added_allocated_bytes": 524288,
+      "per_agent_allocated_bytes": 131072,
+      "seconds": 1.67,
+      "settled": true,
+      "settle_seconds": 1.17
+    },
+    {
+      "name": "jj workspace add",
+      "note": "colocated jj plus N workspaces",
+      "added_apparent_bytes": 206551063,
+      "added_allocated_bytes": 247263232,
+      "per_agent_allocated_bytes": 61815808,
+      "seconds": 7.75,
+      "settled": true,
+      "settle_seconds": 1.69
+    }
+  ],
+  "repository": {
+    "files": 5000,
+    "apparent_bytes": 71695916,
+    "allocated_bytes": 81850368,
+    "checkout_allocated_bytes": 61440000,
+    "src_share": 0.2
+  }
+}

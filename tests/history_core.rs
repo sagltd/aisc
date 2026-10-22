@@ -370,25 +370,15 @@ fn recorded_objects_survive_aggressive_gc() {
 }
 
 #[test]
-fn stub_verbs_are_wired_and_report_not_implemented() {
+fn flag_surface_rejects_invalid_combinations_without_side_effects() {
     let fixture = dirty();
     let before = fixture.snapshot();
-    let verbs: [&[&str]; 1] = [&["gc"]];
-    for args in verbs {
-        let run = fixture.aisc(args);
-        assert_eq!(run.code, 1, "{args:?}: {}", run.stderr);
-        assert!(
-            run.stderr.contains("not implemented"),
-            "{args:?}: {}",
-            run.stderr
-        );
-    }
-    assert_eq!(before, fixture.snapshot());
     // Flag surface is final: parse errors are exit 2.
     assert_eq!(fixture.aisc(&["move", "a"]).code, 2);
     assert_eq!(fixture.aisc(&["commit", "--all", "f.txt"]).code, 2);
     assert_eq!(fixture.aisc(&["pick", "a", "--to", "x", "-b", "y"]).code, 2);
     assert_eq!(fixture.aisc(&["sync", "--continue", "--abort"]).code, 2);
+    assert_eq!(before, fixture.snapshot());
 }
 
 #[test]
