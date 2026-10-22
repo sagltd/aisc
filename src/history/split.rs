@@ -312,7 +312,7 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
         let every: Vec<&Block> = file.blocks.iter().collect();
         let rebuilt = splice(&lines, &every)
             .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
-        let oid = git.write_blob(&join_lines(&rebuilt), true)?;
+        let oid = git.blob_id(&join_lines(&rebuilt))?;
         if commit_entries.get(&file.path).map(|(_, known)| known) != Some(&oid) {
             return Err(fail_hint(
                 Code::Unsupported,

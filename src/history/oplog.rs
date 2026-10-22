@@ -6,6 +6,7 @@ use super::rewrite::{Plan, WorktreeWrite};
 use super::{Code, Outcome, fail, fail_hint};
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -171,7 +172,7 @@ pub(crate) fn build(git: &Git, record: &OpRecord) -> Result<(String, Option<Stri
     let empty = git.empty_tree()?;
     let mut edits = Vec::new();
     for (index, bytes) in record.files.iter().enumerate() {
-        let oid = git.write_blob(bytes, true)?;
+        let oid = git.write_object(Kind::Blob, bytes)?;
         edits.push(TreeEdit {
             path: format!("wt/{index}"),
             entry: Some(("100644".to_owned(), oid)),
@@ -179,14 +180,14 @@ pub(crate) fn build(git: &Git, record: &OpRecord) -> Result<(String, Option<Stri
     }
     for (file, bytes) in data.worktree.iter_mut().zip(&record.after) {
         file.after = match bytes {
-            Some(bytes) => Some(git.write_blob(bytes, true)?),
+            Some(bytes) => Some(git.write_object(Kind::Blob, bytes)?),
             None => None,
         };
     }
     let json = serde_json::to_vec_pretty(&data)?;
     edits.push(TreeEdit {
         path: "op.json".to_owned(),
-        entry: Some(("100644".to_owned(), git.write_blob(&json, true)?)),
+        entry: Some(("100644".to_owned(), git.write_object(Kind::Blob, &json)?)),
     });
     let tree = git.tree_with(&empty, &edits)?;
     let mut parents: Vec<String> = Vec::new();
@@ -298,7 +299,7 @@ pub(crate) fn load(git: &Git, spec: Option<&str>) -> Result<(String, OpData)> {
 
 /// Reads the record of the op commit `oid`.
 pub(crate) fn load_oid(git: &Git, oid: &str) -> Result<OpData> {
-    let blob = git.run(&["cat-file", "blob", &format!("{oid}:op.json")])?;
+    let blob = git.blob_at(oid, "op.json")?;
     let data: OpData = serde_json::from_slice(&blob).context("unreadable operation record")?;
     if data.v >= 2 && data.head_after.is_none() {
         return Err(fail(
@@ -317,9 +318,7 @@ pub(crate) fn recorded_writes(git: &Git, oid: &str, data: &OpData) -> Result<Vec
     let mut writes = Vec::with_capacity(data.worktree.len());
     for file in &data.worktree {
         let before = match file.before {
-            Some(position) => {
-                Some(git.run(&["cat-file", "blob", &format!("{oid}:wt/{position}")])?)
-            }
+            Some(position) => Some(git.blob_at(oid, &format!("wt/{position}"))?),
             None => None,
         };
         let after = match &file.after {

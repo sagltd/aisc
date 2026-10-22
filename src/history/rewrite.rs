@@ -241,26 +241,32 @@ impl Session {
             return Ok(None);
         }
         let git = &self.git;
-        let mut current: BTreeMap<String, Vec<(u8, Entry)>> = BTreeMap::new();
-        for chunk in changes.chunks(400) {
-            let mut args = vec!["ls-files", "-s", "-z", "--"];
-            args.extend(chunk.iter().map(|change| change.path.as_str()));
-            let output = git.run(&args)?;
-            for record in output.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
-                let tab = record
-                    .iter()
-                    .position(|byte| *byte == b'\t')
-                    .context("malformed ls-files record")?;
-                let meta = text(&record[..tab])?;
-                let path = String::from_utf8(record[tab + 1..].to_vec())?;
-                let mut fields = meta.split(' ');
-                let mode = fields.next().context("ls-files mode")?.to_owned();
-                let oid = fields.next().context("ls-files oid")?.to_owned();
-                let stage: u8 = fields.next().context("ls-files stage")?.parse()?;
-                current.entry(path).or_default().push((stage, (mode, oid)));
+        let paths: Vec<&str> = changes.iter().map(|change| change.path.as_str()).collect();
+        let (current, intent_to_add) = match git.index_state(&paths) {
+            Some(found) => found,
+            None => {
+                let mut current: BTreeMap<String, Vec<(u8, Entry)>> = BTreeMap::new();
+                for chunk in changes.chunks(400) {
+                    let mut args = vec!["ls-files", "-s", "-z", "--"];
+                    args.extend(chunk.iter().map(|change| change.path.as_str()));
+                    let output = git.run(&args)?;
+                    for record in output.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
+                        let tab = record
+                            .iter()
+                            .position(|byte| *byte == b'\t')
+                            .context("malformed ls-files record")?;
+                        let meta = text(&record[..tab])?;
+                        let path = String::from_utf8(record[tab + 1..].to_vec())?;
+                        let mut fields = meta.split(' ');
+                        let mode = fields.next().context("ls-files mode")?.to_owned();
+                        let oid = fields.next().context("ls-files oid")?.to_owned();
+                        let stage: u8 = fields.next().context("ls-files stage")?.parse()?;
+                        current.entry(path).or_default().push((stage, (mode, oid)));
+                    }
+                }
+                (current, self.intent_to_add(changes)?)
             }
-        }
-        let intent_to_add = self.intent_to_add(changes)?;
+        };
         let zero = git.zero_oid(&self.head.oid);
         let mut input = Vec::new();
         let mut applied: Vec<&str> = Vec::new();
@@ -370,7 +376,7 @@ impl Session {
         if let Some(head) = &plan.head {
             // HEAD may dangle here (its branch was just deleted), so read only the symref.
             let current = git
-                .probe(&["symbolic-ref", "-q", "HEAD"])
+                .head_symbolic()
                 .map_err(|e| partial("HEAD unreadable", &e))?;
             if current != head.from {
                 return Err(partial("HEAD moved", &"concurrent change"));
@@ -1522,6 +1528,23 @@ fn tree_changes(git: &Git, from_tree: &str, to_tree: &str) -> Result<Vec<TreeCha
     if from_tree == to_tree {
         return Ok(Vec::new());
     }
+    if let Some(changed) = git.tree_changes(from_tree, to_tree) {
+        let mut changes = Vec::with_capacity(changed.len());
+        for (path, from, to) in changed {
+            if [&from, &to]
+                .into_iter()
+                .flatten()
+                .any(|(mode, _)| mode == "160000")
+            {
+                return Err(fail(
+                    Code::Unsupported,
+                    format!("{path}: submodules are unsupported"),
+                ));
+            }
+            changes.push(TreeChange { path, from, to });
+        }
+        return Ok(changes);
+    }
     let output = git.run(&[
         "diff-tree",
         "-r",
@@ -1681,9 +1704,7 @@ pub(crate) fn carry(
         Skip,
     }
     // On a case-insensitive filesystem a case-only rename adds a path that already "exists".
-    let ignorecase = git
-        .probe(&["config", "--bool", "--get", "core.ignorecase"])?
-        .is_some_and(|value| value == "true");
+    let ignorecase = crate::runner::config(&git.root)?.is_true("core.ignorecase");
     let removed_lower: BTreeSet<String> = active
         .iter()
         .filter(|change| change.to.is_none())

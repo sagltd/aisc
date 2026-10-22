@@ -6,7 +6,9 @@ mod gitlab;
 mod history;
 mod output;
 mod process;
+mod runner;
 mod signals;
+mod store;
 mod task;
 mod worktree;
 

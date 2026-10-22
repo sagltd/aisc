@@ -118,18 +118,7 @@ pub(crate) fn recommit(
 }
 
 pub(crate) fn short_ids(git: &Git, oids: &[String]) -> Result<Vec<String>> {
-    if oids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut arguments = vec![
-        "log".to_owned(),
-        "--no-walk=unsorted".to_owned(),
-        "--abbrev=4".to_owned(),
-        "--format=%h".to_owned(),
-    ];
-    arguments.extend(oids.iter().cloned());
-    let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
-    Ok(git.line(&arguments)?.lines().map(str::to_owned).collect())
+    git.short_ids(oids)
 }
 
 pub(crate) fn first_line(message: &str) -> &str {

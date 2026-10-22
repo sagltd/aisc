@@ -78,7 +78,15 @@ pub(crate) fn load_picks(git: &Git, tip: &str, exclude: &str) -> Result<Vec<Pick
             parent_tree: String::new(),
         });
     }
-    if !picks.is_empty() {
+    let in_process: Option<Vec<String>> = picks
+        .iter()
+        .map(|pick| git.fast(|store| store.peel_to_tree(&pick.parent)).flatten())
+        .collect();
+    if let Some(trees) = in_process {
+        for (pick, tree) in picks.iter_mut().zip(trees) {
+            pick.parent_tree = tree;
+        }
+    } else if !picks.is_empty() {
         let arguments: Vec<String> = picks
             .iter()
             .map(|pick| format!("{}^{{tree}}", pick.parent))
@@ -476,7 +484,7 @@ pub(crate) fn run(args: &cli::Sync) -> Result<Outcome> {
 }
 
 fn remote_for(git: &Git, spec: Option<&str>) -> Result<String> {
-    let remotes: Vec<String> = git.line(&["remote"])?.lines().map(str::to_owned).collect();
+    let remotes = git.remotes()?;
     if let Some(spec) = spec {
         let name = spec.strip_prefix("refs/remotes/").unwrap_or(spec);
         if let Some((remote, _)) = name.split_once('/')
@@ -485,7 +493,9 @@ fn remote_for(git: &Git, spec: Option<&str>) -> Result<String> {
             return Ok(remote.to_owned());
         }
         let key = format!("branch.{name}.remote");
-        if let Some(remote) = git.probe(&["config", "--get", &key])?
+        if let Some(remote) = crate::runner::config(&git.root)?
+            .string(&key)
+            .map(str::to_owned)
             && remotes.contains(&remote)
         {
             return Ok(remote);
@@ -1036,6 +1046,17 @@ fn paused_outcome(
 }
 
 fn local_branches(git: &Git) -> Result<Vec<BranchRef>> {
+    if let Some(listed) = git.fast(|store| store.list_refs(&["refs/heads/"])) {
+        return Ok(listed
+            .into_iter()
+            .filter_map(|(name, oid, _)| {
+                Some(BranchRef {
+                    name: name.strip_prefix("refs/heads/")?.to_owned(),
+                    oid,
+                })
+            })
+            .collect());
+    }
     let output = git.line(&[
         "for-each-ref",
         "--format=%(objectname) %(refname)",

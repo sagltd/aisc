@@ -286,10 +286,7 @@ pub(super) enum Sig {
 }
 
 pub(super) fn signature(git: &Git, from: &str, to: &str) -> Result<BTreeMap<String, Sig>> {
-    let mut args = super::diff::commit_diff_args(false);
-    args.push(from);
-    args.push(to);
-    let patch = git.run(&args)?;
+    let patch = git.tree_patch(from, to, &[])?;
     Ok(super::diff::parse_patch(&patch)?
         .into_iter()
         .map(|file| {
@@ -349,12 +346,15 @@ pub(super) type Recorded = Vec<BTreeMap<String, Option<Vec<Block>>>>;
 
 pub(super) fn recorded(git: &Git, chain: &[CommitInfo], paths: &[String]) -> Result<Recorded> {
     let mut steps = vec![BTreeMap::new()];
+    let pairs: Vec<(String, String)> = chain
+        .windows(2)
+        .map(|pair| (pair[0].tree.clone(), pair[1].tree.clone()))
+        .collect();
+    git.prefetch_patches(&pairs, paths);
     for pair in chain.windows(2) {
-        let mut args = super::diff::commit_diff_args(false);
-        args.extend([pair[0].tree.as_str(), pair[1].tree.as_str(), "--"]);
-        args.extend(paths.iter().map(String::as_str));
         let mut step = BTreeMap::new();
-        for file in super::diff::parse_patch(&git.run(&args)?)? {
+        let patch = git.tree_patch(&pair[0].tree, &pair[1].tree, paths)?;
+        for file in super::diff::parse_patch(&patch)? {
             let blocks = match file.kind {
                 Kind::Modified if !file.binary => Some(file.blocks),
                 Kind::ModeOnly => Some(Vec::new()),
@@ -538,6 +538,15 @@ pub(super) fn verify_amend(
     parent_tree: &str,
     routed: &dyn Fn(usize) -> Routed,
 ) -> Result<()> {
+    let (mut old_prev, mut new_prev) = (parent_tree.to_owned(), parent_tree.to_owned());
+    let mut pairs = Vec::new();
+    for (j, commit) in chain.iter().enumerate() {
+        pairs.push((old_prev.clone(), commit.tree.clone()));
+        pairs.push((new_prev.clone(), trees[j].clone()));
+        old_prev.clone_from(&commit.tree);
+        new_prev.clone_from(&trees[j]);
+    }
+    git.prefetch_patches(&pairs, &[]);
     let (mut old_prev, mut new_prev) = (parent_tree.to_owned(), parent_tree.to_owned());
     for (j, commit) in chain.iter().enumerate() {
         let original = signature(git, &old_prev, &commit.tree)?;

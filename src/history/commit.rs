@@ -230,7 +230,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
         let every: Vec<_> = file.blocks.iter().collect();
         let rebuilt = splice(&lines, &every)
             .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
-        let oid = git.write_blob(&join_lines(&rebuilt), true)?;
+        let oid = git.blob_id(&join_lines(&rebuilt))?;
         if file.new_oid.as_deref() != Some(oid.as_str()) {
             return Err(fail_hint(
                 Code::Unsupported,
@@ -339,18 +339,8 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     };
     let old_tip = head.oid.clone();
     let file_count = cumulative.files.len();
-    let ids = {
-        let mut arguments = vec![
-            "log".to_owned(),
-            "--no-walk=unsorted".to_owned(),
-            "--abbrev=4".to_owned(),
-            "--format=%h".to_owned(),
-        ];
-        arguments.extend(commits.iter().map(|(oid, _)| oid.clone()));
-        let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
-        git.line(&arguments)?
-    };
-    let ids: Vec<String> = ids.lines().map(str::to_owned).collect();
+    let oids: Vec<String> = commits.iter().map(|(oid, _)| oid.clone()).collect();
+    let ids = git.short_ids(&oids)?;
     plan.summary = commits
         .iter()
         .zip(&ids)
