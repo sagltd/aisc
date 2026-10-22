@@ -270,6 +270,28 @@ fn an_intent_to_add_file_is_removed_with_its_placeholder() {
 }
 
 #[test]
+fn undo_of_discarding_an_intent_to_add_file_restores_the_placeholder() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n"), ("b.txt", "b\n")]);
+    fixture.write("b.txt", "b\nstaged\n");
+    fixture.git(&["add", "b.txt"]);
+    fixture.write("n.txt", "new\n");
+    fixture.git(&["add", "-N", "n.txt"]);
+    fixture.aisc(&["discard", "n.txt"]).ok();
+    assert!(!fixture.exists("n.txt"));
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.read("n.txt"), "new\n");
+    assert_eq!(
+        fixture.git(&["status", "--porcelain"]),
+        "M  b.txt\n A n.txt"
+    );
+    assert_eq!(fixture.git(&["show", ":b.txt"]), "b\nstaged");
+    // Redo the discard.
+    fixture.aisc(&["undo"]).ok();
+    assert!(!fixture.exists("n.txt"));
+    assert_eq!(fixture.git(&["status", "--porcelain"]), "M  b.txt");
+}
+
+#[test]
 fn failures_change_nothing() {
     let fixture = pilot9();
     fixture.git(&["add", "src/catalog.ts"]);
