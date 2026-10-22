@@ -115,6 +115,12 @@ pub(crate) enum Operation {
     Undo {
         /// Operation id from `aisc oplog`
         op: Option<String>,
+        /// Print only the result line
+        #[arg(short = 'q', long)]
+        quiet: bool,
+        /// Also print the branch's commits after the change
+        #[arg(short = 'v', long)]
+        stack: bool,
     },
     /// List recorded history operations, newest first
     Oplog {
@@ -134,6 +140,9 @@ pub(crate) struct MutationOpts {
     /// Print only the result line
     #[arg(short = 'q', long)]
     pub quiet: bool,
+    /// Also print the branch's commits after the change
+    #[arg(short = 'v', long)]
+    pub stack: bool,
 }
 
 #[derive(Args, Debug)]
@@ -145,6 +154,9 @@ pub(crate) struct Log {
     /// Omit per-hunk lines of uncommitted changes
     #[arg(long)]
     pub no_hunks: bool,
+    /// Only commit ids and subjects, and the uncommitted paths
+    #[arg(short = 'q', long)]
+    pub quiet: bool,
 }
 
 #[derive(Args, Debug)]
@@ -317,6 +329,12 @@ pub(crate) struct Switch {
     pub branch: String,
     #[arg(short = 'c', long)]
     pub create: bool,
+    /// Print only the result line
+    #[arg(short = 'q', long)]
+    pub quiet: bool,
+    /// Also print the branch's commits after the change
+    #[arg(short = 'v', long)]
+    pub stack: bool,
 }
 
 #[derive(Args, Debug)]
@@ -401,6 +419,44 @@ impl Operation {
             Self::Split(args) => args.groups = groups(),
             Self::Squash(args) => args.groups = groups(),
             _ => {}
+        }
+    }
+
+    /// `-q`: a mutation prints only its result line.
+    pub fn quiet(&self) -> bool {
+        match self {
+            Self::Commit(args) => args.opts.quiet,
+            Self::Amend(args) => args.opts.quiet,
+            Self::Discard(args) => args.opts.quiet,
+            Self::Split(args) => args.opts.quiet,
+            Self::Uncommit(args) => args.opts.quiet,
+            Self::Squash(args) => args.opts.quiet,
+            Self::Move(args) => args.opts.quiet,
+            Self::Pick(args) => args.opts.quiet,
+            Self::Sync(args) => args.opts.quiet,
+            Self::Land(args) => args.opts.quiet,
+            Self::Switch(args) => args.quiet,
+            Self::Undo { quiet, .. } => *quiet,
+            _ => false,
+        }
+    }
+
+    /// `--stack`/`-v`: the full commit list after a mutation.
+    pub fn stack(&self) -> bool {
+        match self {
+            Self::Commit(args) => args.opts.stack,
+            Self::Amend(args) => args.opts.stack,
+            Self::Discard(args) => args.opts.stack,
+            Self::Split(args) => args.opts.stack,
+            Self::Uncommit(args) => args.opts.stack,
+            Self::Squash(args) => args.opts.stack,
+            Self::Move(args) => args.opts.stack,
+            Self::Pick(args) => args.opts.stack,
+            Self::Sync(args) => args.opts.stack,
+            Self::Land(args) => args.opts.stack,
+            Self::Switch(args) => args.stack,
+            Self::Undo { stack, .. } => *stack,
+            _ => false,
         }
     }
 

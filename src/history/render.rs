@@ -38,6 +38,13 @@ fn whole_label(file: &FileChange) -> String {
 }
 
 pub(crate) fn header(view: &View) -> String {
+    let mut line = header_line(view);
+    line.push_str(" (newest first)");
+    line
+}
+
+/// The header without the commit-list suffix: what a mutation prints by default.
+pub(crate) fn header_line(view: &View) -> String {
     let name = escape_line(&view.label());
     let mut line = match &view.base {
         Some(base) => {
@@ -75,7 +82,6 @@ pub(crate) fn header(view: &View) -> String {
             upstream.behind
         );
     }
-    line.push_str(" (newest first)");
     line
 }
 
@@ -207,6 +213,37 @@ pub(crate) fn log_text(view: &View, hunks: bool) -> String {
 /// Compact log printed after a mutation: uncommitted changes as one line of paths.
 pub(crate) fn compact_text(view: &View) -> String {
     log_text(view, false)
+}
+
+/// `aisc log -q`: the header, one `ID SUBJECT` line per commit and the uncommitted paths.
+pub(crate) fn quiet_log_text(view: &View) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "{}", header(view));
+    for commit in &view.commits {
+        let _ = writeln!(out, "{} {}", commit.short, escape_line(&commit.subject));
+    }
+    if view.total > view.commits.len() && view.base.is_some() {
+        let _ = writeln!(
+            out,
+            "… {} more (aisc log --limit N)",
+            view.total - view.commits.len()
+        );
+    }
+    out.push_str(&changes_and_state(view));
+    out.trim_end().to_owned()
+}
+
+/// The uncommitted paths (one line) and the state lines (nested repositories, unmerged paths,
+/// a paused sync).
+pub(crate) fn changes_and_state(view: &View) -> String {
+    let mut out = String::new();
+    if let Some(changes) = &view.changes
+        && !changes.files.is_empty()
+    {
+        let _ = writeln!(out, "uncommitted: {}", path_line(changes));
+    }
+    state_lines(view, &mut out);
+    out.trim_end().to_owned()
 }
 
 fn file_json(file: &FileChange, hunks: bool) -> Value {

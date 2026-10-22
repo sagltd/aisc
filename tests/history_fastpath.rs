@@ -1,0 +1,137 @@
+//! Repositories and settings the in-process fast paths must hand to Git (or match Git on):
+//! SHA-256 object storage, dates Git refuses, clean filters, and the ids a summary must print.
+mod support;
+
+use support::Fixture;
+
+/// A SHA-256 repository with one `base` commit.
+fn sha256(files: &[(&str, &str)]) -> Fixture {
+    let fixture = Fixture::bare();
+    std::fs::remove_dir_all(fixture.path(".git")).unwrap();
+    fixture.git(&["init", "-q", "-b", "main", "--object-format=sha256"]);
+    fixture.git(&["config", "user.name", "Fixture"]);
+    fixture.git(&["config", "user.email", "fixture@example.invalid"]);
+    for (path, content) in files {
+        fixture.write(path, content);
+    }
+    fixture.commit_all("base");
+    fixture
+}
+
+#[test]
+fn sha256_repositories_commit_amend_and_undo() {
+    let fixture = sha256(&[
+        ("a.txt", "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n"),
+        ("b.txt", "b\n"),
+    ]);
+    fixture.write("b.txt", "b2\n");
+    fixture.aisc(&["commit", "-m", "whole", "b.txt"]).ok();
+    fixture.write("a.txt", "one\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\ntwelve\n");
+    fixture.aisc(&["commit", "-m", "part", "a.txt~one"]).ok();
+    assert_eq!(fixture.subjects("HEAD"), ["part", "whole", "base"]);
+    assert!(
+        fixture
+            .tree_blob("HEAD", "a.txt")
+            .unwrap()
+            .starts_with("one\n")
+    );
+    assert!(
+        fixture
+            .tree_blob("HEAD", "a.txt")
+            .unwrap()
+            .ends_with("\n12\n")
+    );
+    fixture.aisc(&["amend", "--into", "whole", "a.txt"]).ok();
+    assert_eq!(fixture.subjects("HEAD"), ["part", "whole", "base"]);
+    assert!(
+        fixture
+            .tree_blob("HEAD~1", "a.txt")
+            .unwrap()
+            .ends_with("twelve\n")
+    );
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.git(&["status", "--porcelain"]), " M a.txt");
+    fixture.git(&["fsck", "--strict", "--no-dangling"]);
+}
+
+#[test]
+fn a_date_git_refuses_is_refused() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.write("f.txt", "two\n");
+    let before = fixture.snapshot();
+    // One hour before the epoch: `git var` refuses it, so must aisc.
+    let run = fixture.aisc_env(
+        &["commit", "-m", "x", "f.txt"],
+        &[
+            ("GIT_AUTHOR_DATE", "1970-01-01T00:00:00+01:00"),
+            ("GIT_AUTHOR_NAME", "A"),
+            ("GIT_AUTHOR_EMAIL", "a@example.invalid"),
+        ],
+    );
+    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(before.refs, fixture.snapshot().refs);
+    fixture.git(&["fsck", "--strict", "--no-dangling"]);
+}
+
+#[test]
+fn a_file_a_clean_filter_reports_modified_is_not_overwritten() {
+    let fixture = Fixture::with_files(&[("README", "r\n")]);
+    // A clean filter that is not idempotent: the stored blob of "x" is "xx".
+    fixture.git(&["config", "filter.grow.clean", "sed s/x/xx/"]);
+    fixture.write(".gitattributes", "*.txt filter=grow\n");
+    fixture.write("f.txt", "x\n");
+    fixture.commit_all("filtered");
+    fixture.git(&["switch", "-q", "-c", "other"]);
+    fixture.write("f.txt", "y\n");
+    fixture.commit_all("other");
+    fixture.git(&["switch", "-q", "main"]);
+    // The worktree bytes equal the stored blob, yet Git sees a modification.
+    fixture.write("f.txt", "xx\n");
+    assert_eq!(fixture.git(&["status", "--porcelain"]), " M f.txt");
+    let run = fixture.aisc(&["switch", "other"]);
+    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.read("f.txt"), "xx\n", "the user's edit is kept");
+    assert_eq!(fixture.git(&["symbolic-ref", "--short", "HEAD"]), "main");
+}
+
+#[test]
+fn moved_branches_print_their_new_tip() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.git(&["switch", "-q", "-c", "topic"]);
+    fixture.write("a.txt", "a\n");
+    fixture.commit_all("add a");
+    fixture.write("b.txt", "b\n");
+    fixture.commit_all("add b");
+    let squash = fixture.aisc(&["squash", "--into", "a and b", "add a", "add b"]);
+    squash.ok();
+    let undo = fixture.aisc(&["undo"]);
+    undo.ok();
+    let tip = fixture.git(&["rev-parse", "HEAD"]);
+    let line = format!("topic {}", &squash_tip(&squash.stdout));
+    assert!(
+        undo.stdout.lines().any(|text| text.starts_with(&line)
+            && text.contains(&tip[..7])
+            && text.ends_with(" add b")),
+        "undo names the restored tip: {}",
+        undo.stdout
+    );
+    let switch = fixture.aisc(&["switch", "main"]);
+    switch.ok();
+    let main = fixture.git(&["rev-parse", "HEAD"]);
+    assert!(
+        switch.stdout.contains(&main[..7]),
+        "switch names the tip it moved to: {}",
+        switch.stdout
+    );
+}
+
+/// The `old→new` source of the topic line: the squashed tip's 7-character id.
+fn squash_tip(output: &str) -> String {
+    output
+        .lines()
+        .find_map(|line| line.strip_prefix("topic "))
+        .and_then(|rest| rest.split('→').nth(1))
+        .map(|rest| rest.chars().take(7).collect())
+        .unwrap_or_else(|| panic!("no topic line: {output}"))
+}

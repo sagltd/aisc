@@ -56,6 +56,10 @@ pub(crate) struct View {
     pub changes: Option<ChangeSet>,
     pub sync_paused: Option<usize>,
     pub locals: Vec<BranchRef>,
+    /// Commits this process wrote (the post-mutation summary lists those in the range).
+    pub created: std::collections::HashSet<String>,
+    /// Branch tips the operation moved (printed after a mutation).
+    pub moves: Vec<super::summary::Move>,
 }
 
 impl View {
@@ -120,30 +124,43 @@ impl View {
     }
 }
 
-struct Refs {
-    locals: Vec<BranchRef>,
+pub(crate) struct Refs {
+    pub locals: Vec<BranchRef>,
     remote_head: Option<String>,
     remotes: Vec<BranchRef>,
 }
 
-fn read_refs(git: &Git) -> Result<Refs> {
-    let output = git.run(&[
-        "for-each-ref",
-        "--format=%(refname)%00%(objectname)%00%(symref)",
-        "refs/heads",
-        "refs/remotes",
-    ])?;
+/// Local and remote-tracking branches (`for-each-ref refs/heads refs/remotes`), read in process
+/// when possible.
+pub(crate) fn read_refs(git: &Git) -> Result<Refs> {
+    let listed = match git.fast(|store| store.list_refs(&["refs/heads/", "refs/remotes/"])) {
+        Some(listed) => listed,
+        None => {
+            let output = git.run(&[
+                "for-each-ref",
+                "--format=%(refname)%00%(objectname)%00%(symref)",
+                "refs/heads",
+                "refs/remotes",
+            ])?;
+            let mut listed = Vec::new();
+            for line in text(&output)?.lines() {
+                let mut fields = line.split('\0');
+                if let (Some(name), Some(oid), Some(symref)) =
+                    (fields.next(), fields.next(), fields.next())
+                {
+                    listed.push((name.to_owned(), oid.to_owned(), symref.to_owned()));
+                }
+            }
+            listed
+        }
+    };
     let mut refs = Refs {
         locals: Vec::new(),
         remote_head: None,
         remotes: Vec::new(),
     };
-    for line in text(&output)?.lines() {
-        let mut fields = line.split('\0');
-        let (Some(name), Some(oid), Some(symref)) = (fields.next(), fields.next(), fields.next())
-        else {
-            continue;
-        };
+    for (name, oid, symref) in &listed {
+        let (name, oid, symref) = (name.as_str(), oid.as_str(), symref.as_str());
         if let Some(local) = name.strip_prefix("refs/heads/") {
             refs.locals.push(BranchRef {
                 name: local.to_owned(),
@@ -164,7 +181,7 @@ fn read_refs(git: &Git) -> Result<Refs> {
 }
 
 /// Default branch: origin/HEAD target, else the first of main, master, trunk.
-fn find_base(refs: &Refs) -> Option<(String, String, String)> {
+pub(crate) fn find_base(refs: &Refs) -> Option<(String, String, String)> {
     let local = |name: &str| refs.locals.iter().find(|branch| branch.name == name);
     let candidate = refs.remote_head.clone().or_else(|| {
         ["main", "master", "trunk"]
@@ -234,6 +251,65 @@ pub(crate) fn parse_log(output: &[u8]) -> Result<Vec<CommitInfo>> {
     Ok(commits)
 }
 
+/// Longest first-parent line walked in process before Git is asked instead (at least the
+/// requested limit): a line that does not reach the base is otherwise walked to its root.
+const WALK_CAP: usize = 200;
+
+/// The commits shown, and `(ahead, behind)` when exact.
+pub(crate) type Walked = (Vec<CommitInfo>, Option<(usize, usize)>);
+
+/// The range `git log --first-parent TIP ^BASE -nLIMIT --name-only` prints, read in process.
+/// Exact whenever TIP's first-parent line reaches BASE's tip: nothing on that line above it can be
+/// reachable from BASE. Without a base it is simply the newest LIMIT commits. The second value
+/// is `(ahead, behind)` when that is exact too (no merges on the line, so nothing else counts).
+/// `None` hands the range to Git (and `rev-list --count`).
+pub(crate) fn walk(git: &Git, tip: &str, base: Option<&str>, limit: usize) -> Option<Walked> {
+    git.fast(|store| {
+        let mut commits = Vec::new();
+        let mut current = Some(tip.to_owned());
+        let mut steps = 0;
+        let mut merges = false;
+        loop {
+            let Some(oid) = current else {
+                if base.is_some() {
+                    anyhow::bail!("the first-parent line does not reach the base");
+                }
+                break;
+            };
+            if Some(oid.as_str()) == base || (base.is_none() && commits.len() == limit) {
+                break;
+            }
+            steps += 1;
+            if steps > WALK_CAP.max(limit) {
+                anyhow::bail!("long range");
+            }
+            let commit = store.commit(&oid)?;
+            if commit.has_encoding() {
+                anyhow::bail!("re-encoded message");
+            }
+            merges |= commit.parents.len() > 1;
+            if commits.len() < limit {
+                let parent_tree = match commit.parents.first() {
+                    Some(parent) => Some(store.commit(parent)?.tree),
+                    None => None,
+                };
+                let mut changed = Vec::new();
+                store.diff_trees(parent_tree.as_deref(), Some(&commit.tree), "", &mut changed)?;
+                commits.push(CommitInfo {
+                    short: store.abbrev(&oid, 4)?,
+                    tree: commit.tree.clone(),
+                    parents: commit.parents.clone(),
+                    subject: commit.subject().context("non-UTF-8 message")?,
+                    files: changed.into_iter().map(|(path, _, _)| path).collect(),
+                    oid: oid.clone(),
+                });
+            }
+            current = commit.parents.first().cloned();
+        }
+        Ok((commits, (base.is_some() && !merges).then_some((steps, 0))))
+    })
+}
+
 /// Reads only HEAD's status and uncommitted changes (two parallel Git processes).
 pub(crate) fn read_changes(git: &Git) -> Result<(Status, ChangeSet)> {
     let (status, patch) = std::thread::scope(|scope| {
@@ -253,6 +329,9 @@ pub(crate) fn read_changes(git: &Git) -> Result<(Status, ChangeSet)> {
     let status = diff::parse_status(&status.map_err(|_| panicked())??)?;
     let patch = patch.map_err(|_| panicked())??;
     let changes = diff::build_changes(&git.root, &patch, &status.untracked)?;
+    if let Some(oid) = &status.oid {
+        super::summary::note_changes(git, oid, &changes);
+    }
     Ok((status, changes))
 }
 
@@ -321,6 +400,12 @@ pub(crate) fn read(
         // The base branch itself has no base.
         target.as_deref() != Some(label.as_str())
     });
+    let walked = walk(
+        git,
+        &tip,
+        base.as_ref().map(|(_, _, oid)| oid.as_str()),
+        limit,
+    );
     let tip_argument = tip.clone();
     let limit_argument = format!("-n{limit}");
     let (counts, log) = std::thread::scope(|scope| {
@@ -328,6 +413,9 @@ pub(crate) fn read(
             let Some((_, refname, _)) = &base else {
                 return Ok(None);
             };
+            if let Some((_, Some(counts))) = &walked {
+                return Ok(Some(*counts));
+            }
             let range = format!("{refname}...{tip_argument}");
             let output = git.line(&["rev-list", "--left-right", "--count", &range])?;
             let mut numbers = output.split_whitespace().map(|part| part.parse::<usize>());
@@ -336,6 +424,9 @@ pub(crate) fn read(
             Ok(Some((ahead, behind)))
         });
         let log = scope.spawn(|| {
+            if walked.is_some() {
+                return Ok(Vec::new());
+            }
             let exclude = base.as_ref().map(|(_, refname, _)| format!("^{refname}"));
             let mut args = vec![
                 "-c",
@@ -358,7 +449,11 @@ pub(crate) fn read(
         (counts.join(), log.join())
     });
     let counts = counts.map_err(|_| panicked())??;
-    let commits = parse_log(&log.map_err(|_| panicked())??)?;
+    let log = log.map_err(|_| panicked())??;
+    let commits = match walked {
+        Some((commits, _)) => commits,
+        None => parse_log(&log)?,
+    };
     let base_info = base.map(|(label, refname, oid)| {
         let (ahead, behind) = counts.unwrap_or((0, 0));
         BaseInfo {
@@ -376,7 +471,11 @@ pub(crate) fn read(
     let mut upstream = None;
     if is_head && let (Some(raw), Some(patch)) = (status_output, patch) {
         let parsed = diff::parse_status(&raw)?;
-        changes = Some(diff::build_changes(&git.root, &patch, &parsed.untracked)?);
+        let built = diff::build_changes(&git.root, &patch, &parsed.untracked)?;
+        if let Some(oid) = &parsed.oid {
+            super::summary::note_changes(git, oid, &built);
+        }
+        changes = Some(built);
         if let Some(label) = &parsed.upstream {
             upstream = Some(UpstreamInfo {
                 label: label.clone(),
@@ -406,5 +505,7 @@ pub(crate) fn read(
         changes,
         sync_paused,
         locals: refs.locals,
+        created: super::plumbing::created(&git.dir),
+        moves: Vec::new(),
     })
 }

@@ -16,6 +16,7 @@ use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -186,7 +187,9 @@ impl Parts<'_> {
                 let chosen: Vec<&Block> = blocks.iter().map(|block| &file.blocks[*block]).collect();
                 let lines = splice(&self.parent_lines[&file.path], &chosen)
                     .map_err(|error| stale(&format!("{}: {error}", file.path)))?;
-                let oid = self.git.write_blob(&join_lines(&lines), true)?;
+                let oid = self
+                    .git
+                    .write_object(ObjectKind::Blob, &join_lines(&lines))?;
                 let mode = self
                     .parent_entries
                     .get(&file.path)
@@ -312,7 +315,7 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
         let every: Vec<&Block> = file.blocks.iter().collect();
         let rebuilt = splice(&lines, &every)
             .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
-        let oid = git.write_blob(&join_lines(&rebuilt), true)?;
+        let oid = git.blob_id(&join_lines(&rebuilt))?;
         if commit_entries.get(&file.path).map(|(_, known)| known) != Some(&oid) {
             return Err(fail_hint(
                 Code::Unsupported,
@@ -424,6 +427,18 @@ fn execute(request: &Request<'_>) -> Result<Outcome> {
     // position-aware in every descendant; every other change of a descendant must stay as it was,
     // and the new tip must differ from the old one only in the rest's files.
     if strip {
+        // Every diff the checks below read, in one `git diff-tree --stdin`.
+        let mut pairs = Vec::new();
+        let (mut old_prev, mut new_prev) = (target.tree.clone(), base_tree.clone());
+        for (commit, tree) in descendants.iter().zip(&trees) {
+            pairs.push((old_prev.clone(), commit.tree.clone()));
+            pairs.push((new_prev.clone(), tree.clone()));
+            old_prev.clone_from(&commit.tree);
+            new_prev.clone_from(tree);
+        }
+        let tip = chain.last().expect("chain has the tip").tree.clone();
+        pairs.push((new_tip_tree.clone(), tip));
+        git.prefetch_patches(&pairs, &[]);
         let proved = prove_rest(&git, &chain, &changes, &steps, &stripped, &after_parts)?;
         let (mut old_prev, mut new_prev) = (target.tree.clone(), base_tree.clone());
         for (offset, (commit, tree)) in descendants.iter().zip(&trees).enumerate() {
@@ -643,7 +658,10 @@ fn strip_rest(
     let refs: Vec<&Block> = carried.iter().collect();
     let lines = unsplice(&split_lines(&bytes), &refs).map_err(|_| again())?;
     Ok((
-        Some((mode, git.write_blob(&join_lines(&lines), true)?)),
+        Some((
+            mode,
+            git.write_object(ObjectKind::Blob, &join_lines(&lines))?,
+        )),
         Some(carried),
     ))
 }

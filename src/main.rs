@@ -6,7 +6,9 @@ mod gitlab;
 mod history;
 mod output;
 mod process;
+mod runner;
 mod signals;
+mod store;
 mod task;
 mod worktree;
 
@@ -74,6 +76,7 @@ fn main() {
     };
     let operation = command.name();
     let presentation = presentation.for_operation(&command);
+    history::summary::configure(presentation.json, command.stack(), command.quiet());
     let history = command.prefers_text();
     let exit;
     match run(&command) {

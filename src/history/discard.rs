@@ -192,6 +192,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
     }
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    git.keep_subprocesses();
     let session = Session::open(&repo, &git, true, false)?;
     let head_oid = session.head.oid.clone();
     require_checked_out(&args.opts, &session.head)?;

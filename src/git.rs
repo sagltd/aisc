@@ -60,6 +60,9 @@ impl Repo {
     pub fn discover() -> Result<Self> {
         validate_environment()?;
         let cwd = std::env::current_dir()?;
+        if let Some((root, directory)) = crate::store::discover(&cwd) {
+            return Ok(Self { root, directory });
+        }
         let root = PathBuf::from(
             text(&run_git(&cwd, &["rev-parse", "--show-toplevel"], None)?)?
                 .strip_suffix('\n')
@@ -135,6 +138,11 @@ impl Repo {
         Ok(())
     }
     pub fn writable(&self) -> Result<()> {
+        if let Some(entries) = crate::store::open(&self.root, &self.directory)
+            .and_then(|_| crate::store::read_index(&self.directory).ok())
+        {
+            return self.writable_with(&entries);
+        }
         let stage = self.git(&["ls-files", "--stage", "-z"])?;
         text(&stage)?;
         if stage
@@ -185,6 +193,10 @@ impl Repo {
         Ok(())
     }
     fn config_flag(&self, name: &str) -> Result<bool> {
+        // `git config --bool --get` printing `true`; unset and invalid values are false.
+        if let Ok(config) = crate::runner::config(&self.root) {
+            return Ok(config.is_true(name));
+        }
         Ok(text(
             &self
                 .git(&["config", "--bool", "--get", name])
@@ -204,6 +216,41 @@ impl Repo {
         }
         let list = self.git(&["sparse-checkout", "list"])?;
         Ok(Some(text(&list)?.lines().map(str::to_owned).collect()))
+    }
+    /// `writable` from an index read in process: the same checks in the same order.
+    fn writable_with(&self, entries: &[crate::store::IndexEntry]) -> Result<()> {
+        if entries.iter().any(|entry| entry.mode == "160000") {
+            bail!("submodule checkouts are unsupported for task writes");
+        }
+        let cone = self.sparse_cone()?;
+        // Skip-worktree is how a cone checkout hides paths outside the cone; inside it, or
+        // without a cone, the flag would hide edits from verification.
+        let hidden = |entry: &crate::store::IndexEntry| {
+            entry.assume_valid
+                || (entry.skip_worktree
+                    && cone.as_ref().is_none_or(|cone| in_cone(&entry.path, cone)))
+        };
+        if entries.iter().any(hidden) {
+            bail!(
+                "assume-unchanged and skip-worktree entries are unsupported for task writes and verification"
+            );
+        }
+        for marker in [
+            "MERGE_HEAD",
+            "CHERRY_PICK_HEAD",
+            "REVERT_HEAD",
+            "rebase-merge",
+            "rebase-apply",
+            "sequencer",
+        ] {
+            if self.directory.join(marker).exists() {
+                bail!("finish the existing Git merge/rebase/sequencer operation first");
+            }
+        }
+        if entries.iter().any(|entry| entry.stage != 0) {
+            bail!("resolve Git conflicts before task writes");
+        }
+        Ok(())
     }
     pub fn paths(&self, paths: &[String]) -> Result<()> {
         if let Some(cone) = self.sparse_cone()?
@@ -341,7 +388,8 @@ pub(crate) fn run_git_raw(
     input: Option<Vec<u8>>,
     limit: usize,
 ) -> Result<process::Output> {
-    let mut command = Command::new("git");
+    crate::runner::note(root, args);
+    let mut command = Command::new(crate::runner::program());
     command
         .arg("--literal-pathspecs")
         .args(args)

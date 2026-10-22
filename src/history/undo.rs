@@ -3,12 +3,12 @@ use super::oplog::{self, OpData};
 use super::plumbing::Git;
 use super::render;
 use super::rewrite::{HeadMove, IndexChange, Plan, RefMove, Session, WorktreeWrite, stale};
-use super::{Code, Outcome, fail_hint, view};
+use super::{Code, Outcome, fail_hint};
 use crate::git::Repo;
 use anyhow::Result;
 use serde_json::json;
 
-pub(crate) fn run(spec: Option<&str>) -> Result<Outcome> {
+pub(crate) fn run(spec: Option<&str>, quiet: bool) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
     let session = Session::open(&repo, &git, true, false)?;
@@ -16,7 +16,7 @@ pub(crate) fn run(spec: Option<&str>) -> Result<Outcome> {
     check_current(&git, &session, &data)?;
     let plan = reverse_plan(&git, &op_oid, &data)?;
     let applied = session.apply(&plan)?;
-    let after = view::read(&git, None, 20, true)?;
+    let after = super::summary::after(&git, None, true)?;
     let result = format!(
         "undid {} ({}); op {}",
         oplog::short(&op_oid),
@@ -26,7 +26,11 @@ pub(crate) fn run(spec: Option<&str>) -> Result<Outcome> {
     Ok(Outcome::with_text(
         json!({"op": applied.op, "verb": "undo", "undid": oplog::short(&op_oid),
             "log": render::log_json(&after, false)}),
-        format!("{result}\n{}", render::compact_text(&after)),
+        if quiet {
+            result
+        } else {
+            super::summary::text(&after, &result)
+        },
     ))
 }
 

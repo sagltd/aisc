@@ -10,6 +10,7 @@ use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -114,7 +115,9 @@ impl Context<'_> {
                 let chosen: Vec<_> = blocks.iter().map(|block| &file.blocks[*block]).collect();
                 let lines = splice(old, &chosen)
                     .map_err(|error| stale(&format!("{}: {error}", file.path)))?;
-                let oid = self.git.write_blob(&join_lines(&lines), true)?;
+                let oid = self
+                    .git
+                    .write_object(ObjectKind::Blob, &join_lines(&lines))?;
                 let mode = file.old_mode.clone().unwrap_or_else(|| "100644".to_owned());
                 Ok(Some((mode, oid)))
             }
@@ -230,7 +233,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
         let every: Vec<_> = file.blocks.iter().collect();
         let rebuilt = splice(&lines, &every)
             .map_err(|error| fail(Code::Unsupported, format!("{}: {error}", file.path)))?;
-        let oid = git.write_blob(&join_lines(&rebuilt), true)?;
+        let oid = git.blob_id(&join_lines(&rebuilt))?;
         if file.new_oid.as_deref() != Some(oid.as_str()) {
             return Err(fail_hint(
                 Code::Unsupported,
@@ -339,18 +342,8 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     };
     let old_tip = head.oid.clone();
     let file_count = cumulative.files.len();
-    let ids = {
-        let mut arguments = vec![
-            "log".to_owned(),
-            "--no-walk=unsorted".to_owned(),
-            "--abbrev=4".to_owned(),
-            "--format=%h".to_owned(),
-        ];
-        arguments.extend(commits.iter().map(|(oid, _)| oid.clone()));
-        let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
-        git.line(&arguments)?
-    };
-    let ids: Vec<String> = ids.lines().map(str::to_owned).collect();
+    let oids: Vec<String> = commits.iter().map(|(oid, _)| oid.clone()).collect();
+    let ids = git.short_ids(&oids)?;
     plan.summary = commits
         .iter()
         .zip(&ids)
@@ -360,7 +353,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
 
     let applied = session.apply(&plan)?;
 
-    let after = view::read(&git, None, 20, true)?;
+    let after = super::summary::after(&git, None, true)?;
     let on = if args.new_branch.is_some() {
         format!("new branch {target_name}")
     } else {
@@ -385,7 +378,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     let text = if args.opts.quiet {
         result
     } else {
-        format!("{result}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &result)
     };
     let uncommitted: Vec<&str> = after
         .changes

@@ -19,11 +19,13 @@ pub(crate) fn run(args: &cli::Log) -> Result<Outcome> {
     let git = Git::from_repo(&repo);
     super::rewrite::recover_before_read(&git);
     let view = view::read(&git, args.branch.as_deref(), args.limit, true)?;
-    let hunks = !args.no_hunks;
-    Ok(Outcome::with_text(
-        render::log_json(&view, hunks),
-        render::log_text(&view, hunks),
-    ))
+    let hunks = !args.no_hunks && !args.quiet;
+    let text = if args.quiet {
+        render::quiet_log_text(&view)
+    } else {
+        render::log_text(&view, hunks)
+    };
+    Ok(Outcome::with_text(render::log_json(&view, hunks), text))
 }
 
 fn commit_info(git: &Git, view: &View, oid: &str) -> Result<CommitInfo> {

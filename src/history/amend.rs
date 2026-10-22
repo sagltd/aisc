@@ -11,6 +11,7 @@ use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
+use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -205,7 +206,7 @@ pub(super) struct Finished<'a> {
 
 /// Reads the resulting view and renders the result line, moved branches and compact log.
 pub(super) fn finish(git: &Git, done: &Finished<'_>) -> Result<Outcome> {
-    let after = view::read(git, None, 20, true)?;
+    let after = super::summary::after(git, None, true)?;
     let mut text = done.result.clone();
     let mut moved_json = Vec::new();
     for moved in done.moved {
@@ -228,7 +229,7 @@ pub(super) fn finish(git: &Git, done: &Finished<'_>) -> Result<Outcome> {
     let text = if done.quiet {
         text
     } else {
-        format!("{text}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &text)
     };
     let uncommitted: Vec<&str> = after
         .changes
@@ -286,10 +287,7 @@ pub(super) enum Sig {
 }
 
 pub(super) fn signature(git: &Git, from: &str, to: &str) -> Result<BTreeMap<String, Sig>> {
-    let mut args = super::diff::commit_diff_args(false);
-    args.push(from);
-    args.push(to);
-    let patch = git.run(&args)?;
+    let patch = git.tree_patch(from, to, &[])?;
     Ok(super::diff::parse_patch(&patch)?
         .into_iter()
         .map(|file| {
@@ -349,12 +347,15 @@ pub(super) type Recorded = Vec<BTreeMap<String, Option<Vec<Block>>>>;
 
 pub(super) fn recorded(git: &Git, chain: &[CommitInfo], paths: &[String]) -> Result<Recorded> {
     let mut steps = vec![BTreeMap::new()];
+    let pairs: Vec<(String, String)> = chain
+        .windows(2)
+        .map(|pair| (pair[0].tree.clone(), pair[1].tree.clone()))
+        .collect();
+    git.prefetch_patches(&pairs, paths);
     for pair in chain.windows(2) {
-        let mut args = super::diff::commit_diff_args(false);
-        args.extend([pair[0].tree.as_str(), pair[1].tree.as_str(), "--"]);
-        args.extend(paths.iter().map(String::as_str));
         let mut step = BTreeMap::new();
-        for file in super::diff::parse_patch(&git.run(&args)?)? {
+        let patch = git.tree_patch(&pair[0].tree, &pair[1].tree, paths)?;
+        for file in super::diff::parse_patch(&patch)? {
             let blocks = match file.kind {
                 Kind::Modified if !file.binary => Some(file.blocks),
                 Kind::ModeOnly => Some(Vec::new()),
@@ -539,6 +540,15 @@ pub(super) fn verify_amend(
     routed: &dyn Fn(usize) -> Routed,
 ) -> Result<()> {
     let (mut old_prev, mut new_prev) = (parent_tree.to_owned(), parent_tree.to_owned());
+    let mut pairs = Vec::new();
+    for (j, commit) in chain.iter().enumerate() {
+        pairs.push((old_prev.clone(), commit.tree.clone()));
+        pairs.push((new_prev.clone(), trees[j].clone()));
+        old_prev.clone_from(&commit.tree);
+        new_prev.clone_from(&trees[j]);
+    }
+    git.prefetch_patches(&pairs, &[]);
+    let (mut old_prev, mut new_prev) = (parent_tree.to_owned(), parent_tree.to_owned());
     for (j, commit) in chain.iter().enumerate() {
         let original = signature(git, &old_prev, &commit.tree)?;
         let rewritten = signature(git, &new_prev, &trees[j])?;
@@ -718,7 +728,9 @@ fn place(
                 let lines = splice(&context.old_lines[&file.path], &chosen(file, blocks))
                     .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
                 let placed = chosen(file, blocks).into_iter().cloned().collect();
-                let oid = context.git.write_blob(&join_lines(&lines), true)?;
+                let oid = context
+                    .git
+                    .write_object(ObjectKind::Blob, &join_lines(&lines))?;
                 return Ok((Some((mode, oid)), Some(placed)));
             }
             if !exact {
@@ -741,7 +753,9 @@ fn place(
             let refs: Vec<&Block> = placed.iter().collect();
             let lines = splice(&split_lines(&ours), &refs)
                 .map_err(|error| Miss::Apply(nth(blocks, block_of(&error))))?;
-            let oid = context.git.write_blob(&join_lines(&lines), true)?;
+            let oid = context
+                .git
+                .write_object(ObjectKind::Blob, &join_lines(&lines))?;
             Ok((Some((mode, oid)), Some(placed)))
         }
         Kind::Untracked | Kind::Added => {
@@ -1141,7 +1155,7 @@ fn rebuilds(git: &Git, lines: &[Line], blocks: &[Block], oid: Option<&str>) -> R
     let (Some(oid), Ok(rebuilt)) = (oid, splice(lines, &every)) else {
         return Ok(false);
     };
-    Ok(git.write_blob(&join_lines(&rebuilt), true)? == oid)
+    Ok(git.blob_id(&join_lines(&rebuilt))? == oid)
 }
 
 /// The file's change as the diff of HEAD's blob and `stored` (the blob Git stores for the
@@ -1207,6 +1221,10 @@ pub(super) fn hash_as_staged(git: &Git, paths: &[String]) -> Result<Vec<String>>
             let mut args = vec!["update-index", "--add", "--"];
             args.extend(chunk.iter().map(String::as_str));
             git.run_with(&args, &env, None)?;
+            if let Some(entries) = git.index_file_entries(&copy, chunk) {
+                stored.extend(entries);
+                continue;
+            }
             let mut args = vec!["ls-files", "-s", "-z", "--"];
             args.extend(chunk.iter().map(String::as_str));
             let output = git.run_with(&args, &env, None)?;

@@ -445,13 +445,13 @@ pub(crate) fn run(args: &cli::Pick) -> Result<Outcome> {
     }
     line.push_str(&format!("; op {}", applied.op));
     let shown = match &dest {
-        Dest::Head => view::read(&git, None, 20, true)?,
-        Dest::Branch(name) | Dest::New(name) => view::read(&git, Some(name), 20, false)?,
+        Dest::Head => super::summary::after(&git, None, true)?,
+        Dest::Branch(name) | Dest::New(name) => super::summary::after(&git, Some(name), false)?,
     };
     let result_text = if args.opts.quiet {
         line
     } else {
-        format!("{line}\n{}", render::compact_text(&shown))
+        super::summary::text(&shown, &line)
     };
     let value = json!({
         "op": applied.op,

@@ -168,7 +168,7 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
         args.branches.join(", ")
     );
     let applied = session.apply(&plan)?;
-    let after = view::read(&git, None, 20, true)?;
+    let after = super::summary::after(&git, None, true)?;
     let result = format!(
         "landed {} into {target} ({total} commits, {} → {}); op {}",
         args.branches.join(", "),
@@ -179,7 +179,7 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
     let text = if args.opts.quiet {
         result
     } else {
-        format!("{result}\n{}", render::compact_text(&after))
+        super::summary::text(&after, &result)
     };
     Ok(Outcome::with_text(
         json!({"op": applied.op, "verb": "land", "branch": target, "old": old_target,
@@ -250,7 +250,7 @@ pub(crate) fn switch(args: &cli::Switch) -> Result<Outcome> {
     });
     plan.summary = format!("to {}", args.branch);
     let applied = session.apply(&plan)?;
-    let after = view::read(&git, None, 20, true)?;
+    let after = super::summary::after(&git, None, true)?;
     let result = format!(
         "switched to {}{}; op {}",
         args.branch,
@@ -260,6 +260,10 @@ pub(crate) fn switch(args: &cli::Switch) -> Result<Outcome> {
     Ok(Outcome::with_text(
         json!({"op": applied.op, "verb": "switch", "branch": args.branch,
             "log": render::log_json(&after, false)}),
-        format!("{result}\n{}", render::compact_text(&after)),
+        if args.quiet {
+            result
+        } else {
+            super::summary::text(&after, &result)
+        },
     ))
 }
