@@ -48,9 +48,10 @@ fn repository() -> Fixture {
         ("src/deep/inner.txt", "inner\n"),
         ("docs/guide.txt", "guide\n"),
         ("other/file.txt", "other\n"),
+        ("tools/cli/Cargo.toml", "[package]\n"),
         (
             ".gitignore",
-            ".env\nbuild/\n*.key\nsecret/\nlocal/\nnode_modules/\n",
+            ".env\nbuild/\n*.key\nsecret/\nlocal/\nnode_modules/\ndist/\n.cache/\ntarget/\n.venv/\n*.log\n.DS_Store\n",
         ),
     ])
 }
@@ -538,7 +539,7 @@ fn a_truncated_ignored_scan_fails_closed() {
     for file in 0..20 {
         fs::write(path.join(format!("build/f{file}.o")), "x").unwrap();
     }
-    // Verification evidence binds the environment, so verify and finish share the limit.
+    // The scan limit is a tuning knob, not content: evidence from a plain verify still holds.
     let limited = |args: &[&str]| {
         let output = Command::new(env!("CARGO_BIN_EXE_aisc"))
             .args(args)
@@ -555,13 +556,113 @@ fn a_truncated_ignored_scan_fails_closed() {
         );
         serde_json::from_slice::<Value>(&output.stdout).unwrap()
     };
-    limited(&["verify", "--", "true"]);
     let value = limited(&["finish"]);
     assert!(value["removed_worktree"].is_null(), "{value}");
     assert_eq!(value["ignored_scan_truncated"], true);
     let reason = value["kept_reason"].as_str().unwrap();
     assert!(
         reason.starts_with("ignored file scan truncated"),
+        "{reason}"
+    );
+}
+
+fn write_files(path: &Path, files: &[&str]) {
+    for file in files {
+        fs::create_dir_all(path.join(file).parent().unwrap()).unwrap();
+        fs::write(path.join(file), "x\n").unwrap();
+    }
+}
+
+#[test]
+fn generic_build_dir_names_count_only_at_the_root_or_next_to_a_manifest() {
+    let fixture = repository();
+    let path = verified(&fixture, "anchored");
+    write_files(
+        &path,
+        &[
+            "src/build/notes.txt",
+            "docs/dist/handwritten.md",
+            "data/.cache/results.csv",
+        ],
+    );
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("ignored files not known to be regenerable: "),
+        "{reason}"
+    );
+    for file in [
+        "src/build/notes.txt",
+        "docs/dist/handwritten.md",
+        "data/.cache/results.csv",
+    ] {
+        // Git lists both `data/` and `data/.cache/`; each file is counted once.
+        assert_eq!(reason.matches(file).count(), 1, "{reason}");
+    }
+    assert!(!reason.contains(" more "), "{reason}");
+
+    // Next to Cargo.toml `target` is build output, and dependency files are not name-checked.
+    let path = verified(&fixture, "manifest");
+    write_files(
+        &path,
+        &[
+            "tools/cli/target/debug/cli",
+            "tools/cli/target/debug/build/openssl/out/server.key",
+            "dist/bundle.js",
+            ".cache/tool.db",
+        ],
+    );
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+}
+
+#[test]
+fn third_party_package_files_are_not_name_checked_but_root_build_output_is() {
+    let fixture = repository();
+    let path = verified(&fixture, "packages");
+    write_files(
+        &path,
+        &[
+            "node_modules/dotenv/.env.example",
+            "node_modules/node-forge/tests/server.key",
+            "node_modules/@aws-sdk/credential-providers/index.js",
+            ".venv/lib/python3.12/site-packages/certifi/cacert.pem",
+            ".venv/bin/python",
+        ],
+    );
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+
+    let path = verified(&fixture, "rootbuild");
+    write_files(&path, &["build/.env.production"]);
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("ignored secret-like files: build/.env.production"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn os_and_package_manager_junk_is_regenerable_but_other_logs_are_not() {
+    let fixture = repository();
+    let path = verified(&fixture, "junk");
+    write_files(
+        &path,
+        &[
+            "src/.DS_Store",
+            ".DS_Store",
+            "npm-debug.log",
+            "yarn-error.log",
+            "lerna-debug.log",
+        ],
+    );
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+
+    let path = verified(&fixture, "logs");
+    write_files(&path, &["server.log"]);
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("ignored files not known to be regenerable: server.log"),
         "{reason}"
     );
 }

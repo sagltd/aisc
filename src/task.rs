@@ -35,7 +35,17 @@ const OUTPUT_HEAD: usize = 4_096;
 /// Larger capture so the tail of long output is still available to slice.
 const CAPTURE_LIMIT: usize = 2 * 1_024 * 1_024;
 /// Variables that describe the calling shell, not the verified candidate.
-const VOLATILE_ENVIRONMENT: &[&str] = &["CODEX_TOOL_CALL_ID", "PWD", "OLDPWD", "SHLVL", "_"];
+/// AISC tuning knobs (scan limit, Git timeout, output format) do not change the candidate either.
+const VOLATILE_ENVIRONMENT: &[&str] = &[
+    "CODEX_TOOL_CALL_ID",
+    "PWD",
+    "OLDPWD",
+    "SHLVL",
+    "_",
+    "AISC_IGNORED_SCAN_LIMIT",
+    "AISC_GIT_TIMEOUT",
+    "AISC_OUTPUT",
+];
 
 fn head_and_tail(bytes: &[u8], omitted: usize) -> (String, usize) {
     if bytes.len() <= OUTPUT_KEEP {

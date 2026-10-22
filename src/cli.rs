@@ -67,8 +67,9 @@ pub(crate) enum Operation {
         /// Keep the worktree created by `start --path` (by default it is removed; the branch stays)
         #[arg(long)]
         keep: bool,
-        /// Remove the worktree even if it holds ignored files outside regenerable build/cache dirs
-        /// (target, node_modules, build, dist, .venv, ...), secret-like files or nested repositories
+        /// Remove the worktree even if it holds ignored files that are not known to be regenerable
+        /// (tool dirs like node_modules/.venv anywhere; build/dist/target/... only at the root or
+        /// next to a project manifest), secret-like files or nested repositories
         #[arg(long, conflicts_with = "keep", aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
         delete_ignored: bool,
     },
@@ -324,8 +325,9 @@ pub(crate) struct Gc {
     /// Keep worktrees with Git activity within this many hours
     #[arg(long, default_value = "24", value_name = "HOURS")]
     pub min_age: u64,
-    /// Also remove worktrees holding ignored files outside regenerable build/cache dirs
-    /// (target, node_modules, build, dist, .venv, ...), secret-like files or nested repositories
+    /// Also remove worktrees holding ignored files that are not known to be regenerable (tool
+    /// dirs like node_modules/.venv anywhere; build/dist/target/... only at the root or next to
+    /// a project manifest), secret-like files or nested repositories
     #[arg(long, aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
     pub delete_ignored: bool,
 }

@@ -345,32 +345,58 @@ fn measure(root: &Path) -> Size {
     size
 }
 
-/// Directories whose contents tools regenerate; ignored content elsewhere may be the user's.
-const REGENERABLE_DIRS: &[&str] = &[
-    "target",
+/// Tool-owned directories, regenerable wherever they appear.
+const TOOL_DIRS: &[&str] = &[
     "node_modules",
-    ".venv",
-    "venv",
     "__pycache__",
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
     ".tox",
-    "dist",
-    "build",
-    "out",
+    ".venv",
+    ".gradle",
     ".next",
     ".nuxt",
     ".svelte-kit",
     ".turbo",
     ".parcel-cache",
-    ".gradle",
-    ".cache",
-    "coverage",
-    ".nyc_output",
     "DerivedData",
+    ".dart_tool",
 ];
-const REGENERABLE_SUFFIXES: &[&str] = &[".pyc", ".o"];
+/// Common names that are build output only at the worktree root or next to a project manifest;
+/// elsewhere (`src/build/`, `docs/dist/`) they may hold the user's own files.
+const GENERIC_DIRS: &[&str] = &[
+    "build", "dist", "out", "target", "coverage", ".cache", "bin", "obj",
+];
+const MANIFESTS: &[&str] = &[
+    "Cargo.toml",
+    "package.json",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "Package.swift",
+    "Gemfile",
+    "composer.json",
+    "mix.exs",
+    "CMakeLists.txt",
+];
+const MANIFEST_SUFFIXES: &[&str] = &[".csproj", ".sln"];
+const REGENERABLE_SUFFIXES: &[&str] = &[".pyc", ".pyo", ".o"];
+/// OS and package-manager junk, regenerable anywhere. Other `*.log` files are not.
+const JUNK_FILES: &[&str] = &[".DS_Store", "Thumbs.db", "desktop.ini"];
+const JUNK_PREFIXES: &[&str] = &[
+    "npm-debug.log",
+    "yarn-debug.log",
+    "yarn-error.log",
+    "pnpm-debug.log",
+    "lerna-debug.log",
+];
 /// Directories that hold credentials wherever they appear (compared case-insensitively).
 const SECRET_DIRS: &[&str] = &[
     ".aws", ".kube", ".ssh", ".gnupg", ".docker", "gcloud", "secrets", "secret",
@@ -412,21 +438,62 @@ struct Ignored {
     truncated: bool,
 }
 
+/// Whether worktree directories hold a project manifest, cached per directory.
+struct Manifests<'a> {
+    worktree: &'a Path,
+    known: HashMap<String, bool>,
+}
+
+impl Manifests<'_> {
+    fn beside(&mut self, directory: &str) -> bool {
+        if directory.is_empty() {
+            return true;
+        }
+        if let Some(known) = self.known.get(directory) {
+            return *known;
+        }
+        let path = self.worktree.join(directory);
+        let found = MANIFESTS.iter().any(|name| path.join(name).is_file())
+            || fs::read_dir(&path).is_ok_and(|entries| {
+                entries.filter_map(|entry| entry.ok()).any(|entry| {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    MANIFEST_SUFFIXES
+                        .iter()
+                        .any(|suffix| name.ends_with(suffix))
+                })
+            });
+        self.known.insert(directory.to_owned(), found);
+        found
+    }
+}
+
 /// Classification inherited from the directories above a path.
 #[derive(Clone, Copy, Default)]
 struct Lineage {
     regenerable: bool,
     node_modules: bool,
+    venv: bool,
+    /// Installed dependencies: their file names come from lockfiles, so names are not checked.
+    third_party: bool,
     secret: bool,
 }
 
 impl Lineage {
-    fn enter(self, directory: &str) -> Self {
-        let lower = directory.to_ascii_lowercase();
+    /// The lineage of directory `name` inside `parent` (relative to the worktree root).
+    fn enter(self, parent: &str, name: &str, manifests: &mut Manifests) -> Self {
+        let anchored = GENERIC_DIRS.contains(&name) && manifests.beside(parent);
+        let third_party = self.third_party
+            || matches!(name, "node_modules" | ".gradle" | ".dart_tool")
+            || (name == "target" && anchored)
+            || (name == "site-packages" && self.venv);
         Self {
-            regenerable: self.regenerable || REGENERABLE_DIRS.contains(&directory),
-            node_modules: self.node_modules || directory == "node_modules",
-            secret: self.secret || SECRET_DIRS.contains(&lower.as_str()),
+            regenerable: self.regenerable || TOOL_DIRS.contains(&name) || anchored,
+            node_modules: self.node_modules || name == "node_modules",
+            venv: self.venv || name == ".venv",
+            third_party,
+            secret: self.secret
+                || (!third_party && SECRET_DIRS.contains(&name.to_ascii_lowercase().as_str())),
         }
     }
 }
@@ -436,6 +503,10 @@ fn scan_limit() -> usize {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(IGNORED_ENTRY_BUDGET)
+}
+
+fn parent_of(relative: &str) -> &str {
+    relative.rsplit_once('/').map_or("", |(parent, _)| parent)
 }
 
 impl Ignored {
@@ -455,23 +526,45 @@ impl Ignored {
         )?;
         let started = Instant::now();
         let limit = scan_limit();
+        let mut manifests = Manifests {
+            worktree,
+            known: HashMap::new(),
+        };
         let mut ignored = Self::default();
         let mut pending = Vec::new();
-        for path in output
+        let mut roots = output
             .split(|byte| *byte == 0)
             .filter(|path| !path.is_empty())
-        {
-            let relative = text(path)?.trim_end_matches('/').to_owned();
-            let mut context = Lineage::default();
+            .map(|path| Ok(text(path)?.trim_end_matches('/').to_owned()))
+            .collect::<Result<Vec<_>>>()?;
+        // Git may list both `data/` and `data/.cache/`; walk each tree once.
+        roots.sort();
+        let mut kept: Vec<String> = Vec::new();
+        roots.retain(|root| {
+            let inside = kept
+                .iter()
+                .any(|outer| root.starts_with(&format!("{outer}/")));
+            if !inside {
+                kept.push(root.clone());
+            }
+            !inside
+        });
+        for relative in roots {
+            let mut lineage = Lineage::default();
+            let mut parent = String::new();
             let mut parts = relative.split('/').collect::<Vec<_>>();
             parts.pop();
             for part in parts {
-                context = context.enter(part);
+                lineage = lineage.enter(&parent, part, &mut manifests);
+                if !parent.is_empty() {
+                    parent.push('/');
+                }
+                parent.push_str(part);
             }
-            pending.push((relative, context));
+            pending.push((relative, lineage));
         }
         let mut visited = 0_usize;
-        while let Some((relative, context)) = pending.pop() {
+        while let Some((relative, lineage)) = pending.pop() {
             visited += 1;
             if visited > limit || started.elapsed() > SCAN_BUDGET {
                 ignored.truncated = true;
@@ -483,13 +576,13 @@ impl Ignored {
             };
             let name = relative.rsplit('/').next().unwrap_or(&relative);
             if !metadata.is_dir() {
-                ignored.file(&relative, name, metadata.len(), context);
+                ignored.file(&relative, name, metadata.len(), lineage);
                 continue;
             }
-            let inner = context.enter(name);
+            let inner = lineage.enter(parent_of(&relative), name, &mut manifests);
             if !inner.node_modules && (name == ".git" || is_bare_repository(&full)) {
                 ignored.nested.push(if name == ".git" {
-                    relative.rsplit_once('/').map_or(".", |(parent, _)| parent)
+                    parent_of(&relative)
                 } else {
                     &relative
                 });
@@ -506,17 +599,19 @@ impl Ignored {
         Ok(ignored)
     }
 
-    fn file(&mut self, relative: &str, name: &str, size: u64, context: Lineage) {
+    fn file(&mut self, relative: &str, name: &str, size: u64, lineage: Lineage) {
         self.files += 1;
         self.bytes += size;
-        if name == ".git" && !context.node_modules {
+        if name == ".git" && !lineage.node_modules {
             // A `.git` file: a linked worktree or a --separate-git-dir checkout.
-            self.nested
-                .push(relative.rsplit_once('/').map_or(".", |(parent, _)| parent));
+            self.nested.push(parent_of(relative));
         }
-        if context.secret || secret_like(name) {
+        let junk = JUNK_FILES.contains(&name)
+            || JUNK_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
+        if !lineage.third_party && !junk && (lineage.secret || secret_like(name)) {
             self.secrets.push(relative);
-        } else if !(context.regenerable
+        } else if !(lineage.regenerable
+            || junk
             || REGENERABLE_SUFFIXES
                 .iter()
                 .any(|suffix| name.ends_with(suffix)))
