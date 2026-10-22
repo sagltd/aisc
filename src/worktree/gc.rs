@@ -7,6 +7,7 @@ use super::{
 use crate::cli;
 use crate::git::{Lock, Repo, run_git, text};
 use crate::history::Outcome;
+use crate::history::plumbing::Git;
 use crate::task;
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -320,11 +321,19 @@ fn apply(row: &mut Row, main: &Path, common: &Path) {
         Action::Forget => unregister(common, &row.registration.name),
         Action::Remove => {
             let admin = row.admin.clone().unwrap_or_default();
-            // Holding the worktree's operation lock keeps aisc writes out while Git removes it.
-            let Ok(_lock) = Lock::acquire(admin.join("aisc-operation.lock")) else {
-                row.action = Action::Keep;
-                row.reason = "busy: an aisc operation holds the worktree lock".into();
-                return;
+            // Holding the worktree's operation lock (the same flock-tagged lock its own aisc
+            // commands take) keeps aisc writes out while Git removes it.
+            let worktree = Git {
+                root: PathBuf::from(&row.registration.path),
+                dir: admin,
+            };
+            let _lock = match crate::history::rewrite::task_lock(&worktree) {
+                Ok(lock) => lock,
+                Err(error) => {
+                    row.action = Action::Keep;
+                    row.reason = format!("busy: {error:#}");
+                    return;
+                }
             };
             match rescue(main, &row.registration.name, &row.head) {
                 Ok(reference) => {

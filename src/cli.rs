@@ -69,7 +69,9 @@ pub(crate) enum Operation {
         keep: bool,
         /// Remove the worktree even if it holds ignored files that are not known to be regenerable
         /// (tool dirs like node_modules/.venv anywhere; build/dist/target/... only at the root or
-        /// next to a project manifest), secret-like files or nested repositories
+        /// next to a project manifest), secret-like files or nested repositories. Without it, files
+        /// inside installed packages (node_modules, site-packages, .gradle, .dart_tool) are still
+        /// deleted without secret-name checks: an accepted trade-off
         #[arg(long, conflicts_with = "keep", aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
         delete_ignored: bool,
     },

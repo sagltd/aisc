@@ -139,13 +139,6 @@ impl Presentation {
         }
     }
 
-    pub fn success(&self, operation: &str, value: &Value) -> String {
-        if self.json {
-            return value.to_string();
-        }
-        render(operation, value, self.colors(false))
-    }
-
     pub fn error(&self, message: &str) -> String {
         if self.json {
             return json!({"error": message}).to_string();
@@ -157,10 +150,9 @@ impl Presentation {
         )
     }
 
+    /// Help is always plain text (styled only on a color terminal), even with `--json`.
     pub fn help(&self, help: &str, styled: &str) -> String {
-        if self.json {
-            json!({"help": help}).to_string()
-        } else if self.colors(false) {
+        if self.colors(false) {
             styled.to_owned()
         } else {
             help.to_owned()
@@ -339,9 +331,6 @@ fn render(operation: &str, value: &Value, colors: bool) -> String {
                 omissions(&mut result, "pull requests", &value[key]["omitted"]);
             }
             let _ = writeln!(result, "Scope: {}", display(&value["scope"]));
-        }
-        "version" => {
-            let _ = writeln!(result, "aisc {}", display(&value["version"]));
         }
         "gitlab" => {
             let _ = writeln!(

@@ -49,9 +49,10 @@ fn repository() -> Fixture {
         ("docs/guide.txt", "guide\n"),
         ("other/file.txt", "other\n"),
         ("tools/cli/Cargo.toml", "[package]\n"),
+        ("tools/app/App.csproj", "<Project/>\n"),
         (
             ".gitignore",
-            ".env\nbuild/\n*.key\nsecret/\nlocal/\nnode_modules/\ndist/\n.cache/\ntarget/\n.venv/\n*.log\n.DS_Store\n",
+            ".env\nbuild/\n*.key\nsecret/\nlocal/\nnode_modules/\ndist/\n.cache/\ntarget/\n.venv/\n*.log\n.DS_Store\nbin/\nobj/\n",
         ),
     ])
 }
@@ -600,13 +601,13 @@ fn generic_build_dir_names_count_only_at_the_root_or_next_to_a_manifest() {
     }
     assert!(!reason.contains(" more "), "{reason}");
 
-    // Next to Cargo.toml `target` is build output, and dependency files are not name-checked.
+    // Next to Cargo.toml `target` is build output.
     let path = verified(&fixture, "manifest");
     write_files(
         &path,
         &[
             "tools/cli/target/debug/cli",
-            "tools/cli/target/debug/build/openssl/out/server.key",
+            "tools/cli/target/debug/build/openssl/out/libssl.a",
             "dist/bundle.js",
             ".cache/tool.db",
         ],
@@ -699,4 +700,45 @@ fn finish_on_a_detached_head_saves_the_commit_before_removal() {
         fixture.git(&["rev-parse", "refs/aisc/rescue/loose"]),
         commit
     );
+}
+
+#[test]
+fn target_is_regenerable_but_still_checked_for_secrets() {
+    let fixture = repository();
+    let path = verified(&fixture, "rusty");
+    write_files(
+        &path,
+        &["target/.env", "target/debug/prod.pem", "target/debug/app"],
+    );
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("ignored secret-like files: "),
+        "{reason}"
+    );
+    assert!(
+        reason.contains("target/.env") && reason.contains("target/debug/prod.pem"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn bin_and_obj_count_only_beside_a_dotnet_project() {
+    let fixture = repository();
+    let path = verified(&fixture, "scripts");
+    write_files(&path, &["bin/deploy.sh"]);
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("ignored files not known to be regenerable: bin/deploy.sh"),
+        "{reason}"
+    );
+    let path = verified(&fixture, "dotnet");
+    write_files(
+        &path,
+        &[
+            "tools/app/bin/Debug/App.dll",
+            "tools/app/obj/project.assets.json",
+        ],
+    );
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
 }
