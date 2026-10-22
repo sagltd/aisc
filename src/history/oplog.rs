@@ -349,6 +349,7 @@ pub(crate) fn age(seconds: u64) -> String {
 pub(crate) fn run(limit: usize) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    super::rewrite::recover_before_read(&git);
     let operations = list(&git, limit)?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

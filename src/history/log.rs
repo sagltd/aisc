@@ -17,6 +17,7 @@ const CAP: usize = 12;
 pub(crate) fn run(args: &cli::Log) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    super::rewrite::recover_before_read(&git);
     let view = view::read(&git, args.branch.as_deref(), args.limit, true)?;
     let hunks = !args.no_hunks;
     Ok(Outcome::with_text(
@@ -202,6 +203,7 @@ fn render_changes(
 pub(crate) fn show(args: &cli::Show) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    super::rewrite::recover_before_read(&git);
     let view = view::read(&git, args.branch.as_deref(), 1_000, true)?;
     let (target, skip) = subject(&git, &view, view.changes.as_ref(), &args.args)?;
     let tokens = &args.args[skip..];

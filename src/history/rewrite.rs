@@ -337,7 +337,8 @@ impl Session {
         self.ensure_unchanged()?;
         let op = oplog::short(&op_oid);
         // From here on a killed process is finished by the next command (see `recover`).
-        self.write_journal(plan, &op_oid, &log_ref, prepared.as_ref())?;
+        let obsolete = obsolete_digests(&git, &plan.remove_files);
+        self.write_journal(plan, &op_oid, &log_ref, prepared.as_ref(), &obsolete)?;
         let _critical = signals::Critical::enter();
         // Reference transaction: the point of no return.
         let mut transaction = RefTx::default();
@@ -357,7 +358,8 @@ impl Session {
             None => transaction.create(&log_ref, &op_oid),
         }
         transaction.commit(&git, &format!("aisc {}", plan.verb))?;
-        remove_obsolete(&git, &plan.remove_files, &plan.remove_state);
+        // A side file edited meanwhile is kept: the user's bytes are never discarded.
+        remove_obsolete(&git, &plan.remove_files, &obsolete, &plan.remove_state);
         let partial = |what: &str, error: &dyn std::fmt::Display| {
             fail_hint(
                 Code::State,
@@ -399,6 +401,7 @@ impl Session {
         op_oid: &str,
         log_ref: &str,
         prepared: Option<&Prepared>,
+        obsolete: &[Option<String>],
     ) -> Result<()> {
         let pid = std::process::id();
         let index = match prepared {
@@ -426,6 +429,7 @@ impl Session {
                 .map(|(_, _, restore)| restore.clone())
                 .unwrap_or_default(),
             remove_files: plan.remove_files.clone(),
+            remove_digests: obsolete.to_vec(),
             remove_state: plan.remove_state.clone(),
         };
         let staged = temporary_dir(&self.git).join(format!("journal-{pid}"));
@@ -471,19 +475,49 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Deletes the files a plan made obsolete. Best effort: they hold nothing history lacks.
-fn remove_obsolete(git: &Git, files: &[String], state: &[String]) {
-    let relative = |path: &str| {
-        Path::new(path)
-            .components()
-            .all(|component| matches!(component, std::path::Component::Normal(_)))
-    };
-    for path in files.iter().filter(|path| relative(path)) {
-        let _ = fs::remove_file(git.root.join(path));
+fn is_relative(path: &str) -> bool {
+    Path::new(path)
+        .components()
+        .all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
+/// `digest` of each obsolete worktree file as the plan saw it.
+fn obsolete_digests(git: &Git, files: &[String]) -> Vec<Option<String>> {
+    files
+        .iter()
+        .map(|path| digest(fs::read(git.root.join(path)).ok().as_deref()))
+        .collect()
+}
+
+/// Deletes the files a plan made obsolete (they hold nothing history lacks). A worktree file is
+/// deleted only while it still holds what the plan saw; the others are kept and returned.
+fn remove_obsolete(
+    git: &Git,
+    files: &[String],
+    digests: &[Option<String>],
+    state: &[String],
+) -> Vec<String> {
+    let mut kept = Vec::new();
+    for (position, path) in files
+        .iter()
+        .enumerate()
+        .filter(|(_, path)| is_relative(path))
+    {
+        let full = git.root.join(path);
+        let current = digest(fs::read(&full).ok().as_deref());
+        if current.is_none() {
+            continue; // already gone
+        }
+        if digests.get(position) == Some(&current) {
+            let _ = fs::remove_file(full);
+        } else {
+            kept.push(path.clone());
+        }
     }
-    for path in state.iter().filter(|path| relative(path)) {
+    for path in state.iter().filter(|path| is_relative(path)) {
         let _ = fs::remove_file(git.dir.join(path));
     }
+    kept
 }
 
 pub(crate) fn stale(message: &str) -> anyhow::Error {
@@ -502,8 +536,20 @@ pub(crate) fn write_order(writes: &[WorktreeWrite]) -> Vec<&WorktreeWrite> {
     ordered
 }
 
+/// Removes `directory` when it holds nothing but (nested) empty directories.
+fn remove_empty_tree(directory: &Path) -> std::io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            remove_empty_tree(&entry.path())?;
+        }
+    }
+    fs::remove_dir(directory)
+}
+
 /// Writes (or removes) a worktree file atomically, never following symlinked parents. A removal
-/// also removes the directories it leaves empty, as Git does.
+/// keeps its directories (they may predate the operation, and undo must be exact); a file that
+/// replaces a directory removes it once the plan's deletions have emptied it.
 pub(crate) fn write_file(root: &Path, write: &WorktreeWrite) -> Result<()> {
     let target = root.join(&write.path);
     let mut parent = root.to_path_buf();
@@ -520,19 +566,16 @@ pub(crate) fn write_file(root: &Path, write: &WorktreeWrite) -> Result<()> {
         None => {
             if fs::symlink_metadata(&target).is_ok() {
                 fs::remove_file(&target)?;
-                let mut directory = target.parent();
-                while let Some(path) = directory.filter(|path| *path != root) {
-                    if fs::remove_dir(path).is_err() {
-                        break; // not empty (or not ours to remove)
-                    }
-                    directory = path.parent();
-                }
             }
             Ok(())
         }
         Some(bytes) => {
             if let Some(directory) = target.parent() {
                 fs::create_dir_all(directory)?;
+            }
+            if fs::symlink_metadata(&target).is_ok_and(|metadata| metadata.is_dir()) {
+                remove_empty_tree(&target)
+                    .with_context(|| format!("{}: a directory is in the way", write.path))?;
             }
             let temporary = target.with_file_name(format!(
                 ".aisc-write-{}-{}",
@@ -614,7 +657,7 @@ impl Planned {
         self.files.insert(path);
     }
 
-    /// Whether earlier removals leave `directory` empty, so that `write_file` prunes it.
+    /// Whether earlier removals leave `directory` empty, so that `write_file` can replace it.
     fn empties(&self, root: &Path, directory: &Path) -> bool {
         let Ok(entries) = fs::read_dir(root.join(directory)) else {
             return false;
@@ -984,6 +1027,10 @@ struct Journal {
     index: Option<JournalIndex>,
     restore_ita: Vec<String>,
     remove_files: Vec<String>,
+    /// `digest` of each `remove_files` entry as the plan saw it; a file is removed only while it
+    /// still matches (journals without it keep every file).
+    #[serde(default)]
+    remove_digests: Vec<Option<String>>,
     remove_state: Vec<String>,
 }
 
@@ -1053,6 +1100,31 @@ fn recover(git: &Git, dead_owner: Option<u32>) -> Result<Option<Finished>> {
     let Some(pid) = journal.as_ref().map(|journal| journal.pid).or(dead_owner) else {
         return Ok(None);
     };
+    if dead_owner.is_none()
+        && let Some(journal) = &journal
+    {
+        // No dead owner's lock vouches for this journal (someone removed the lock by hand):
+        // touch nothing unless its owner is surely gone.
+        let age = fs::metadata(&path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok());
+        let alive = pid_alive(journal.pid);
+        if alive || age.is_none_or(|age| age < JOURNAL_GRACE) {
+            return Err(fail_hint(
+                Code::State,
+                format!(
+                    "an operation journal of aisc process {} exists without its lock",
+                    journal.pid
+                ),
+                if alive {
+                    "that process may still be running: wait for it to finish, then retry"
+                } else {
+                    "retry in a few seconds"
+                },
+            ));
+        }
+    }
     let _critical = signals::Critical::enter();
     let mut finished = None;
     if let Some(journal) = &journal {
@@ -1086,6 +1158,7 @@ fn recover(git: &Git, dead_owner: Option<u32>) -> Result<Option<Finished>> {
         fs::remove_file(&index_lock)?;
     }
     sweep_temporary(git, pid);
+    sweep_temporary(git, std::process::id()); // a token `install_prepared` may have taken
     if journal.is_some() {
         fs::remove_file(&path)?;
     }
@@ -1097,8 +1170,12 @@ fn recover(git: &Git, dead_owner: Option<u32>) -> Result<Option<Finished>> {
 fn roll_forward(git: &Git, journal: &Journal) -> Result<Finished> {
     let op = &journal.op;
     let data = oplog::load_oid(git, op)?;
-    let mut skipped = Vec::new();
-    remove_obsolete(git, &journal.remove_files, &journal.remove_state);
+    let mut skipped = remove_obsolete(
+        git,
+        &journal.remove_files,
+        &journal.remove_digests,
+        &journal.remove_state,
+    );
     if let Some(head) = &data.head {
         let current = git.probe(&["symbolic-ref", "-q", "HEAD"])?;
         if current == head.from {
@@ -1129,34 +1206,125 @@ fn roll_forward(git: &Git, journal: &Journal) -> Result<Finished> {
             skipped.push(write.path.clone());
         }
     }
-    if let Some(index) = &journal.index {
-        let lock = git.dir.join("index.lock");
-        let real = git.dir.join("index");
-        let token = token_path(git, journal.pid);
-        if same_file(&token, &lock) {
-            if digest(fs::read(&real).ok().as_deref()) == index.snapshot {
-                let mut bytes = fs::read(prepared_path(git, journal.pid))?;
-                if !journal.restore_ita.is_empty() {
-                    bytes = restore_placeholders(git, &bytes, &journal.restore_ita)?;
-                }
-                let file = fs::OpenOptions::new().write(true).open(&lock)?;
-                let mtime = index
-                    .mtime
-                    .map(|(seconds, nanos)| std::time::UNIX_EPOCH + Duration::new(seconds, nanos));
-                fill_index_lock(&file, &bytes, mtime)?;
-                fs::rename(&lock, &real)?;
-            } else {
-                skipped.push("the index".to_owned());
-            }
-        } else if !same_file(&token, &real) {
-            skipped.push("the index".to_owned()); // its lock is not ours and it was not installed
-        }
+    if let Some(index) = &journal.index
+        && !same_file(&token_path(git, journal.pid), &git.dir.join("index"))
+        && let Some(reason) = install_prepared(git, journal, index)?
+    {
+        skipped.push(reason);
     }
     Ok(Finished {
         op: op.clone(),
         verb: journal.verb.clone(),
         skipped,
     })
+}
+
+/// Installs the dead process's prepared index (which it had not installed) under an `index.lock`
+/// aisc holds: the dead process's own, proved by its token, or a fresh one when the user removed
+/// it. The decision rests on the index content: it must still be the snapshot the new index was
+/// prepared from. Returns why the index was left alone, if it was.
+fn install_prepared(git: &Git, journal: &Journal, index: &JournalIndex) -> Result<Option<String>> {
+    let path = git.dir.join("index.lock");
+    let mut lock = if same_file(&token_path(git, journal.pid), &path) {
+        let file = fs::OpenOptions::new().write(true).open(&path)?;
+        Lock {
+            path,
+            file,
+            keep: false,
+        }
+    } else {
+        match acquire_index_lock(git) {
+            Ok(lock) => lock,
+            Err(_) => {
+                return Ok(Some(
+                    "the index (index.lock is held by another process)".into(),
+                ));
+            }
+        }
+    };
+    let real = git.dir.join("index");
+    if digest(fs::read(&real).ok().as_deref()) != index.snapshot {
+        return Ok(Some("the index".to_owned())); // dropping `lock` releases it
+    }
+    let mut bytes = fs::read(prepared_path(git, journal.pid))?;
+    if !journal.restore_ita.is_empty() {
+        bytes = restore_placeholders(git, &bytes, &journal.restore_ita)?;
+    }
+    let mtime = index
+        .mtime
+        .map(|(seconds, nanos)| std::time::UNIX_EPOCH + Duration::new(seconds, nanos));
+    fill_index_lock(&lock.file, &bytes, mtime)?;
+    lock.keep = true;
+    if let Err(error) = fs::rename(&lock.path, &real) {
+        lock.keep = false;
+        return Err(error.into());
+    }
+    Ok(None)
+}
+
+/// Whether process `pid` may be alive (`kill(pid, 0)` does not report ESRCH).
+fn pid_alive(pid: u32) -> bool {
+    let Ok(pid) = libc::pid_t::try_from(pid) else {
+        return true; // unrepresentable: assume the worst
+    };
+    // SAFETY: signal 0 only checks for existence and permission.
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return true;
+    }
+    std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+}
+
+/// A journal younger than this, found without its operation lock, may belong to a process that
+/// is still starting or finishing; it is never touched.
+const JOURNAL_GRACE: Duration = Duration::from_secs(5);
+
+/// Recovers whatever a killed aisc process left behind, without running an operation: the
+/// entry point for commands that do not open a `Session` (history reads, and task verbs once
+/// they adopt it). A live or foreign lock is left alone. Returns a note when an interrupted
+/// operation was completed.
+pub(crate) fn recover_if_needed(git: &Git) -> Result<Option<String>> {
+    let lock = git.dir.join("aisc-operation.lock");
+    if !super::plumbing::path_exists(&lock) && !super::plumbing::path_exists(&journal_path(git)) {
+        return Ok(None);
+    }
+    let Ok((operation, dead_owner)) = OperationLock::acquire(git) else {
+        return Ok(None); // live or foreign: nothing to recover
+    };
+    let finished = recover(git, dead_owner)?;
+    drop(operation);
+    Ok(finished.map(|finished| {
+        let mut note = format!(
+            "aisc: finished an interrupted aisc {} (op {})",
+            finished.verb,
+            oplog::short(&finished.op)
+        );
+        if !finished.skipped.is_empty() {
+            let shown: Vec<String> = finished
+                .skipped
+                .iter()
+                .map(|path| escape_line(path))
+                .collect();
+            note.push_str(&format!("; left as found: {}", shown.join(", ")));
+        }
+        note
+    }))
+}
+
+/// `recover_if_needed` for read-only commands: a read never fails because of recovery; what it
+/// did, or why it could not, goes to stderr.
+pub(crate) fn recover_before_read(git: &Git) {
+    match recover_if_needed(git) {
+        Ok(None) => {}
+        Ok(Some(note)) => eprintln!("{note}"),
+        Err(error) => {
+            let hint = error
+                .downcast_ref::<super::HistoryError>()
+                .and_then(|error| error.hint.clone())
+                .map(|hint| format!(" ({hint})"))
+                .unwrap_or_default();
+            eprintln!("aisc: could not recover an interrupted operation: {error:#}{hint}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1533,24 +1701,23 @@ mod tests {
     }
 
     #[test]
-    fn deletions_run_first_and_prune_emptied_directories() {
+    fn deletions_keep_directories_unless_a_file_replaces_them() {
         let directory = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(directory.path()).unwrap();
         fs::create_dir_all(root.join("d/e")).unwrap();
         fs::write(root.join("d/e/y"), "tracked").unwrap();
-        fs::write(root.join("keep"), "k").unwrap();
+        fs::create_dir(root.join("logs")).unwrap();
+        fs::write(root.join("logs/x"), "tracked").unwrap();
         let writes = [
             write("d", None, Some(b"file now")),
             write("d/e/y", Some(b"tracked"), None),
+            write("logs/x", Some(b"tracked"), None),
         ];
         for each in write_order(&writes) {
             write_file(&root, each).unwrap();
         }
         assert_eq!(fs::read_to_string(root.join("d")).unwrap(), "file now");
-        assert!(
-            root.join("keep").exists(),
-            "the root itself is never pruned"
-        );
+        assert!(root.join("logs").is_dir(), "an emptied directory is kept");
     }
 
     #[test]
