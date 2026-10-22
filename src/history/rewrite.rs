@@ -77,6 +77,29 @@ pub(crate) struct Session {
     index_mtime: Option<SystemTime>,
 }
 
+/// Index bytes, the paths replaced from placeholders, and the placeholders to put back.
+type Prepared = (Vec<u8>, Vec<String>, Vec<String>);
+
+/// Puts `git add -N` placeholders back on a copy of the new index. Best effort per path: a file
+/// that is gone has nothing to restore, and `-f` covers paths that are ignored now.
+fn restore_placeholders(git: &Git, bytes: &[u8], paths: &[String]) -> Result<Vec<u8>> {
+    let directory = git.dir.join("aisc").join("tmp");
+    fs::create_dir_all(&directory)?;
+    let alternate = directory.join(format!("index-ita-{}", std::process::id()));
+    let result = (|| -> Result<Vec<u8>> {
+        fs::write(&alternate, bytes)?;
+        let env = [("GIT_INDEX_FILE", alternate.as_os_str())];
+        for path in paths {
+            if fs::symlink_metadata(git.root.join(path)).is_ok() {
+                let _ = git.raw(&["add", "-N", "-f", "--", path], &env, None);
+            }
+        }
+        Ok(fs::read(&alternate)?)
+    })();
+    let _ = fs::remove_file(&alternate);
+    result
+}
+
 fn fingerprint(git: &Git) -> (Option<Vec<u8>>, Option<SystemTime>) {
     let path = git.dir.join("index");
     (
@@ -183,7 +206,7 @@ impl Session {
     }
 
     /// Index bytes with the rule applied: an entry equal to `from` becomes `to`; others are kept.
-    fn prepare_index(&self, plan: &Plan) -> Result<Option<(Vec<u8>, Vec<String>)>> {
+    fn prepare_index(&self, plan: &Plan) -> Result<Option<Prepared>> {
         let changes = &plan.index;
         if changes.is_empty() {
             return Ok(None);
@@ -256,22 +279,16 @@ impl Session {
             }
             let env = [("GIT_INDEX_FILE", alternate.as_os_str())];
             git.run_with(&["update-index", "-z", "--index-info"], &env, Some(input))?;
-            // Undo of a commit made from `git add -N`: put the placeholder back.
-            for path in plan
-                .restore_ita
-                .iter()
-                .filter(|p| applied.contains(&p.as_str()))
-            {
-                // Best effort: a file deleted since the commit has nothing to restore, and -f
-                // covers paths that are ignored now. Undo never fails on this step.
-                if fs::symlink_metadata(git.root.join(path)).is_ok() {
-                    let _ = git.raw(&["add", "-N", "-f", "--", path], &env, None);
-                }
-            }
             Ok(fs::read(&alternate)?)
         })();
         let _ = fs::remove_file(&alternate);
-        result.map(|bytes| Some((bytes, replaced_ita)))
+        let restore = plan
+            .restore_ita
+            .iter()
+            .filter(|path| applied.contains(&path.as_str()))
+            .cloned()
+            .collect();
+        result.map(|bytes| Some((bytes, replaced_ita, restore)))
     }
 
     /// Executes the plan. Nothing changes unless every precondition holds up to the ref transaction.
@@ -284,7 +301,7 @@ impl Session {
         record.data.head_after = Some(self.head_after(plan)?);
         record.data.index_ita = prepared
             .as_ref()
-            .map(|(_, ita)| ita.clone())
+            .map(|(_, ita, _)| ita.clone())
             .unwrap_or_default();
         let (op_oid, previous) = oplog::build(&git, &record)?;
         self.ensure_unchanged()?;
@@ -330,7 +347,12 @@ impl Session {
         for write in &plan.worktree {
             write_file(&git.root, write).map_err(|e| partial(&write.path, &e))?;
         }
-        if let Some((bytes, _)) = prepared {
+        if let Some((mut bytes, _, restore)) = prepared {
+            if !restore.is_empty() {
+                // Undo of a commit made from `git add -N`: the files exist again only now.
+                bytes = restore_placeholders(&git, &bytes, &restore)
+                    .map_err(|e| partial("could not restore intent-to-add entries", &e))?;
+            }
             self.install_index(&bytes)
                 .map_err(|e| partial("could not install the index", &e))?;
         }
