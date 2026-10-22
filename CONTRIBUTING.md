@@ -28,6 +28,10 @@ problem, and include evidence for behavior that can fail or change over time.
 
 ## Pull requests
 
+Feature work goes in a pull request into `dev`. Releases are a pull request from
+`dev` into `main` only, and `main` is protected: the Main guard check rejects
+any other source branch.
+
 Open pull requests against `dev`. Keep the title specific and the description
 short: state the problem, the resulting behavior, and the checks run. Do not
 include user data, local agent sessions, credentials, or machine-specific
