@@ -12,7 +12,10 @@ use crate::git::{Repo, text};
 use anyhow::{Context, Result};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::{ErrorKind, Read};
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Hunks whose removed and added text differ only by whitespace.
 fn whitespace_selection(changes: &ChangeSet, within: Option<&Selection>) -> Result<Selection> {
@@ -118,6 +121,59 @@ fn worktree_bytes(git: &Git, path: &str) -> Option<Vec<u8>> {
     std::fs::read(&full).ok()
 }
 
+/// Whether the file's status or content changed at or after `since`.
+fn changed_since(git: &Git, path: &str, since: SystemTime) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(metadata) = std::fs::symlink_metadata(git.root.join(path)) else {
+        return true;
+    };
+    let changed = u64::try_from(metadata.ctime())
+        .ok()
+        .zip(u32::try_from(metadata.ctime_nsec()).ok())
+        .map(|(seconds, nanos)| UNIX_EPOCH + Duration::new(seconds, nanos));
+    [changed, metadata.modified().ok()]
+        .into_iter()
+        .any(|time| time.is_none_or(|time| time >= since))
+}
+
+/// Whether `full` holds exactly `expected` (`None`: absent). A regular file is compared in
+/// chunks, so a large file is streamed rather than read into memory a second time.
+fn holds(full: &Path, expected: Option<&[u8]>) -> bool {
+    let metadata = match std::fs::symlink_metadata(full) {
+        Ok(metadata) => metadata,
+        Err(error) => return error.kind() == ErrorKind::NotFound && expected.is_none(),
+    };
+    let Some(expected) = expected else {
+        return false;
+    };
+    if metadata.file_type().is_symlink() {
+        return std::fs::read_link(full)
+            .is_ok_and(|target| target.as_os_str().as_encoded_bytes() == expected);
+    }
+    if !metadata.is_file() || metadata.len() != expected.len() as u64 {
+        return false;
+    }
+    let Ok(mut file) = std::fs::File::open(full) else {
+        return false;
+    };
+    let mut buffer = vec![0; 64 * 1024];
+    let mut offset = 0;
+    loop {
+        match file.read(&mut buffer) {
+            Ok(0) => return offset == expected.len(),
+            Ok(count) => {
+                let end = offset + count;
+                if end > expected.len() || buffer[..count] != expected[offset..end] {
+                    return false;
+                }
+                offset = end;
+            }
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            Err(_) => return false,
+        }
+    }
+}
+
 fn worktree_mode(git: &Git, path: &str) -> String {
     match std::fs::symlink_metadata(git.root.join(path)) {
         Ok(metadata) if metadata.file_type().is_symlink() => "120000".to_owned(),
@@ -139,6 +195,8 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
     let session = Session::open(&repo, &git, true, false)?;
     let head_oid = session.head.oid.clone();
     require_checked_out(&args.opts, &session.head)?;
+    // Anything that changes a file from here on is a concurrent edit.
+    let started = SystemTime::now();
     let (status, changes) = view::read_changes(&git)?;
     if status.oid.as_deref() != Some(head_oid.as_str()) {
         return Err(stale("HEAD changed while aisc was reading"));
@@ -176,23 +234,39 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
         })
         .map(|file| file.path.clone())
         .collect();
-    // Untracked files have no object id: compare the digest taken when they were listed.
+    // Each file is read once; every check below is about these bytes, which the op keeps.
+    let mut current: BTreeMap<String, Option<Vec<u8>>> = paths
+        .iter()
+        .map(|path| (path.clone(), worktree_bytes(&git, path)))
+        .collect();
+    // Untracked files have no object id: compare the digest taken when they were listed. Above
+    // 16 MiB the listing records only the size, so the size must match and the file must not
+    // have changed since this run started.
     for index in selection.files.keys() {
         let file = &changes.files[*index];
-        if file.kind == Kind::Untracked && !file.digest.starts_with("size-") {
-            let digest = worktree_bytes(&git, &file.path).map(|bytes| {
+        if file.kind != Kind::Untracked {
+            continue;
+        }
+        let bytes = current[&file.path].as_deref();
+        let listed = match file.digest.strip_prefix("size-") {
+            Some(size) => {
+                bytes.is_some_and(|bytes| size == bytes.len().to_string())
+                    && !changed_since(&git, &file.path, started)
+            }
+            None => bytes.is_some_and(|bytes| {
                 use sha2::{Digest, Sha256};
-                Sha256::digest(&bytes)
+                let digest: String = Sha256::digest(bytes)
                     .iter()
                     .map(|byte| format!("{byte:02x}"))
-                    .collect::<String>()
-            });
-            if digest.as_deref() != Some(file.digest.as_str()) {
-                return Err(stale(&format!(
-                    "{} changed while aisc was working",
-                    file.path
-                )));
-            }
+                    .collect();
+                digest == file.digest
+            }),
+        };
+        if !listed {
+            return Err(stale(&format!(
+                "{} changed while aisc was working",
+                file.path
+            )));
         }
     }
     let hashes = git.hash_worktree(&modified)?;
@@ -225,7 +299,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
     for (file_index, selected) in &selection.files {
         let file = &changes.files[*file_index];
         hunks += hunks_in(file, selected);
-        let current = worktree_bytes(&git, &file.path);
+        let current = current.remove(&file.path).flatten();
         let head = head_entries.get(&file.path);
         match (file.kind, selected) {
             (Kind::Modified, FileSel::Blocks(blocks)) => {
@@ -287,6 +361,15 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
         ));
     }
     plan.summary = summary.clone();
+    // Last check before anything is written: the files still hold the bytes the op keeps.
+    for write in &plan.worktree {
+        if !holds(&git.root.join(&write.path), write.before.as_deref()) {
+            return Err(stale(&format!(
+                "{} changed while aisc was working",
+                write.path
+            )));
+        }
+    }
     let applied = session.apply(&plan)?;
     finish(
         &git,

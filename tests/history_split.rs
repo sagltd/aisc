@@ -613,3 +613,41 @@ fn pilot10_uncommit_recovers_an_overbroad_amend_in_one_call() {
         "notes/private.md"
     );
 }
+
+/// One line per word.
+fn lines(words: &str) -> String {
+    words.split(' ').map(|word| format!("{word}\n")).collect()
+}
+
+#[test]
+fn uncommit_never_takes_the_rest_from_a_look_alike_line_at_the_tip() {
+    // "append two" appends after the rest's line; `git merge-file` aligns the run of `a` lines the
+    // other way and takes the rest from the file's last line, which the line counts cannot tell.
+    let fixture =
+        Fixture::with_files(&[("f.txt", &lines("top f1 f2 f3 f4 f5 f6 b b b b a a end"))]);
+    fixture.git(&["switch", "-c", "topic"]);
+    fixture.write("f.txt", &lines("TOP f1 f2 f3 f4 f5 f6 b b b b a a a"));
+    fixture.commit_all("edit both ends");
+    fixture.write("f.txt", &lines("TOP f1 f2 f3 f4 f5 f6 b b b a a a"));
+    fixture.commit_all("drop a b");
+    fixture.write("f.txt", &lines("TOP f1 f2 f3 f4 f5 f6 b b b a a a a a"));
+    fixture.commit_all("append two");
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["uncommit", "edit both ends", "f.txt~end"]);
+    if run.code == 0 {
+        assert_eq!(
+            fixture.tree_blob("HEAD", "f.txt").unwrap(),
+            lines("TOP f1 f2 f3 f4 f5 f6 b b b a a end a a"),
+            "{}",
+            run.stdout
+        );
+        assert_eq!(
+            fixture.tree_blob("HEAD~1", "f.txt").unwrap(),
+            lines("TOP f1 f2 f3 f4 f5 f6 b b b a a end")
+        );
+    } else {
+        assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains("f.txt"), "{}", run.stderr);
+        assert_eq!(before, fixture.snapshot());
+    }
+}
