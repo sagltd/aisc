@@ -93,8 +93,10 @@ come from addressing commits by subject in one verb:
   reflog lookup for undo.
 - GitButler needs an ID lookup before each history edit, and has no split verb.
 
-AISC needs more calls than GitButler and Jujutsu in parallel_branch: 3 against
-1 and 2.
+In this run AISC needed more calls than GitButler and Jujutsu in
+parallel_branch: 3 against 1 and 2. The AISC arm now uses
+`aisc commit -b docs --onto main` (1 call, graded against Git's end state);
+the tables below predate that change.
 
 ### Output modes
 
@@ -202,8 +204,9 @@ Each per-task cell gives calls (`e` = edits) / output bytes / estimated tokens
   against AISC's 1.44 KB, which brings jj's token estimate (648) below AISC's
   (688). AISC has no quiet flag on `undo`, `switch` or `log`, and `undo` still
   prints a branch summary. In default mode AISC has the lowest token estimate.
-- **parallel_branch.** It takes 3 calls, because `commit -b` branches from
-  HEAD: `switch main`, `commit -b docs`, `switch feature`.
+- **parallel_branch.** It took 3 calls, because `commit -b` branched from
+  HEAD: `switch main`, `commit -b docs`, `switch feature`. `commit -b NEW
+  --onto BASE` now does it in one call (not yet re-measured here).
 
 ### Optimization opportunities
 

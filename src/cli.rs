@@ -6,7 +6,7 @@ use std::path::PathBuf;
     name = "aisc",
     version,
     about = "Task-oriented source control, backed by Git",
-    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix --sparse src\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nSelectors (SEL): PATH | hunk id | PATH:L-R | PATH~text. L-R are new-side line numbers; a deletion counts at the line that follows it (within L..R+1).\nNo automatic push or merge. finish removes the worktree `start --path` created (its branch stays; --keep opts out); aisc gc lists leftovers.\nConfigured Git hooks/signing run normally for checkpoint."
+    after_help = "Examples:\n  aisc log\n  aisc commit -b topic -m 'Add check' README.md 'src/a.rs~validate'\n  aisc commit -b docs --onto main -m 'Update guide' docs/guide.md\n  aisc undo\n  aisc start fix --in-place\n  aisc start fix --path ../fix --sparse src\n  aisc checkpoint -m 'Fix parser' -- src/parser.rs\n  aisc verify -- cargo test\n  aisc finish\n\nTask verbs default to JSON when redirected; history verbs (log, show, commit, ...) print compact text unless --json or AISC_OUTPUT=json.\nPaths are literal files relative to the repository root.\nSelectors (SEL): PATH | hunk id | PATH:L-R | PATH~text. L-R are new-side line numbers; a deletion counts at the line that follows it (within L..R+1).\nNo automatic push or merge. finish removes the worktree `start --path` created (its branch stays; --keep opts out); aisc gc lists leftovers.\nConfigured Git hooks/signing run normally for checkpoint."
 )]
 pub(crate) struct Cli {
     /// Emit stable, ANSI-free JSON, including errors and help
@@ -178,6 +178,21 @@ pub(crate) struct Commit {
     /// Create this branch at the new commit and switch HEAD to it
     #[arg(short = 'b', long = "new-branch", value_name = "NEW")]
     pub new_branch: Option<String>,
+    /// With -b NEW: build NEW on BASE instead, without switching (a parallel branch). HEAD stays;
+    /// the committed changes leave the worktree and index unless --keep. Runs no Git hooks (D3), unlike git switch + commit
+    #[arg(
+        long,
+        value_name = "BASE",
+        requires = "new_branch",
+        conflicts_with = "into"
+    )]
+    pub onto: Option<String>,
+    /// With --onto: leave the committed changes in the worktree and index too
+    #[arg(long, requires = "onto")]
+    pub keep: bool,
+    /// With --onto: NEW may exist; the commit goes on top of it (BASE must then be NEW)
+    #[arg(long, requires = "onto")]
+    pub existing: bool,
     /// Commit every change, including untracked files that are not ignored
     #[arg(long, conflicts_with_all = ["into", "selectors"])]
     pub all: bool,

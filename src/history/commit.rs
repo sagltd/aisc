@@ -1,6 +1,6 @@
 //! `aisc commit`: new commits from selected hunks, files or content, built with plumbing only.
 use super::apply::{join_lines, splice, split_lines};
-use super::model::{ChangeSet, Kind};
+use super::model::{ChangeSet, FileChange, Kind};
 use super::plumbing::{Entry, Git, TreeEdit};
 use super::render;
 use super::rewrite::{HeadMove, IndexChange, Plan, RefMove, Session, stale};
@@ -14,6 +14,7 @@ use crate::store::Kind as ObjectKind;
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::SystemTime;
 
 struct Group {
     message: String,
@@ -143,16 +144,33 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     let git = Git::from_repo(&repo);
     if let Some(name) = &args.new_branch {
         git.valid_branch_name(name)?;
-        if git.ref_oid(&format!("refs/heads/{name}"))?.is_some() {
+        if let Some(existing) = conflicting_branch(&git, name)? {
+            return Err(fail_hint(
+                Code::State,
+                format!("branch '{name}' conflicts with existing branch {existing}"),
+                "a branch cannot be both a name and a directory of names; pick another name",
+            ));
+        }
+        if git.ref_oid(&format!("refs/tags/{name}"))?.is_some() {
+            eprintln!("warning: refname '{name}' is ambiguous (a tag of that name exists)");
+        }
+        if git.ref_oid(&format!("refs/heads/{name}"))?.is_some() && !args.existing {
+            let hint = if args.onto.is_some() {
+                format!("pick another name, or add --existing --onto {name} to commit on top of it")
+            } else {
+                "pick another name, or use aisc switch".to_owned()
+            };
             return Err(fail_hint(
                 Code::State,
                 format!("branch '{name}' already exists"),
-                "pick another name, or use aisc switch",
+                hint,
             ));
         }
     }
     let session = Session::open(&repo, &git, true, false)?;
     let head = &session.head;
+    // With --onto the selection leaves the worktree: any change from here on is concurrent.
+    let started = SystemTime::now();
     let (status, changes) = view::read_changes(&git)?;
     if status.oid.as_deref() != Some(head.oid.as_str()) {
         return Err(stale("HEAD changed while aisc was reading"));
@@ -170,6 +188,17 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
         });
     }
     selector::check_disjoint(&changes, &selections)?;
+    if args.onto.is_some() {
+        let message = groups[0].message.clone();
+        return onto(
+            args,
+            &message,
+            (&git, session),
+            &changes,
+            &selections[0],
+            started,
+        );
+    }
 
     // Gather everything the entries need with as few processes as possible.
     let mut touched: BTreeSet<usize> = BTreeSet::new();
@@ -408,6 +437,376 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     Ok(Outcome::with_text(value, text))
 }
 
+/// An existing branch that `refs/heads/NAME` cannot live beside: `a` for `a/b`, or `a/b` for
+/// `a` (Git keeps refs as paths, so a name cannot also be a directory of names).
+fn conflicting_branch(git: &Git, name: &str) -> Result<Option<String>> {
+    let parts: Vec<&str> = name.split('/').collect();
+    for end in 1..parts.len() {
+        let parent = format!("refs/heads/{}", parts[..end].join("/"));
+        if git.ref_oid(&parent)?.is_some() {
+            return Ok(Some(parent));
+        }
+    }
+    let prefix = format!("refs/heads/{name}/");
+    let common = git.common_dir()?;
+    if !common.join("reftable").exists() {
+        // Loose refs below refs/heads/NAME/, then packed ones; read in process.
+        let mut stack = vec![common.join("refs/heads").join(name)];
+        while let Some(directory) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&directory) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if let Ok(relative) = path.strip_prefix(common.join("refs/heads")) {
+                    return Ok(Some(format!("refs/heads/{}", relative.to_string_lossy())));
+                }
+            }
+        }
+        let packed = std::fs::read_to_string(common.join("packed-refs")).unwrap_or_default();
+        return Ok(packed
+            .lines()
+            .filter_map(|line| line.split_once(' ').map(|(_, name)| name))
+            .find(|reference| reference.starts_with(&prefix))
+            .map(str::to_owned));
+    }
+    let found = git.line(&["for-each-ref", "--count=1", "--format=%(refname)", &prefix])?;
+    Ok((!found.is_empty()).then_some(found))
+}
+
 fn first_line(message: &str) -> &str {
     message.lines().next().unwrap_or("")
+}
+
+/// `commit -b NEW --onto BASE`: NEW becomes BASE plus one commit holding the selection, built
+/// with plumbing only; HEAD never moves. Unless `--keep`, the selection then leaves the worktree
+/// and index in the same operation (as if committed on NEW and switched back), so `aisc undo`
+/// deletes NEW and puts the changes back.
+fn onto(
+    args: &cli::Commit,
+    message: &str,
+    (git, session): (&Git, Session),
+    changes: &ChangeSet,
+    selection: &Selection,
+    started: SystemTime,
+) -> Result<Outcome> {
+    let rev = args.onto.as_deref().expect("--onto");
+    let name = args
+        .new_branch
+        .as_deref()
+        .expect("clap requires -b with --onto");
+    let (head_oid, head_symbolic) = (session.head.oid.clone(), session.head.symbolic.clone());
+    let base = git.resolve_commit(rev)?.ok_or_else(|| {
+        fail_hint(
+            Code::Selector,
+            format!("unknown revision '{rev}'"),
+            "--onto names the branch or commit the new branch starts from",
+        )
+    })?;
+    let reference = format!("refs/heads/{name}");
+    let existing = git.ref_oid(&reference)?;
+    if let Some(tip) = &existing {
+        if head_symbolic.as_deref() == Some(reference.as_str()) {
+            return Err(fail_hint(
+                Code::Usage,
+                format!("'{name}' is the checked-out branch"),
+                "commit without --onto",
+            ));
+        }
+        if *tip != base {
+            return Err(fail_hint(
+                Code::Usage,
+                format!("with --existing, --onto must be '{name}' itself"),
+                format!("aisc commit -b {name} --existing --onto {name} ..."),
+            ));
+        }
+        if git.checked_out()?.contains(&reference) {
+            return Err(fail(
+                Code::State,
+                format!("branch '{name}' is checked out in another worktree"),
+            ));
+        }
+    }
+
+    // The selection as each file's entry on BASE.
+    let head_tree = git.commit_tree_of(&head_oid)?;
+    let base_tree = git.commit_tree_of(&base)?;
+    let paths: Vec<String> = selection
+        .files
+        .keys()
+        .map(|index| changes.files[*index].path.clone())
+        .collect();
+    let at_head = git.ls_tree(&head_tree, &paths)?;
+    let at_base = git.ls_tree(&base_tree, &paths)?;
+    let to_hash: Vec<String> = selection
+        .files
+        .iter()
+        .map(|(index, selected)| (&changes.files[*index], selected))
+        .filter(|(file, selected)| {
+            **selected == FileSel::Whole && file.new_mode.is_some() && file.kind != Kind::ModeOnly
+        })
+        .map(|(file, _)| file.path.clone())
+        .collect();
+    let hashed: BTreeMap<String, String> = to_hash
+        .iter()
+        .cloned()
+        .zip(super::amend::hash_as_staged(git, &to_hash)?)
+        .collect();
+    for (path, oid) in &hashed {
+        let file = &changes.files[changes.index_of(path).expect("path from the change set")];
+        if file.kind == Kind::Modified && file.new_oid.as_deref().is_some_and(|known| known != oid)
+        {
+            return Err(stale(&format!("{path} changed while aisc was working")));
+        }
+    }
+    // Modified files: HEAD's and BASE's versions, and how BASE became HEAD where they differ.
+    let modified: Vec<&FileChange> = selection
+        .files
+        .keys()
+        .map(|index| &changes.files[*index])
+        .filter(|file| file.kind == Kind::Modified)
+        .collect();
+    let differ: Vec<String> = modified
+        .iter()
+        .filter(|file| at_base.contains_key(&file.path))
+        .filter(|file| at_base.get(&file.path) != at_head.get(&file.path))
+        .map(|file| file.path.clone())
+        .collect();
+    let mut steps: super::amend::Recorded = vec![BTreeMap::new(), BTreeMap::new()];
+    if !differ.is_empty() {
+        for file in super::diff::parse_patch(&git.tree_patch(&base_tree, &head_tree, &differ)?)? {
+            let blocks = match file.kind {
+                Kind::Modified if !file.binary => Some(file.blocks),
+                Kind::ModeOnly => Some(Vec::new()),
+                _ => None,
+            };
+            steps[1].insert(file.path, blocks);
+        }
+    }
+    let mut versions: Vec<String> = modified
+        .iter()
+        .filter_map(|file| at_head.get(&file.path).map(|(_, oid)| oid.clone()))
+        .collect();
+    versions.extend(
+        differ
+            .iter()
+            .filter_map(|path| at_base.get(path).map(|(_, oid)| oid.clone())),
+    );
+    let versions: BTreeSet<String> = versions.into_iter().collect();
+    let versions: Vec<String> = versions.into_iter().collect();
+    let blobs: BTreeMap<&String, Vec<u8>> =
+        versions.iter().zip(git.read_blobs(&versions)?).collect();
+
+    let mut edits = Vec::new();
+    for (index, selected) in &selection.files {
+        let file = &changes.files[*index];
+        let refuse = |why: String| {
+            fail_hint(
+                Code::Conflict,
+                format!("{}: {why}; nothing was changed", file.path),
+                format!(
+                    "commit it on {} first, or base the branch on another commit",
+                    head_symbolic
+                        .as_deref()
+                        .map_or("HEAD", |name| name.trim_start_matches("refs/heads/"))
+                ),
+            )
+        };
+        let on_head = at_head.get(&file.path);
+        let on_base = at_base.get(&file.path);
+        let new_mode = file.new_mode.clone().unwrap_or_else(|| "100644".to_owned());
+        let entry = match file.kind {
+            Kind::Modified => {
+                let (base_mode, base_oid) =
+                    on_base.ok_or_else(|| refuse(format!("it does not exist on {rev}")))?;
+                let (head_mode, head_oid) =
+                    on_head.ok_or_else(|| stale(&format!("{} is no longer tracked", file.path)))?;
+                let whole = *selected == FileSel::Whole;
+                let head_lines = split_lines(&blobs[head_oid]);
+                // Exact blocks: the listed ones, or for a whole file whose listed blocks do not
+                // rebuild the stored blob (filters), the diff of HEAD's blob and that blob.
+                let exact = super::amend::rebuilds(
+                    git,
+                    &head_lines,
+                    &file.blocks,
+                    file.new_oid.as_deref(),
+                )?;
+                let all = if exact {
+                    file.blocks.clone()
+                } else if whole {
+                    super::amend::stored_blocks(git, &head_tree, file, &hashed[&file.path])?.blocks
+                } else {
+                    return Err(fail_hint(
+                        Code::Unsupported,
+                        format!("{}: Git filters or line-ending conversion apply", file.path),
+                        "select the whole file",
+                    ));
+                };
+                let chosen: Vec<(usize, &super::model::Block)> = if whole {
+                    all.iter().enumerate().collect()
+                } else {
+                    super::amend::selected_blocks(file, selected)
+                        .into_iter()
+                        .map(|block| (block, &all[block]))
+                        .collect()
+                };
+                let mode = if whole && file.mode_changed() {
+                    if base_mode != head_mode {
+                        return Err(refuse(format!("its mode differs on {rev}")));
+                    }
+                    new_mode
+                } else {
+                    base_mode.clone()
+                };
+                // Each block goes where the diff from BASE to HEAD puts it on BASE's version.
+                let mut placed = Vec::new();
+                for (number, block) in chosen {
+                    let old_pos = super::amend::follow(
+                        &steps,
+                        &file.path,
+                        [1],
+                        super::amend::Way::Back,
+                        block.old_pos,
+                        block.removed.len(),
+                    )
+                    .map_err(|_| {
+                        refuse(format!(
+                            "hunk {} changes lines that differ on {rev}",
+                            super::amend::hunk_name(file, number)
+                        ))
+                    })?;
+                    placed.push(super::model::Block {
+                        old_pos,
+                        ..block.clone()
+                    });
+                }
+                let base_lines = if on_base == on_head {
+                    head_lines
+                } else {
+                    split_lines(&blobs[base_oid])
+                };
+                let refs: Vec<&super::model::Block> = placed.iter().collect();
+                let lines = splice(&base_lines, &refs)
+                    .map_err(|_| refuse(format!("it does not apply onto {rev}")))?;
+                Some((
+                    mode,
+                    git.write_object(ObjectKind::Blob, &join_lines(&lines))?,
+                ))
+            }
+            Kind::Untracked | Kind::Added => {
+                if on_base.is_some() {
+                    return Err(refuse(format!("it already exists on {rev}")));
+                }
+                Some((new_mode, hashed[&file.path].clone()))
+            }
+            Kind::Deleted => {
+                if on_base != on_head {
+                    return Err(refuse(format!("it differs on {rev}")));
+                }
+                None
+            }
+            Kind::ModeOnly => {
+                let (_, oid) = on_base
+                    .filter(|(_, oid)| on_head.map(|(_, head)| head) == Some(oid))
+                    .ok_or_else(|| refuse(format!("it differs on {rev}")))?;
+                Some((new_mode, oid.clone()))
+            }
+            Kind::Binary | Kind::TypeChange | Kind::Symlink => {
+                if on_base != on_head {
+                    return Err(refuse(format!("it differs on {rev}")));
+                }
+                Some((new_mode, hashed[&file.path].clone()))
+            }
+        };
+        edits.push(TreeEdit {
+            path: file.path.clone(),
+            entry,
+        });
+    }
+    let tree = git.tree_with(&base_tree, &edits)?;
+    if tree == base_tree {
+        return Err(fail(
+            Code::Selector,
+            format!("the selection changes nothing on {rev}"),
+        ));
+    }
+    let commit = git.commit_tree(
+        &tree,
+        std::slice::from_ref(&base),
+        format!("{message}\n").as_bytes(),
+        None,
+    )?;
+
+    // One operation: the branch, and (unless --keep) the selection leaving worktree and index.
+    let mut plan = Plan {
+        verb: "commit".to_owned(),
+        argv: std::env::args().skip(1).collect(),
+        ..Plan::default()
+    };
+    plan.refs.push(RefMove {
+        name: reference.clone(),
+        old: existing.clone(),
+        new: Some(commit.clone()),
+    });
+    let removed = if args.keep {
+        Vec::new()
+    } else {
+        let removal =
+            super::discard::removal(git, changes, selection, &head_oid, (started, &hashed))?;
+        plan.worktree = removal.worktree;
+        plan.index = removal.index;
+        removal.paths
+    };
+    let id = git
+        .short_ids(std::slice::from_ref(&commit))?
+        .pop()
+        .unwrap_or_default();
+    plan.summary = format!("{id} {} on {name}", first_line(message));
+    super::discard::ensure_unchanged(git, &plan.worktree)?;
+    let applied = session.apply(&plan)?;
+
+    let noun = if existing.is_some() {
+        "branch"
+    } else {
+        "new branch"
+    };
+    let text = format!(
+        "{noun} {name}: {id} \"{}\"",
+        escape_line(first_line(message))
+    );
+    let mut value = json!({
+        "op": applied.op,
+        "verb": "commit",
+        "branch": name,
+        "onto": rev,
+        "base": base,
+        "old": existing,
+        "new": commit,
+        "rewritten": [],
+        "committed": [{"id": id, "oid": commit, "subject": first_line(message)}],
+        "moved_refs": [{"ref": reference, "old": existing, "new": commit}],
+        "head_changed_to": Value::Null,
+        "kept": args.keep,
+        "removed": removed,
+    });
+    if super::summary::full() {
+        // JSON gets the full state after the operation; text stays one line.
+        let after = super::summary::after(git, None, true)?;
+        let uncommitted: Vec<&str> = after
+            .changes
+            .as_ref()
+            .map(|changes| {
+                changes
+                    .files
+                    .iter()
+                    .map(|file| file.path.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        value["uncommitted"] = json!(uncommitted);
+        value["log"] = render::log_json(&after, false);
+    }
+    Ok(Outcome::with_text(value, text))
 }

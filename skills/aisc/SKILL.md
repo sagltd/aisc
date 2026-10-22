@@ -12,6 +12,7 @@ Use `aisc` for every version-control write. Run `aisc log` once: it shows the br
 Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:START-END (new-side lines; a deletion counts at the line after it, so a range ending on the line just before a deletion also selects it) | "PATH~text in the change".
 
 - Commit: `aisc commit -m MSG [-b NEW_BRANCH] SEL...` (`--all` = everything)
+- Parallel branch: `aisc commit -b NAME --onto BASE -m MSG PATHS` (HEAD stays; the changes move to NAME; no Git hooks run)
 - Fold changes into existing commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]`
 - Split: `aisc split COMMIT --into MSG SEL... [--into MSG SEL...]` (unselected parts become uncommitted)
 - Remove part of a commit: `aisc uncommit COMMIT SEL...`

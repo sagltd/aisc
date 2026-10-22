@@ -1,7 +1,7 @@
 //! `aisc discard`: reverts selected uncommitted changes. The old bytes are kept in the op so that
 //! `aisc undo` restores them exactly.
-use super::amend::{finish, hash_as_staged, hunks_in, require_checked_out};
-use super::apply::{Direction, join_lines, split_lines, transplant, unsplice};
+use super::amend::{Recorded, Way, finish, follow, hash_as_staged, hunks_in, require_checked_out};
+use super::apply::{join_lines, split_lines, unsplice};
 use super::model::{Block, ChangeSet, FileChange, Kind};
 use super::plumbing::{Entry, Git};
 use super::rewrite::{IndexChange, Plan, Session, WorktreeWrite, stale};
@@ -80,6 +80,37 @@ fn index_entries(git: &Git, paths: &[String]) -> Result<BTreeMap<String, Entry>>
         }
     }
     Ok(entries)
+}
+
+/// Stage-0 index entries for `paths` (a conflicted path is refused) and which of them are
+/// `git add -N` placeholders: read in process when possible, else asked of Git.
+type IndexView = (BTreeMap<String, Entry>, BTreeSet<String>);
+
+fn index_and_placeholders(git: &Git, paths: &[String]) -> Result<IndexView> {
+    let wanted: Vec<&str> = paths.iter().map(String::as_str).collect();
+    let Some((stages, placeholders)) = git.index_state(&wanted) else {
+        return Ok((index_entries(git, paths)?, intent_to_add(git, paths)?));
+    };
+    let mut entries = BTreeMap::new();
+    for (path, at) in stages {
+        if !paths.contains(&path) {
+            continue;
+        }
+        for (stage, entry) in at {
+            if stage != 0 {
+                return Err(fail(
+                    Code::Dirty,
+                    format!("{path}: unresolved conflict in the index"),
+                ));
+            }
+            entries.insert(path.clone(), entry);
+        }
+    }
+    let placeholders = placeholders
+        .into_iter()
+        .filter(|path| paths.contains(path))
+        .collect();
+    Ok((entries, placeholders))
 }
 
 /// Paths whose index entry is an intent-to-add placeholder: porcelain v2 reports them as
@@ -182,6 +213,191 @@ fn worktree_mode(git: &Git, path: &str) -> String {
     }
 }
 
+/// What removing a selection from the worktree and index takes: the writes and index changes
+/// that revert it to HEAD, with every file checked against the listing first.
+#[derive(Default)]
+pub(super) struct Removal {
+    pub paths: Vec<String>,
+    pub worktree: Vec<WorktreeWrite>,
+    pub index: Vec<IndexChange>,
+    pub hunks: usize,
+    pub partial_files: usize,
+}
+
+/// Plans reverting `selection` (of `changes`, read against `head_oid` after `started`). `known`:
+/// worktree blob ids the caller already hashed and checked against the listing.
+pub(super) fn removal(
+    git: &Git,
+    changes: &ChangeSet,
+    selection: &Selection,
+    head_oid: &str,
+    (started, known): (SystemTime, &BTreeMap<String, String>),
+) -> Result<Removal> {
+    // Gather HEAD entries and blobs, index entries and verified worktree hashes.
+    let paths: Vec<String> = selection
+        .files
+        .keys()
+        .map(|index| changes.files[*index].path.clone())
+        .collect();
+    let head_tree = git.commit_tree_of(head_oid)?;
+    let head_entries = git.ls_tree(&head_tree, &paths)?;
+    let (index, placeholders) = index_and_placeholders(git, &paths)?;
+    let modified: Vec<String> = selection
+        .files
+        .keys()
+        .map(|index| &changes.files[*index])
+        .filter(|file| {
+            !matches!(file.kind, Kind::Untracked | Kind::Deleted) && file.new_oid.is_some()
+        })
+        .map(|file| file.path.clone())
+        .collect();
+    // Each file is read once; every check below is about these bytes, which the op keeps.
+    let mut current: BTreeMap<String, Option<Vec<u8>>> = paths
+        .iter()
+        .map(|path| (path.clone(), worktree_bytes(git, path)))
+        .collect();
+    // Untracked files have no object id: compare the digest taken when they were listed. Above
+    // 16 MiB the listing records only the size, so the size must match and the file must not
+    // have changed since this run started.
+    for index in selection.files.keys() {
+        let file = &changes.files[*index];
+        if file.kind != Kind::Untracked {
+            continue;
+        }
+        let bytes = current[&file.path].as_deref();
+        let listed = match file.digest.strip_prefix("size-") {
+            Some(size) => {
+                bytes.is_some_and(|bytes| size == bytes.len().to_string())
+                    && !changed_since(git, &file.path, started)
+            }
+            None => bytes.is_some_and(|bytes| {
+                use sha2::{Digest, Sha256};
+                let digest: String = Sha256::digest(bytes)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                digest == file.digest
+            }),
+        };
+        if !listed {
+            return Err(stale(&format!(
+                "{} changed while aisc was working",
+                file.path
+            )));
+        }
+    }
+    // Files the caller already hashed and checked need no second hash.
+    let unknown: Vec<String> = modified
+        .iter()
+        .filter(|path| !known.contains_key(*path))
+        .cloned()
+        .collect();
+    let hashes = hash_as_staged(git, &unknown)?;
+    for (path, oid) in unknown.iter().zip(&hashes) {
+        let file = &changes.files[changes.index_of(path).expect("path from the change set")];
+        if file.new_oid.as_deref() != Some(oid.as_str()) {
+            return Err(stale(&format!("{path} changed while aisc was working")));
+        }
+    }
+    let wanted: Vec<String> = paths
+        .iter()
+        .filter_map(|path| head_entries.get(path).map(|(_, oid)| oid.clone()))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let blobs: BTreeMap<String, Vec<u8>> = wanted
+        .iter()
+        .cloned()
+        .zip(git.read_blobs(&wanted)?)
+        .collect();
+    // read_blobs reads blobs only; symlink targets are blobs too.
+
+    let mut out = Removal {
+        paths: paths.clone(),
+        ..Removal::default()
+    };
+    for (file_index, selected) in &selection.files {
+        let file = &changes.files[*file_index];
+        out.hunks += hunks_in(file, selected);
+        let current = current.remove(&file.path).flatten();
+        let head = head_entries.get(&file.path);
+        match (file.kind, selected) {
+            (Kind::Modified, FileSel::Blocks(blocks)) => {
+                out.partial_files += 1;
+                let (write, change) = partial(
+                    git,
+                    file,
+                    blocks,
+                    current,
+                    head,
+                    &blobs,
+                    index.get(&file.path),
+                )?;
+                out.worktree.push(write);
+                out.index.extend(change);
+            }
+            _ => {
+                let before_mode = current.is_some().then(|| worktree_mode(git, &file.path));
+                let (after, mode) = match head {
+                    Some((mode, oid)) => (Some(blobs[oid].clone()), mode.clone()),
+                    None => (None, worktree_mode(git, &file.path)),
+                };
+                out.worktree.push(WorktreeWrite {
+                    path: file.path.clone(),
+                    before: current,
+                    after,
+                    mode,
+                    before_mode,
+                });
+                if placeholders.contains(&file.path) {
+                    // `git add -N` placeholder: counts as absent and is removed with the file.
+                    out.index.push(IndexChange {
+                        path: file.path.clone(),
+                        from: None,
+                        to: head.cloned(),
+                    });
+                    continue;
+                }
+                let present = index.get(&file.path);
+                // Staged as neither HEAD nor the worktree: never drop that version.
+                if let Some(staged @ (_, oid)) = present
+                    && head.is_none_or(|(_, head_oid)| head_oid != oid)
+                    && file.new_oid.as_deref() != Some(oid.as_str())
+                {
+                    if file.kind != Kind::Modified {
+                        return Err(staged_apart(file));
+                    }
+                    let every: Vec<&Block> = file.blocks.iter().collect();
+                    out.index
+                        .extend(staged_without(git, file, &every, head, staged)?);
+                    continue;
+                }
+                if present != head {
+                    out.index.push(IndexChange {
+                        path: file.path.clone(),
+                        from: present.cloned(),
+                        to: head.cloned(),
+                    });
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Last check before anything is written: the files still hold the bytes the op keeps.
+pub(super) fn ensure_unchanged(git: &Git, writes: &[WorktreeWrite]) -> Result<()> {
+    for write in writes {
+        if !holds(&git.root.join(&write.path), write.before.as_deref()) {
+            return Err(stale(&format!(
+                "{} changed while aisc was working",
+                write.path
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
     if args.selectors.is_empty() && !args.whitespace_only {
         return Err(fail_hint(
@@ -216,140 +432,26 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
         }
     };
 
-    // Gather HEAD entries and blobs, index entries and verified worktree hashes.
-    let paths: Vec<String> = selection
-        .files
-        .keys()
-        .map(|index| changes.files[*index].path.clone())
-        .collect();
-    let head_tree = git.commit_tree_of(&head_oid)?;
-    let head_entries = git.ls_tree(&head_tree, &paths)?;
-    let index = index_entries(&git, &paths)?;
-    let placeholders = intent_to_add(&git, &paths)?;
-    let modified: Vec<String> = selection
-        .files
-        .keys()
-        .map(|index| &changes.files[*index])
-        .filter(|file| {
-            !matches!(file.kind, Kind::Untracked | Kind::Deleted) && file.new_oid.is_some()
-        })
-        .map(|file| file.path.clone())
-        .collect();
-    // Each file is read once; every check below is about these bytes, which the op keeps.
-    let mut current: BTreeMap<String, Option<Vec<u8>>> = paths
-        .iter()
-        .map(|path| (path.clone(), worktree_bytes(&git, path)))
-        .collect();
-    // Untracked files have no object id: compare the digest taken when they were listed. Above
-    // 16 MiB the listing records only the size, so the size must match and the file must not
-    // have changed since this run started.
-    for index in selection.files.keys() {
-        let file = &changes.files[*index];
-        if file.kind != Kind::Untracked {
-            continue;
-        }
-        let bytes = current[&file.path].as_deref();
-        let listed = match file.digest.strip_prefix("size-") {
-            Some(size) => {
-                bytes.is_some_and(|bytes| size == bytes.len().to_string())
-                    && !changed_since(&git, &file.path, started)
-            }
-            None => bytes.is_some_and(|bytes| {
-                use sha2::{Digest, Sha256};
-                let digest: String = Sha256::digest(bytes)
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect();
-                digest == file.digest
-            }),
-        };
-        if !listed {
-            return Err(stale(&format!(
-                "{} changed while aisc was working",
-                file.path
-            )));
-        }
-    }
-    let hashes = hash_as_staged(&git, &modified)?;
-    for (path, oid) in modified.iter().zip(&hashes) {
-        let file = &changes.files[changes.index_of(path).expect("path from the change set")];
-        if file.new_oid.as_deref() != Some(oid.as_str()) {
-            return Err(stale(&format!("{path} changed while aisc was working")));
-        }
-    }
-    let wanted: Vec<String> = paths
-        .iter()
-        .filter_map(|path| head_entries.get(path).map(|(_, oid)| oid.clone()))
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
-    let blobs: BTreeMap<String, Vec<u8>> = wanted
-        .iter()
-        .cloned()
-        .zip(git.read_blobs(&wanted)?)
-        .collect();
-    // read_blobs reads blobs only; symlink targets are blobs too.
-
+    let Removal {
+        paths,
+        worktree,
+        index,
+        hunks,
+        partial_files,
+    } = removal(
+        &git,
+        &changes,
+        &selection,
+        &head_oid,
+        (started, &BTreeMap::new()),
+    )?;
     let mut plan = Plan {
         verb: "discard".to_owned(),
         argv: std::env::args().skip(1).collect(),
+        worktree,
+        index,
         ..Plan::default()
     };
-    let mut hunks = 0;
-    let mut partial_files = 0;
-    for (file_index, selected) in &selection.files {
-        let file = &changes.files[*file_index];
-        hunks += hunks_in(file, selected);
-        let current = current.remove(&file.path).flatten();
-        let head = head_entries.get(&file.path);
-        match (file.kind, selected) {
-            (Kind::Modified, FileSel::Blocks(blocks)) => {
-                partial_files += 1;
-                let (write, change) = partial(
-                    &git,
-                    file,
-                    blocks,
-                    current,
-                    head,
-                    &blobs,
-                    index.get(&file.path),
-                )?;
-                plan.worktree.push(write);
-                plan.index.extend(change);
-            }
-            _ => {
-                let before_mode = current.is_some().then(|| worktree_mode(&git, &file.path));
-                let (after, mode) = match head {
-                    Some((mode, oid)) => (Some(blobs[oid].clone()), mode.clone()),
-                    None => (None, worktree_mode(&git, &file.path)),
-                };
-                plan.worktree.push(WorktreeWrite {
-                    path: file.path.clone(),
-                    before: current,
-                    after,
-                    mode,
-                    before_mode,
-                });
-                if placeholders.contains(&file.path) {
-                    // `git add -N` placeholder: counts as absent and is removed with the file.
-                    plan.index.push(IndexChange {
-                        path: file.path.clone(),
-                        from: None,
-                        to: head.cloned(),
-                    });
-                    continue;
-                }
-                let present = index.get(&file.path);
-                if present != head {
-                    plan.index.push(IndexChange {
-                        path: file.path.clone(),
-                        from: present.cloned(),
-                        to: head.cloned(),
-                    });
-                }
-            }
-        }
-    }
     let count = selection.files.len();
     let mut summary = format!(
         "discarded {count} file{}",
@@ -362,15 +464,7 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
         ));
     }
     plan.summary = summary.clone();
-    // Last check before anything is written: the files still hold the bytes the op keeps.
-    for write in &plan.worktree {
-        if !holds(&git.root.join(&write.path), write.before.as_deref()) {
-            return Err(stale(&format!(
-                "{} changed while aisc was working",
-                write.path
-            )));
-        }
-    }
+    ensure_unchanged(&git, &plan.worktree)?;
     let applied = session.apply(&plan)?;
     finish(
         &git,
@@ -387,6 +481,32 @@ pub(crate) fn run(args: &cli::Discard) -> Result<Outcome> {
             extra: json!({"discarded": paths}),
         },
     )
+}
+
+/// How blob `to` differs from blob `from` (both at `path`), as Git's own diff.
+fn blob_blocks(
+    git: &Git,
+    path: &str,
+    (from_mode, from): (&str, &str),
+    (to_mode, to): (&str, &str),
+) -> Result<Vec<Block>> {
+    let empty = git.empty_tree()?;
+    let tree = |mode: &str, oid: &str| {
+        git.tree_with(
+            &empty,
+            &[super::plumbing::TreeEdit {
+                path: path.to_owned(),
+                entry: Some((mode.to_owned(), oid.to_owned())),
+            }],
+        )
+    };
+    let (old, new) = (tree(from_mode, from)?, tree(to_mode, to)?);
+    let patch = git.tree_patch(&old, &new, &[path.to_owned()])?;
+    Ok(super::diff::parse_patch(&patch)?
+        .into_iter()
+        .find(|file| file.path == path)
+        .map(|file| file.blocks)
+        .unwrap_or_default())
 }
 
 /// Reverts some blocks of a modified file; returns the worktree write and the index change.
@@ -435,30 +555,77 @@ fn partial(
             })
         }
         Some((_, oid)) if oid == head_oid => None,
-        Some((mode, oid)) => {
-            // Staged differently: take the reverted hunks out of the staged copy too, or refuse.
-            let staged = git
-                .read_blobs(std::slice::from_ref(oid))?
-                .pop()
-                .unwrap_or_default();
-            let placed =
-                transplant(&split_lines(&staged), &chosen, Direction::Reverse).map_err(|_| {
-                    fail_hint(
-                        Code::Dirty,
-                        format!(
-                            "{} has staged changes that overlap the discarded hunks",
-                            file.path
-                        ),
-                        format!("unstage it first: git restore --staged {}", file.path),
-                    )
-                })?;
-            Some(IndexChange {
-                path: file.path.clone(),
-                from: Some((mode.clone(), oid.clone())),
-                to: Some((mode.clone(), git.write_blob(&join_lines(&placed), true)?)),
-            })
-        }
+        Some(staged) => staged_without(git, file, &chosen, head, staged)?,
         None => None,
     };
     Ok((write, change))
+}
+
+/// The index change for a staged copy that differs from both HEAD and the worktree (as after
+/// `git add -p`) when `chosen` (worktree blocks against HEAD) are reverted: a block the staged
+/// copy holds exactly leaves it too, one it does not touch leaves it alone, and any other staged
+/// change to the same lines is refused, so a staged version is never dropped.
+fn staged_without(
+    git: &Git,
+    file: &FileChange,
+    chosen: &[&Block],
+    head: Option<&Entry>,
+    (mode, oid): &Entry,
+) -> Result<Option<IndexChange>> {
+    let overlap = || staged_apart(file);
+    let (head_mode, head_oid) = head.ok_or_else(overlap)?;
+    let staged_blocks = blob_blocks(git, &file.path, (head_mode, head_oid), (mode, oid))?;
+    let steps: Recorded = vec![
+        BTreeMap::new(),
+        BTreeMap::from([(file.path.clone(), Some(staged_blocks.clone()))]),
+    ];
+    let mut revert = Vec::new();
+    for block in chosen {
+        let untouched = follow(
+            &steps,
+            &file.path,
+            [1],
+            Way::Forward,
+            block.old_pos,
+            block.removed.len(),
+        )
+        .is_ok();
+        if untouched {
+            continue;
+        }
+        let same = staged_blocks.iter().find(|staged| {
+            staged.old_pos == block.old_pos
+                && staged.removed == block.removed
+                && staged.added == block.added
+        });
+        revert.push(same.ok_or_else(overlap)?);
+    }
+    if revert.is_empty() {
+        return Ok(None);
+    }
+    let staged = git
+        .read_blobs(std::slice::from_ref(oid))?
+        .pop()
+        .unwrap_or_default();
+    let placed = unsplice(&split_lines(&staged), &revert).map_err(|_| overlap())?;
+    Ok(Some(IndexChange {
+        path: file.path.clone(),
+        from: Some((mode.clone(), oid.clone())),
+        to: Some((mode.clone(), git.write_blob(&join_lines(&placed), true)?)),
+    }))
+}
+
+/// A staged version that differs from both HEAD and the worktree where the selection changes.
+fn staged_apart(file: &FileChange) -> anyhow::Error {
+    fail_hint(
+        Code::Dirty,
+        format!(
+            "{} has staged changes that overlap the selected hunks",
+            file.path
+        ),
+        format!(
+            "stage it (git add {0}) or unstage it (git restore --staged {0}) first",
+            file.path
+        ),
+    )
 }

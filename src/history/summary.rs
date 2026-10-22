@@ -33,6 +33,11 @@ pub(crate) fn configure(json: bool, stack: bool, quiet: bool) {
     QUIET.store(quiet && !json, Ordering::SeqCst);
 }
 
+/// Whether the output needs the complete view after a mutation (JSON or `--stack`).
+pub(crate) fn full() -> bool {
+    FULL.load(Ordering::SeqCst)
+}
+
 /// The change set this process last read, and the HEAD it was read against.
 struct Snapshot {
     head: String,

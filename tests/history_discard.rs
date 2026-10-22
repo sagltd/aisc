@@ -407,3 +407,89 @@ fn autocrlf_on_a_file_committed_with_crlf_is_not_a_concurrent_change() {
         b"a\r\nb\r\nc\r\n"
     );
 }
+
+/// `l1`..`l30` with `edits` (1-based line, text) applied.
+fn numbered(edits: &[(usize, &str)]) -> String {
+    (1..=30)
+        .map(|n| {
+            edits
+                .iter()
+                .find(|(line, _)| *line == n)
+                .map_or_else(|| format!("l{n}\n"), |(_, text)| format!("{text}\n"))
+        })
+        .collect()
+}
+
+#[test]
+fn discarding_an_unstaged_hunk_keeps_a_staged_hunk_elsewhere() {
+    // As after `git add -p`: line 3 staged, line 25 only in the worktree.
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(3, "STAGED3")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(3, "STAGED3"), (25, "WT25")]));
+    let run = fixture.aisc(&["discard", "f:25"]);
+    assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.read("f"), numbered(&[(3, "STAGED3")]));
+    assert_eq!(
+        fixture.git(&["show", ":f"]) + "\n",
+        numbered(&[(3, "STAGED3")])
+    );
+    assert_eq!(fixture.git(&["status", "--porcelain"]), "M  f");
+}
+
+#[test]
+fn a_staged_copy_with_the_discarded_hunk_loses_it_too() {
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(3, "STAGED3"), (25, "BOTH25")]));
+    fixture.git(&["add", "f"]);
+    fixture.write(
+        "f",
+        &numbered(&[(3, "STAGED3"), (14, "WT14"), (25, "BOTH25")]),
+    );
+    fixture.aisc(&["discard", "f:25"]).ok();
+    assert_eq!(fixture.read("f"), numbered(&[(3, "STAGED3"), (14, "WT14")]));
+    assert_eq!(
+        fixture.git(&["show", ":f"]) + "\n",
+        numbered(&[(3, "STAGED3")])
+    );
+}
+
+#[test]
+fn discarding_a_whole_file_never_drops_a_staged_version_that_differs_from_both() {
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(5, "S5")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(5, "W5")]));
+    let before = fixture.snapshot();
+    for selector in ["f:5", "f"] {
+        let run = fixture.aisc(&["discard", selector]);
+        assert_eq!(run.code, 1, "{selector}: {} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains("git add"), "{}", run.stderr);
+        assert_eq!(before, fixture.snapshot(), "{selector}");
+    }
+}
+
+#[test]
+fn discarding_a_whole_file_also_takes_its_hunks_out_of_a_partly_staged_copy() {
+    // Staged S3; the worktree adds W25: the whole file goes back to HEAD, index included.
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(3, "S3")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(3, "S3"), (25, "W25")]));
+    fixture.aisc(&["discard", "f"]).ok();
+    assert_eq!(fixture.read("f"), numbered(&[]));
+    assert!(fixture.git(&["status", "--porcelain"]).is_empty());
+}
+
+#[test]
+fn a_staged_change_that_really_overlaps_is_refused() {
+    let fixture = Fixture::with_files(&[("f", &numbered(&[]))]);
+    fixture.write("f", &numbered(&[(25, "STAGED25")]));
+    fixture.git(&["add", "f"]);
+    fixture.write("f", &numbered(&[(3, "WT3"), (25, "WT25")]));
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["discard", "f:25"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("overlap"), "{}", run.stderr);
+    assert_eq!(before, fixture.snapshot());
+}
