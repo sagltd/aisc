@@ -410,16 +410,19 @@ fn sigterm_kills_the_running_git_child_and_exits_143() {
     let hook = format!("echo $$ > '{}'; sleep 30", pidfile.display());
     let env = fixture.fake_git("diff", &hook);
     let mut child = fixture.spawn(&["log"], &env_refs(&env));
+    // The shell creates the file before `echo` writes to it: wait for a complete pid.
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !pidfile.exists() && Instant::now() < deadline {
+    let pid = loop {
+        let written = std::fs::read_to_string(&pidfile).ok().and_then(|text| {
+            text.strip_suffix('\n')
+                .and_then(|pid| pid.parse::<i32>().ok())
+        });
+        if let Some(pid) = written {
+            break pid;
+        }
+        assert!(Instant::now() < deadline, "fake git never wrote its pid");
         std::thread::sleep(Duration::from_millis(20));
-    }
-    assert!(pidfile.exists(), "fake git never started");
-    let pid: i32 = std::fs::read_to_string(&pidfile)
-        .unwrap()
-        .trim()
-        .parse()
-        .unwrap();
+    };
     // SAFETY: plain signal delivery to a process we spawned.
     unsafe { libc::kill(child.id() as i32, libc::SIGTERM) };
     assert_eq!(wait_for_exit(&mut child, 10), Some(143));
