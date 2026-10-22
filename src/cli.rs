@@ -129,6 +129,21 @@ pub(crate) enum Operation {
     },
     /// List or remove reclaimable aisc worktrees
     Gc(Gc),
+    /// Agent setup: the version-control block for AGENTS.md or CLAUDE.md
+    Agent {
+        #[command(subcommand)]
+        action: AgentAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum AgentAction {
+    /// Print the version-control block to put in an agent's instruction file
+    Setup {
+        /// Print the block to stdout (aisc never edits instruction files itself)
+        #[arg(long, required = true)]
+        print: bool,
+    },
 }
 
 /// Flags shared by every verb that rewrites history.
@@ -411,6 +426,7 @@ impl Operation {
             Self::Undo { .. } => "undo",
             Self::Oplog { .. } => "oplog",
             Self::Gc(_) => "gc",
+            Self::Agent { .. } => "agent",
         }
     }
 
