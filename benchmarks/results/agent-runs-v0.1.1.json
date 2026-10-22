@@ -9,7 +9,8 @@
  "notes": [
   "AISC arm only; compare with the GitButler and Git arms of agent-runs-v0.1.0.json (identical settings, same day).",
   "v0.1.1 changed AISC after watching the v0.1.0 runs on these same 13 tasks.",
-  "No transcripts, prompts or paths are included."
+  "No transcripts, prompts or paths are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
  ],
  "runs": [
   {
@@ -29,7 +30,19 @@
     "output_tokens": 296
    },
    "cost_usd_reported_by_cli": 0.0402394,
-   "wall_ms": 7763
+   "wall_ms": 7763,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add lead input validation -b input-validation qog guq ksv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -48,7 +61,19 @@
     "output_tokens": 277
    },
    "cost_usd_reported_by_cli": 0.0402898,
-   "wall_ms": 9895
+   "wall_ms": 9895,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit 9d93 notes/private.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -67,7 +92,24 @@
     "output_tokens": 478
    },
    "cost_usd_reported_by_cli": 0.0437696,
-   "wall_ms": 9546
+   "wall_ms": 9546,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -86,7 +128,39 @@
     "output_tokens": 417
    },
    "cost_usd_reported_by_cli": 0.0451519,
-   "wall_ms": 24671
+   "wall_ms": 24671,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land normalize greeting docs --into main --switch --delete",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -105,7 +179,24 @@
     "output_tokens": 938
    },
    "cost_usd_reported_by_cli": 0.05834079999999999,
-   "wall_ms": 14717
+   "wall_ms": 14717,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command Revive worktree command -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -124,7 +215,19 @@
     "output_tokens": 375
    },
    "cost_usd_reported_by_cli": 0.0433473,
-   "wall_ms": 14134
+   "wall_ms": 14134,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -143,7 +246,24 @@
     "output_tokens": 476
    },
    "cost_usd_reported_by_cli": 0.04905349999999999,
-   "wall_ms": 15532
+   "wall_ms": 15532,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 8e0b",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 8e0b --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -162,7 +282,19 @@
     "output_tokens": 276
    },
    "cost_usd_reported_by_cli": 0.040552500000000005,
-   "wall_ms": 8349
+   "wall_ms": 8349,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -181,7 +313,19 @@
     "output_tokens": 337
    },
    "cost_usd_reported_by_cli": 0.0412582,
-   "wall_ms": 10061
+   "wall_ms": 10061,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline ddc2 0081 --into add retry support 15af 0f5b e88d",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -200,7 +344,19 @@
     "output_tokens": 623
    },
    "cost_usd_reported_by_cli": 0.051319300000000005,
-   "wall_ms": 27553
+   "wall_ms": 27553,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -221,7 +377,44 @@
     "output_tokens": 1324
    },
    "cost_usd_reported_by_cli": 0.0662583,
-   "wall_ms": 17840
+   "wall_ms": 17840,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show main:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show main:data/questions.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -240,7 +433,24 @@
     "output_tokens": 624
    },
    "cost_usd_reported_by_cli": 0.0460458,
-   "wall_ms": 9526
+   "wall_ms": 9526,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add app checkpoint --all -b app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --oneline HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 1,
@@ -259,7 +469,19 @@
     "output_tokens": 284
    },
    "cost_usd_reported_by_cli": 0.04095820000000001,
-   "wall_ms": 17628
+   "wall_ms": 17628,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard vrk kon qli",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -278,7 +500,19 @@
     "output_tokens": 331
    },
    "cost_usd_reported_by_cli": 0.0405652,
-   "wall_ms": 15021
+   "wall_ms": 15021,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add lead input validation -b input-validation qog guq ksv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -297,7 +531,19 @@
     "output_tokens": 308
    },
    "cost_usd_reported_by_cli": 0.04057530000000001,
-   "wall_ms": 12318
+   "wall_ms": 12318,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit 7703 notes/private.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -316,7 +562,39 @@
     "output_tokens": 427
    },
    "cost_usd_reported_by_cli": 0.0437935,
-   "wall_ms": 11212
+   "wall_ms": 11212,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log origin/feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -335,7 +613,34 @@
     "output_tokens": 443
    },
    "cost_usd_reported_by_cli": 0.0450606,
-   "wall_ms": 14028
+   "wall_ms": 14028,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land normalize greeting docs --into main --switch --delete",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -354,7 +659,24 @@
     "output_tokens": 1043
    },
    "cost_usd_reported_by_cli": 0.060133599999999995,
-   "wall_ms": 28848
+   "wall_ms": 28848,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -373,7 +695,19 @@
     "output_tokens": 385
    },
    "cost_usd_reported_by_cli": 0.0434261,
-   "wall_ms": 20443
+   "wall_ms": 20443,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -392,7 +726,24 @@
     "output_tokens": 438
    },
    "cost_usd_reported_by_cli": 0.04664650000000001,
-   "wall_ms": 19868
+   "wall_ms": 19868,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "show add lead workflow",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split add lead workflow --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -411,7 +762,19 @@
     "output_tokens": 333
    },
    "cost_usd_reported_by_cli": 0.041131299999999996,
-   "wall_ms": 14508
+   "wall_ms": 14508,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --before add customer model",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -430,7 +793,19 @@
     "output_tokens": 307
    },
    "cost_usd_reported_by_cli": 0.040963099999999995,
-   "wall_ms": 16309
+   "wall_ms": 16309,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline 2577 9a0a --into add retry support 341e a779 2396",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -449,7 +824,19 @@
     "output_tokens": 664
    },
    "cost_usd_reported_by_cli": 0.051775100000000004,
-   "wall_ms": 15760
+   "wall_ms": 15760,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -468,7 +855,34 @@
     "output_tokens": 1278
    },
    "cost_usd_reported_by_cli": 0.0643179,
-   "wall_ms": 31475
+   "wall_ms": 31475,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -487,7 +901,24 @@
     "output_tokens": 518
    },
    "cost_usd_reported_by_cli": 0.045153599999999995,
-   "wall_ms": 14583
+   "wall_ms": 14583,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit --all -m Add app checkpoint -b app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 2,
@@ -506,7 +937,19 @@
     "output_tokens": 328
    },
    "cost_usd_reported_by_cli": 0.0414862,
-   "wall_ms": 15089
+   "wall_ms": 15089,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard vrk kon qli",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -525,7 +968,19 @@
     "output_tokens": 327
    },
    "cost_usd_reported_by_cli": 0.0405692,
-   "wall_ms": 22674
+   "wall_ms": 22674,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -b input-validation -m Add lead input validation qog guq ksv",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -544,7 +999,24 @@
     "output_tokens": 260
    },
    "cost_usd_reported_by_cli": 0.040387200000000005,
-   "wall_ms": 18708
+   "wall_ms": 18708,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit 68a5 notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -563,7 +1035,19 @@
     "output_tokens": 450
    },
    "cost_usd_reported_by_cli": 0.040999,
-   "wall_ms": 22394
+   "wall_ms": 22394,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -582,7 +1066,39 @@
     "output_tokens": 438
    },
    "cost_usd_reported_by_cli": 0.0454048,
-   "wall_ms": 17923
+   "wall_ms": 17923,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs normalize --into main --switch --delete",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -601,7 +1117,64 @@
     "output_tokens": 792
    },
    "cost_usd_reported_by_cli": 0.056701499999999995,
-   "wall_ms": 22768
+   "wall_ms": 22768,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch ui-note",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch ui-note",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch ui-note",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch ui-note",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -620,7 +1193,19 @@
     "output_tokens": 421
    },
    "cost_usd_reported_by_cli": 0.0438107,
-   "wall_ms": 16854
+   "wall_ms": 16854,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -639,7 +1224,24 @@
     "output_tokens": 551
    },
    "cost_usd_reported_by_cli": 0.0501874,
-   "wall_ms": 11572
+   "wall_ms": 11572,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 024c",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 024c --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -658,7 +1260,19 @@
     "output_tokens": 274
    },
    "cost_usd_reported_by_cli": 0.04052920000000001,
-   "wall_ms": 19141
+   "wall_ms": 19141,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --before add customer model",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -677,7 +1291,19 @@
     "output_tokens": 324
    },
    "cost_usd_reported_by_cli": 0.0412288,
-   "wall_ms": 10434
+   "wall_ms": 10434,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline extract parser helpers wire parser helpers --into add retry support add retry option test retry option document retry option",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -696,7 +1322,19 @@
     "output_tokens": 620
    },
    "cost_usd_reported_by_cli": 0.0487597,
-   "wall_ms": 14532
+   "wall_ms": 14532,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -715,7 +1353,49 @@
     "output_tokens": 1556
    },
    "cost_usd_reported_by_cli": 0.0740563,
-   "wall_ms": 21755
+   "wall_ms": 21755,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd --help",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd data/questions.json --full",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd data/questions-by-id.json --full",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -734,7 +1414,19 @@
     "output_tokens": 390
    },
    "cost_usd_reported_by_cli": 0.0427878,
-   "wall_ms": 12956
+   "wall_ms": 12956,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add app checkpoint --all -b app-checkpoint",
+     "exit": 0
+    }
+   ]
   },
   {
    "rep": 3,
@@ -753,7 +1445,19 @@
     "output_tokens": 318
    },
    "cost_usd_reported_by_cli": 0.0413662,
-   "wall_ms": 27633
+   "wall_ms": 27633,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    }
+   ]
   }
  ]
 }
