@@ -24,7 +24,7 @@ One call per history edit. Compact output. Your work stays safe.
 - **One call per history edit.** Amend, split, squash, reorder or sync is a single command, not a rebase script.
 - **Compact output.** Short ids, one line per commit, one line per hunk. Built to cost few transcript tokens.
 - **Never loses your work.** Every call is atomic, recorded in an oplog, and reversible with `aisc undo`.
-- **Disk-lean.** No worktree by default, automatic cleanup on `finish`, and `aisc gc` for the rest.
+- **Disk-lean.** No worktree by default, sparse worktrees when you do need one, and `aisc gc` (planned) for the rest.
 
 It is a thin layer over Git: Git stays the storage and transport backend, and your repository stays a normal repository.
 
@@ -42,11 +42,11 @@ git log --oneline -n 6
 git rebase -i HEAD~5      # mark 3 edits
 git stash pop             # conflicts?
 git add -p                # pick hunk 1
-git commit --fixup 3a5d
+git commit --fixup 72abdaf
 git add -p                # pick hunk 2
-git commit --fixup 9c07
+git commit --fixup f5f5138
 git add -p                # pick hunk 3
-git commit --fixup e41b
+git commit --fixup 60d2e54
 git rebase -i --autosquash HEAD~8
 ```
 
@@ -55,9 +55,9 @@ git rebase -i --autosquash HEAD~8
 ```sh
 aisc log
 aisc amend \
-  --into 3a5d gnh \
-  --into 9c07 kqv \
-  --into e41b tmr
+  --into 72ab tpm \
+  --into f5f5 lrn \
+  --into 60d2 tut
 ```
 
 </td></tr>
@@ -90,44 +90,53 @@ cargo install --git https://github.com/sagltd/aisc --locked
 npx skills add sagltd/aisc --skill aisc
 ```
 
-A typical agent loop (output abbreviated from the v0.2 history design):
+A typical agent loop (real output, lightly trimmed):
 
 ```text
 $ aisc log
-amend-series: 5 commits on main (newest first)
-3a5d add lead scoring | README.md src/lead.ts tests/lead.test.ts
-b2c9 refactor validation helpers | README.md src/lead.ts tests/lead.test.ts
+main: last 3 commits (newest first)
+60d2 add c | c.txt
+f5f5 add b | b.txt
+72ab add a | a.txt
 uncommitted:
-src/lead.ts
- gnh @21 +6-1 export function isLikelyEmail(email: string): boolean {
-$ aisc amend --into b2c9 gnh
-amended b2c9 +1 hunk; rewrote 2; op 1a7f
+a.txt tpm @3 +1-1 EDIT3
+b.txt lrn @3 +1-1 EDIT3
+c.txt tut @3 +1-1 EDIT3
+$ aisc amend --into 72ab tpm --into f5f5 lrn --into 60d2 tut
+amended 72ab +1 hunk, f5f5 +1, 60d2 +1; rewrote 3; op b954
+main: last 3 commits (newest first)
+978f add c | c.txt
+9e5b add b | b.txt
+1f25 add a | a.txt
+$ aisc undo
+undid b954 (amend); op 5559
+…
 $ aisc verify -- cargo test && aisc finish
 ```
 
-Today's in-place task flow: `aisc start NAME --in-place`, `aisc context`, `aisc checkpoint -m MSG -- PATHS`, `aisc verify -- CMD`, `aisc finish`.
+Task flow: `aisc start NAME` (in place by default), `aisc context`, `aisc checkpoint -m MSG -- PATHS`, `aisc verify -- CMD`, `aisc finish`.
 
 ## Commands
 
-Available now: `start`, `context`, `diff`, `checkpoint`, `verify`, `finish`, `github`, `gitlab`. The history verbs below land in **v0.2**. Selectors are a hunk id (`gnh`), a path, `PATH:L-R`, or `PATH~text`.
+Available now: `start`, `context`, `diff`, `checkpoint`, `verify`, `finish`, `github`, `gitlab`. History verbs: `log`, `show`, `commit`, `amend`, `discard`, `split`, `uncommit`, `squash`, `move`, `pick`, `sync`, `land`, `switch`, `undo`, `oplog`; `gc` is listed but not implemented yet. Selectors are a hunk id (`tpm`), a path, `PATH:L-R`, or `PATH~text`. Commits are a hex id or an exact subject.
 
 | Verb | What it does | Example |
 | --- | --- | --- |
 | `log` | Branch view plus uncommitted hunks with ids | `aisc log --limit 10` |
-| `show` | Hunks of a commit, range or uncommitted changes | `aisc show 3a5d` |
-| `commit` | New commit(s) from selected hunks | `aisc commit -m "Add validation" src/lead.ts` |
-| `amend --into` | Move uncommitted hunks into older commits | `aisc amend --into 3a5d gnh` |
-| `split` | Break a commit into several | `aisc split 4c1d --into "A" a.ts --into "B" b.ts` |
-| `uncommit` | Pull hunks out of a commit back to the worktree | `aisc uncommit 4c1d src/config.ts` |
-| `squash` | Join adjacent commits | `aisc squash --into "Feature" 9c07 e41b` |
-| `move` | Reorder commits | `aisc move e41b --before 3a5d` |
-| `pick` | Replay commits onto another branch | `aisc pick 9c07 -b hotfix` |
-| `sync` | Rebase onto base; pauses on conflict | `aisc sync --fetch` |
+| `show` | Hunks of a commit, range or uncommitted changes | `aisc show 60d2` |
+| `commit` | New commit(s) from selected hunks | `aisc commit -m "Add validation" a.txt` |
+| `amend --into` | Move uncommitted hunks into older commits | `aisc amend --into 72ab tpm` |
+| `split` | Break a commit into several | `aisc split 5a50 --into "Add b" b.txt` |
+| `uncommit` | Pull hunks out of a commit back to the worktree | `aisc uncommit 60d2 c.txt` |
+| `squash` | Join adjacent commits | `aisc squash --into "Feature" 60d2 f5f5` |
+| `move` | Reorder commits | `aisc move "add b" --before "add a"` |
+| `pick` | Replay commits onto another branch | `aisc pick ca81 -b hotfix` |
+| `sync` | Rebase onto base; pauses on conflict | `aisc sync origin/main --fetch` |
 | `land` | Fast-forward or replay branches into a target | `aisc land feature` |
 | `switch` | Change branch, carrying dirty edits | `aisc switch -c topic` |
 | `discard` | Revert selected uncommitted changes (undoable) | `aisc discard --whitespace-only` |
 | `undo` / `oplog` | Reverse or list recorded operations | `aisc undo` |
-| `gc` | Reclaim stale AISC worktrees | `aisc gc --apply` |
+| `gc` | Reclaim stale AISC worktrees (not implemented yet) | `aisc gc --apply` |
 
 `aisc <verb> --help` is the authority for the installed version.
 
@@ -148,8 +157,8 @@ flowchart LR
 ## Disk efficiency
 
 - **Single-checkout model.** History verbs edit in place; `--branch B` rewrites another branch with no checkout.
-- **`finish` cleans up.** Worktrees AISC created are removed (never forced; `--keep` to retain) and freed bytes are reported.
-- **`aisc gc`.** Dry run by default; `--apply` removes only verified, clean, merged-or-finished AISC worktrees. Foreign worktrees are never touched.
+- **In place by default.** `aisc start NAME` keeps your checkout; `--path` opts into a worktree. Worktree removal on `finish` is planned: today worktrees are kept.
+- **`aisc gc` (planned).** The command exists but reports "not implemented yet". Design: dry run by default, `--apply` removes only verified, clean AISC worktrees.
 - **Sparse worktrees.** `aisc start NAME --path P --sparse DIR...` checks out only the directories you need.
 
 Measured disk numbers: pending, see [Benchmarks](#benchmarks).
