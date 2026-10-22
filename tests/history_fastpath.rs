@@ -180,3 +180,14 @@ fn git_answers_are_remembered_across_fresh_repositories() {
     // A fresh repository with an empty $GIT_COMMON_DIR/aisc reuses the user cache.
     assert!(!trace(&second).contains(" var "));
 }
+
+#[test]
+fn quiet_undo_prints_one_line_even_with_the_stack_view() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("a.txt", "a2\n");
+    fixture.aisc(&["commit", "-q", "-m", "two", "a.txt"]).ok();
+    let run = fixture.aisc(&["undo", "--stack", "-q"]);
+    run.ok();
+    assert_eq!(run.stdout.trim().lines().count(), 1, "{}", run.stdout);
+    assert!(run.stdout.starts_with("undid commit"), "{}", run.stdout);
+}

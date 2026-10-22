@@ -527,7 +527,7 @@ fn remembered(common: &Path, file: &str, ask: impl FnOnce() -> Option<String>) -
 }
 
 /// `$XDG_CACHE_HOME/aisc`, else `~/Library/Caches/aisc` (macOS) or `~/.cache/aisc`. Unit tests
-/// never touch the user's home (the integration tests set `XDG_CACHE_HOME`).
+/// never touch it; `cargo test` points `XDG_CACHE_HOME` into the build tree (`.cargo/config.toml`).
 fn user_cache_dir() -> Option<PathBuf> {
     if cfg!(test) {
         return None;

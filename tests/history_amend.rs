@@ -996,3 +996,22 @@ fn autocrlf_on_a_file_committed_with_crlf_is_not_a_concurrent_change() {
     // Git sees the worktree as the new tip.
     assert!(fixture.git(&["status", "--porcelain"]).is_empty());
 }
+
+#[test]
+fn a_file_changed_between_read_and_amend_is_a_stale_error() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("b.txt", "b\n");
+    fixture.commit_all("add b");
+    fixture.write("a.txt", "a2\n");
+    let head = fixture.git(&["rev-parse", "HEAD"]);
+    // The edit lands after aisc read the diff and before it hashes the whole file.
+    let env = fixture.fake_git_after("diff", "printf 'sneaky\\n' >> a.txt");
+    let run = fixture.aisc_env(
+        &["amend", "--into", "base", "a.txt"],
+        &support::env_refs(&env),
+    );
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert_eq!(fixture.read("a.txt"), "a2\nsneaky\n");
+    assert_eq!(fixture.git(&["rev-parse", "HEAD"]), head);
+    assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
+}

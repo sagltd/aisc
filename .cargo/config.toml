@@ -1,0 +1,3 @@
+# Tests and `cargo run` keep aisc's user-level cache inside the build tree, never in $HOME.
+[env]
+XDG_CACHE_HOME = { value = "target/xdg-cache", relative = true }

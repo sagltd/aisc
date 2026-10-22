@@ -21,7 +21,8 @@ pub(crate) fn run(spec: Option<&str>, quiet: bool) -> Result<Outcome> {
     // earlier command already reported. A redo is `aisc undo` again, so the new op id is in
     // JSON and `aisc oplog` only.
     let result = format!("undid {} {undid}", data.verb);
-    if !super::summary::full() {
+    // `-q` wins over `--stack`/`-v`: one result line only.
+    if quiet || !super::summary::full() {
         let tips = if quiet {
             Some(Vec::new())
         } else {
