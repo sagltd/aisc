@@ -166,6 +166,7 @@ impl Fixture {
             .current_dir(&self.root)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("XDG_CACHE_HOME", self.directory.path().join("cache"))
             .env_remove("AISC_OUTPUT")
             .env_remove("NO_COLOR");
         command

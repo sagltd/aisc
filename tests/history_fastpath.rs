@@ -153,3 +153,30 @@ fn an_attributes_file_only_in_the_index_still_filters_the_hash() {
     assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
     assert_eq!(fixture.read("f.txt"), "yzz\n", "the modified file is kept");
 }
+
+#[test]
+fn git_answers_are_remembered_across_fresh_repositories() {
+    let first = Fixture::with_files(&[("a.txt", "a\n")]);
+    let second = Fixture::with_files(&[("a.txt", "a\n")]);
+    let cache = first.directory.path().join("shared-cache");
+    let cache = cache.to_str().unwrap();
+    let trace = |fixture: &Fixture| {
+        let file = fixture.directory.path().join("trace");
+        fixture.write("a.txt", "a2\n");
+        let run = fixture.aisc_env(
+            &["commit", "-m", "edit", "a.txt"],
+            &[
+                ("XDG_CACHE_HOME", cache),
+                ("GIT_TRACE", file.to_str().unwrap()),
+            ],
+        );
+        assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+        std::fs::read_to_string(file).unwrap_or_default()
+    };
+    assert!(
+        trace(&first).contains(" var "),
+        "the first repository asks Git"
+    );
+    // A fresh repository with an empty $GIT_COMMON_DIR/aisc reuses the user cache.
+    assert!(!trace(&second).contains(" var "));
+}
