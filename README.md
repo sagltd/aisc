@@ -112,8 +112,9 @@ docs deleted
 # Install (Git 2.43+ and Rust 1.91+)
 cargo install --git https://github.com/sagltd/aisc --locked
 
-# Give your agent the skill
+# Give your agent the skill, and the workflow block for AGENTS.md / CLAUDE.md
 npx skills add sagltd/aisc --skill aisc
+aisc agent setup --print >> AGENTS.md
 ```
 
 Then let the agent work. It runs `aisc log` to see ids and state, makes one call per edit, and can undo anything with `aisc undo`.
@@ -140,6 +141,7 @@ A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30
 | `aisc discard SEL…` | Throw away selected changes (undoable) |
 | `aisc undo` · `aisc oplog` | Reverse the last operation · list operations |
 | `aisc start` · `verify` · `finish` · `gc` | Task lifecycle for parallel agents ([details](skills/aisc/references/lifecycle.md)) |
+| `aisc agent setup --print` | The version-control block for an agent's `AGENTS.md` or `CLAUDE.md` |
 
 Every write prints its result, so there is no need to re-check. `-q` prints a single line, `--json` prints machine output, and `aisc <command> --help` is the reference for the version you have installed.
 
