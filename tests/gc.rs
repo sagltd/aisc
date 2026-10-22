@@ -274,6 +274,156 @@ fn current_and_busy_worktrees_are_kept() {
 }
 
 #[test]
+fn a_verify_command_outliving_a_killed_aisc_keeps_the_worktree_busy() {
+    use std::time::{Duration, Instant};
+    let fixture = repository();
+    let path = start(&fixture, "running");
+    finish_kept(&path);
+    let lock = fixture
+        .root
+        .join(".git/worktrees/running/aisc-operation.lock");
+    let marker = path.parent().unwrap().join("running-started");
+    let script = format!("touch '{}'; sleep 4", marker.display());
+    let mut aisc = Command::new(env!("CARGO_BIN_EXE_aisc"))
+        .args(["verify", "--", "/bin/sh", "-c", &script])
+        .current_dir(&path)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    while !marker.exists() {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "command never ran"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // SIGKILL: aisc cannot clean up, but the command it started keeps running.
+    aisc.kill().unwrap();
+    aisc.wait().unwrap();
+    assert!(lock.exists());
+    let busy = |report: &Value| {
+        entry(report, "running")["reason"]
+            .as_str()
+            .unwrap()
+            .contains("busy")
+    };
+    let report = gc(&fixture, &["--apply"]);
+    assert!(busy(&report), "{report}");
+    assert!(path.join("top.txt").exists());
+    // The probe never takes over or rewrites the lock, which names the command's group and
+    // its leader's start time.
+    let tag = fs::read_to_string(&lock).unwrap();
+    let mut lines = tag.lines();
+    let owner = lines
+        .next()
+        .unwrap()
+        .strip_prefix("aisc pid ")
+        .unwrap()
+        .to_owned();
+    let group_line = lines.next().unwrap().to_owned();
+    let fields = group_line.split(' ').collect::<Vec<_>>();
+    assert_eq!(fields.len(), 4, "{tag}");
+    assert_eq!((fields[0], fields[2]), ("pgid", "start"), "{tag}");
+    let (group, start) = (fields[1], fields[3].parse::<u64>().unwrap());
+    // Other verbs say who holds it and how to clear a lock that is not theirs.
+    let refused = aisc_at(&path, &["verify", "--", "true"]);
+    assert_ne!(refused.code, 0);
+    assert!(
+        refused.stderr.contains(&format!(
+            "process group {group} recorded by aisc pid {owner} still has members; if that is not your verify command, remove "
+        )),
+        "{}",
+        refused.stderr
+    );
+    // The same pgid with another leader start time is a reused id: not busy.
+    fs::write(
+        &lock,
+        format!("aisc pid {owner}\npgid {group} start {}\n", start + 1),
+    )
+    .unwrap();
+    assert!(!busy(&gc(&fixture, &[])));
+    fs::write(&lock, &tag).unwrap();
+    assert!(busy(&gc(&fixture, &[])));
+    // Once the command exits the lock is a dead owner's, no longer busy.
+    let started = Instant::now();
+    while busy(&gc(&fixture, &[])) {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "lock never freed"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+#[test]
+fn a_background_job_left_by_a_completed_verify_never_keeps_the_lock() {
+    use std::time::{Duration, Instant};
+    let fixture = repository();
+    let path = start(&fixture, "daemon");
+    finish_kept(&path);
+    let started = Instant::now();
+    aisc_at(
+        &path,
+        &["verify", "--", "/bin/sh", "-c", "sleep 30 & exit 0"],
+    )
+    .ok();
+    assert!(started.elapsed() < Duration::from_secs(20));
+    let report = gc(&fixture, &[]);
+    let reason = entry(&report, "daemon")["reason"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(!reason.contains("busy"), "{report}");
+    // The next task verb in that worktree is not refused either.
+    aisc_at(&path, &["verify", "--", "true"]).ok();
+}
+
+#[test]
+fn recorded_groups_that_cannot_be_the_verify_command_never_count() {
+    use std::os::unix::process::CommandExt;
+    let fixture = repository();
+    let path = start(&fixture, "grouped");
+    finish_kept(&path);
+    let lock = fixture
+        .root
+        .join(".git/worktrees/grouped/aisc-operation.lock");
+    let mut live = Command::new("sleep")
+        .arg("30")
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let mut gone = Command::new("true").process_group(0).spawn().unwrap();
+    let reaped = gone.id();
+    gone.wait().unwrap();
+    for (case, group_line) in [
+        ("pgid 0", "pgid 0 start 1".to_owned()),
+        ("pgid 1 (init)", "pgid 1 start 1".to_owned()),
+        ("a group with no members", format!("pgid {reaped} start 1")),
+        (
+            "a live group whose leader started at another time",
+            format!("pgid {} start 1", live.id()),
+        ),
+        ("no start time", format!("pgid {}", live.id())),
+    ] {
+        fs::write(&lock, format!("aisc pid 99999\n{group_line}\n")).unwrap();
+        let report = gc(&fixture, &[]);
+        assert_eq!(
+            entry(&report, "grouped")["action"],
+            "remove",
+            "{case}: {report}"
+        );
+    }
+    live.kill().unwrap();
+    live.wait().unwrap();
+    let report = gc(&fixture, &["--apply"]);
+    assert_eq!(entry(&report, "grouped")["action"], "removed", "{report}");
+}
+
+#[test]
 fn a_dead_owners_lock_does_not_keep_a_worktree_busy() {
     let fixture = repository();
     let path = start(&fixture, "orphaned");

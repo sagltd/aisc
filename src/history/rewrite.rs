@@ -834,6 +834,7 @@ pub(crate) fn preflight_worktree(root: &Path, writes: &[WorktreeWrite]) -> Resul
 //   brought forward, and the command stops with exit 4 so the caller re-reads the new state.
 
 const LOCK_TAG: &str = "aisc pid ";
+const GROUP_TAG: &str = "pgid ";
 
 fn temporary_dir(git: &Git) -> PathBuf {
     git.dir.join("aisc").join("tmp")
@@ -929,6 +930,72 @@ pub(crate) struct OperationLock {
     _file: fs::File,
 }
 
+impl OperationLock {
+    /// Records (or, with `None`, clears) the process group of a command this lock's owner runs,
+    /// with its leader's start time, so the lock still counts as held while that leader lives
+    /// after the owner died, and a reused pgid is never mistaken for it.
+    pub(crate) fn record_group(&self, group: Option<u32>) -> Result<()> {
+        use std::os::unix::fs::FileExt;
+        let mut tag = format!("{LOCK_TAG}{}\n", std::process::id());
+        if let Some(group) = group
+            && let Some((start, _)) = crate::process::process_identity(group)
+        {
+            tag.push_str(&format!("{GROUP_TAG}{group} start {start}\n"));
+        }
+        // Grow before shrinking, so a concurrent reader never sees an empty file.
+        self._file.write_all_at(tag.as_bytes(), 0)?;
+        self._file.set_len(tag.len() as u64)?;
+        Ok(())
+    }
+}
+
+/// A verified command's process group, as recorded in the lock: pgid and its leader's start.
+#[derive(Clone, Copy)]
+struct Group {
+    id: u32,
+    start: u64,
+}
+
+/// The owner pid and, while a verified command runs, its process group.
+fn parse_tag(content: &str) -> Option<(u32, Option<Group>)> {
+    let mut lines = content.lines();
+    let owner = lines.next()?.strip_prefix(LOCK_TAG)?.trim().parse().ok()?;
+    let group = lines.next().and_then(|line| {
+        let (id, start) = line.strip_prefix(GROUP_TAG)?.split_once(" start ")?;
+        Some(Group {
+            id: id.trim().parse().ok()?,
+            start: start.trim().parse().ok()?,
+        })
+    });
+    Some((owner, group))
+}
+
+/// Whether the recorded group is still the verified command's: its leader (pid = pgid) lives,
+/// started at the recorded time, and still leads that group. A reused pgid has another start
+/// time. pgid 0 and 1, and this process's own group or session, can never be a verified
+/// command. Members left after the leader died are not tracked: verify waits for the leader,
+/// so once it is gone the command has finished as far as the lock is concerned.
+fn group_alive(group: Group) -> bool {
+    let Ok(id) = libc::pid_t::try_from(group.id) else {
+        return false;
+    };
+    // SAFETY: getpgrp and getsid(0) only read this process's own ids.
+    let (own_group, own_session) = unsafe { (libc::getpgrp(), libc::getsid(0)) };
+    if id <= 1 || id == own_group || id == own_session {
+        return false;
+    }
+    crate::process::process_identity(group.id)
+        .is_some_and(|(start, leads)| start == group.start && leads == group.id)
+}
+
+fn group_refusal(owner: u32, group: Group, lock: &Path) -> String {
+    format!(
+        "process group {} recorded by aisc pid {owner} still has members; if that is not your verify command, remove {}",
+        group.id,
+        lock.display()
+    )
+}
+
 impl Drop for OperationLock {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
@@ -979,9 +1046,8 @@ impl OperationLock {
             };
             let mut content = String::new();
             let _ = (&held).take(64).read_to_string(&mut content);
-            let owner = content
-                .strip_prefix(LOCK_TAG)
-                .and_then(|rest| rest.trim().parse::<u32>().ok());
+            let parsed = parse_tag(&content);
+            let owner = parsed.map(|(owner, _)| owner);
             // An empty lock past the grace period was abandoned before any tag was written
             // (an older task verb killed mid-way, or `: > lock`); the flock still decides.
             let abandoned = owner.is_none()
@@ -1003,6 +1069,14 @@ impl OperationLock {
                     |owner| format!("aisc process {owner} is running"),
                 );
                 return Err(locked("aisc-operation.lock", &holder));
+            }
+            if let Some((owner, Some(group))) = parsed
+                && group_alive(group)
+            {
+                return Err(locked(
+                    "aisc-operation.lock",
+                    &group_refusal(owner, group, &path),
+                ));
             }
             // The owner is dead; take over only if this is still the file at `path`.
             let current = held.metadata()?;
@@ -1341,8 +1415,10 @@ pub(crate) fn task_lock(git: &Git) -> Result<OperationLock> {
 }
 
 /// Whether `aisc-operation.lock` in `git.dir` is really held, without taking it: a live flock,
-/// a fresh empty lock (possibly still being written) or a lock with foreign content. A dead
-/// owner's tagged lock, or an empty one past the grace period, is not; `task_lock` takes it over.
+/// a recorded process group that still has members (a verified command outliving a killed
+/// owner), a fresh empty lock (possibly still being written) or a lock with foreign content. A
+/// dead owner's tagged lock, or an empty one past the grace period, is not; `task_lock` takes it
+/// over.
 pub(crate) fn operation_lock_held(git: &Git) -> bool {
     use std::io::Read;
     let path = git.dir.join("aisc-operation.lock");
@@ -1352,10 +1428,13 @@ pub(crate) fn operation_lock_held(git: &Git) -> bool {
     };
     let mut content = String::new();
     let _ = (&file).take(64).read_to_string(&mut content);
-    let tagged = content
-        .strip_prefix(LOCK_TAG)
-        .and_then(|rest| rest.trim().parse::<u32>().ok())
-        .is_some();
+    let parsed = parse_tag(&content);
+    let tagged = parsed.is_some();
+    if let Some((_, Some(group))) = parsed
+        && group_alive(group)
+    {
+        return true;
+    }
     let abandoned = !tagged
         && content.is_empty()
         && file
@@ -1367,8 +1446,16 @@ pub(crate) fn operation_lock_held(git: &Git) -> bool {
     if !tagged && !abandoned {
         return true;
     }
-    // The probe's flock is released when `file` closes.
-    !matches!(try_flock(&file), Ok(true))
+    match try_flock(&file) {
+        Ok(true) => {
+            // A probe only: release at once, never write or take the lock over.
+            use std::os::fd::AsRawFd;
+            // SAFETY: unlocks the flock this probe just took on its own open descriptor.
+            unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
+            false
+        }
+        _ => true,
+    }
 }
 
 pub(crate) fn recover_if_needed(git: &Git) -> Result<Option<String>> {
@@ -1709,6 +1796,19 @@ pub(crate) fn regular(mode: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn own_group_session_and_init_are_never_a_verified_command() {
+        // SAFETY: getpgrp and getsid(0) only read this process's own ids.
+        let (group, session) = unsafe { (libc::getpgrp(), libc::getsid(0)) };
+        for id in [0, 1, group as u32, session as u32] {
+            let start = crate::process::process_identity(id).map_or(0, |(start, _)| start);
+            assert!(!group_alive(Group { id, start }), "{id}");
+        }
+        assert!(parse_tag("aisc pid 7\npgid 9\n").unwrap().1.is_none());
+        let (owner, group) = parse_tag("aisc pid 7\npgid 9 start 11\n").unwrap();
+        assert_eq!((owner, group.unwrap().id, group.unwrap().start), (7, 9, 11));
+    }
     use crate::history::HistoryError;
 
     fn write(path: &str, before: Option<&[u8]>, after: Option<&[u8]>) -> WorktreeWrite {

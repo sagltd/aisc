@@ -57,6 +57,56 @@ impl ExecImage {
     }
 }
 
+/// The start time (an opaque, per-platform comparable value) and the current process group of
+/// a live process; `None` when it does not exist or cannot be inspected.
+#[cfg(target_os = "macos")]
+pub(crate) fn process_identity(pid: u32) -> Option<(u64, u32)> {
+    let pid = libc::c_int::try_from(pid).ok()?;
+    // SAFETY: proc_bsdinfo is plain data; proc_pidinfo fills at most `size` bytes of it.
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = libc::c_int::try_from(std::mem::size_of::<libc::proc_bsdinfo>()).ok()?;
+    let filled = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDTBSDINFO,
+            0,
+            (&mut info as *mut libc::proc_bsdinfo).cast(),
+            size,
+        )
+    };
+    (filled == size).then(|| {
+        (
+            info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec,
+            info.pbi_pgid,
+        )
+    })
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn process_identity(pid: u32) -> Option<(u64, u32)> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // Fields after the parenthesized command name, which may itself contain spaces.
+    let fields = stat
+        .rsplit_once(')')?
+        .1
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    let group = fields.get(2)?.parse().ok()?;
+    let ticks: u64 = fields.get(19)?.parse().ok()?;
+    let boot = std::fs::read_to_string("/proc/stat")
+        .ok()?
+        .lines()
+        .find_map(|line| line.strip_prefix("btime ")?.trim().parse::<u64>().ok())?;
+    // SAFETY: sysconf only reads a configuration value.
+    let per_second = u64::try_from(unsafe { libc::sysconf(libc::_SC_CLK_TCK) }).ok()?;
+    Some((boot * per_second + ticks, group))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) fn process_identity(_pid: u32) -> Option<(u64, u32)> {
+    None
+}
+
 pub(crate) fn exact_executable(command: &mut Command, argument_zero: &str) -> Result<()> {
     use std::os::unix::ffi::OsStrExt;
     const MAXIMUM: usize = 4_096;
@@ -119,7 +169,18 @@ pub(crate) fn exact_executable(command: &mut Command, argument_zero: &str) -> Re
 
 // Nonblocking pipes avoid waiting forever for descendants that inherit stdout.
 pub(crate) fn execute(command: &mut Command, timeout: Duration, limit: usize) -> Result<Output> {
-    execute_with(command, None, timeout, limit)
+    execute_with(command, None, timeout, limit, &mut |_| Ok(()))
+}
+
+/// Like `execute`, calling `spawned` with the child's process group id (its pid) right after it
+/// starts; an error there stops the child.
+pub(crate) fn execute_observed(
+    command: &mut Command,
+    timeout: Duration,
+    limit: usize,
+    spawned: &mut dyn FnMut(u32) -> Result<()>,
+) -> Result<Output> {
+    execute_with(command, None, timeout, limit, spawned)
 }
 
 /// Like `execute`, feeding `input` to stdin from a writer thread so large inputs cannot deadlock.
@@ -129,7 +190,7 @@ pub(crate) fn execute_input(
     timeout: Duration,
     limit: usize,
 ) -> Result<Output> {
-    execute_with(command, Some(input), timeout, limit)
+    execute_with(command, Some(input), timeout, limit, &mut |_| Ok(()))
 }
 
 fn execute_with(
@@ -137,6 +198,7 @@ fn execute_with(
     input: Option<Vec<u8>>,
     timeout: Duration,
     limit: usize,
+    spawned: &mut dyn FnMut(u32) -> Result<()>,
 ) -> Result<Output> {
     let child = command
         .stdin(if input.is_some() {
@@ -152,6 +214,11 @@ fn execute_with(
     let mut guarded = ChildGuard(child);
     let child = &mut guarded.0;
     let pid = child.id();
+    if let Err(error) = spawned(pid) {
+        terminate_group(pid);
+        let _ = child.wait();
+        return Err(error);
+    }
     let writer = match (input, child.stdin.take()) {
         (Some(bytes), Some(mut pipe)) => Some(std::thread::spawn(move || {
             use std::io::Write;
