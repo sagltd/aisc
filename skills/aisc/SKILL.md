@@ -17,7 +17,7 @@ Refs: COMMIT = hex id or exact subject in quotes. SEL = PATH | hunk id | PATH:ST
 - Remove part of a commit: `aisc uncommit COMMIT SEL...`
 - Squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG ...]`
 - Reorder: `aisc move COMMIT... --before|--after COMMIT`
-- Rebase onto a moved base, keeping uncommitted work: `aisc sync [ONTO] [--fetch] [--prefer-branch PATH...]`. On CONFLICTS, edit the marked files, then `aisc sync --continue`
+- Rebase onto a moved base, keeping uncommitted work: `aisc sync [ONTO] [--fetch] [--prefer-branch PATH]... [--prefer-onto PATH]...`; `--abort` cancels. On CONFLICTS, edit the marked files, then `aisc sync --continue`
 - Copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be `origin/BRANCH`); integrate: `aisc land BRANCH... --into main --switch`
 - Discard uncommitted changes: `aisc discard SEL...`; undo the last operation: `aisc undo`
 

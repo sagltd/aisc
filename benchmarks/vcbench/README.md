@@ -2,7 +2,7 @@
 
 Compares AISC with plain Git, GitButler (`but`) and Jujutsu (`jj`) on identical tasks, using GitButler's MIT-licensed [version-control-bench](https://github.com/gitbutlerapp/version-control-bench) harness (`vcbench`). This directory holds only our patch to it; the harness itself is not vendored.
 
-Status: the harness side (arm, policy, disk metric, reference solutions) is complete. The reference solutions (`tasks/*/solution/solve-aisc.sh`) need the AISC history verbs (`commit`, `amend`, `split`, `squash`, `move`, `sync`, `pick`, `land`, `discard`, `uncommit`, `undo`, `log`, `show`) and fail until those ship. No agent results are published yet.
+Status: the harness side (arm, policy, disk metric, reference solutions) is complete and all 13 aisc reference solutions pass against the history verbs on `dev` (`npm run aisc:check`). `aisc gc`, `finish` and `start --sparse` were still in flight when this was written. No agent results are published yet.
 
 ## Reproduce
 
@@ -24,7 +24,7 @@ Status: the harness side (arm, policy, disk metric, reference solutions) is comp
    | git | 2.50.1 (Apple Git-155) | not pinned (system binary) |
    | but | 0.22.3 | `b79af0f95d3bce2274d03f9c91d3868d17a91c9fcfe6f4224e3aea117155c550` |
    | jj | 0.42.0-b8f7c455170e3273897aaf94431f8ccfb1afa7ad (aarch64-apple-darwin) | `9677341bc90a1f4b6e1df52d2c1ddcb666ed588b7834d3f131a77fa521b2591d` (binary); release tarball `98764966f22b599dc0b19bb9bd00d21df86156aeca5827f8274900356768db08` |
-   | aisc | `aisc --version` of the release build under test | record `shasum -a 256 $(command -v aisc)` |
+   | aisc | `aisc --human --version` of the release build under test (`--version` alone prints JSON when redirected) | record `shasum -a 256 $(command -v aisc)` |
    | codex / claude | 0.163.0 / 2.1.306 | record `--version` |
 
    The harness defaults pin git 2.44.0 and but 0.5.2189. Because we use other versions, supply a pin file so mismatches fail loudly instead of silently:
@@ -50,7 +50,7 @@ Status: the harness side (arm, policy, disk metric, reference solutions) is comp
    npm run aisc:check -- --aisc-bin /path/to/aisc --aisc-skill-dir frozen-skills/aisc --but-bin /path/to/but --version-pins pins.json
    ```
 
-   `aisc:check` runs the aisc reference solution for pilots 1-6 and the deterministic references for expansion tasks 7-13. It fails until the history verbs exist. `check-runner-infra.mjs` (part of `runner:check`) has a 250 ms timing assertion that can fail on a loaded machine.
+   `aisc:check` runs the aisc reference solution for pilots 1-6 and the deterministic references for expansion tasks 7-13. `check-runner-infra.mjs` (part of `runner:check`) has a 250 ms timing assertion that can fail on a loaded machine.
 
 5. Permission smoke test: one real run per arm and agent on the simplest task, before the matrix. Check that no run hit a sandbox or permission denial (for example `grep -il "permission\|denied\|not allowed\|sandbox" runs/*/agent-stdout.txt runs/*/command-output/*.stderr`), that every arm's tool state was writable (GitButler app data, `.jj`, `.git`) and that no run ended in `AGENT_RUNTIME_ERROR`. If a denial appears, widen the allowlist or `--add-dir` set identically for all arms, and discard the smoke runs.
 
@@ -65,6 +65,26 @@ Status: the harness side (arm, policy, disk metric, reference solutions) is comp
    ```
 
    Use `--dry-run true` first to see the plan. `--k` should be at least 5 per cell. Do a one-run pilot per agent before the full matrix.
+
+## Reference solutions (no LLM)
+
+Every reference passes its verifier. Calls and bytes are the `aisc` invocations of the reference script only (stdout plus stderr); an agent usually adds one `aisc log` first.
+
+| Task | Calls | Output bytes |
+|---|---|---|
+| 1 selective commit | 1 | 274 |
+| 2 multi-amend | 1 | 464 |
+| 3 split | 1 | 597 |
+| 4 reorder | 1 | 609 |
+| 5 squash | 1 | 440 |
+| 6 dirty sync | 2 | 648 |
+| 7 scoped review | 1 | 524 |
+| 8 cold checkpoint | 1 | 203 |
+| 9 cleanup noise | 1 | 144 |
+| 10 recover amend | 1 | 177 |
+| 11 dual-source sync | 2 | 702 |
+| 12 integrate topics | 1 | 360 |
+| 13 selective copy | 1 | 216 |
 
 ## What the patch adds
 

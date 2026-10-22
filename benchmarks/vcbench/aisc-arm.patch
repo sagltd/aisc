@@ -670,7 +670,7 @@ index fb0f3af..b4f2d47 100644
    console.log(`[${plan.idx}/${plans.length}] ${plan.task} ${plan.agent} ${plan.arm} r${plan.rep}`);
    const started = Date.now();
 diff --git a/scripts/run-pilot-agent.mjs b/scripts/run-pilot-agent.mjs
-index 8b5150d..4f52f43 100755
+index 8b5150d..e5d3a27 100755
 --- a/scripts/run-pilot-agent.mjs
 +++ b/scripts/run-pilot-agent.mjs
 @@ -14,17 +14,19 @@ import { SCENARIO_TASKS, loadScenario } from "./lib/scenarios.mjs";
@@ -733,7 +733,7 @@ index 8b5150d..4f52f43 100755
 +  if (!skillDir) throw new Error("The aisc+skill arm requires --aisc-skill-dir (a frozen copy of skills/aisc)");
 +  const skillFile = path.join(skillDir, "SKILL.md");
 +  if (!existsSync(skillFile)) throw new Error(`AISC skill file not found: ${skillFile}`);
-+  const aiscVersion = run(realAisc, ["--version"], { cwd: workspace, env: aiscEnv }).stdout.trim();
++  const aiscVersion = run(realAisc, ["--human", "--version"], { cwd: workspace, env: aiscEnv }).stdout.trim();
 +  const installed = [];
 +  for (const root of [".codex/skills/aisc", ".claude/skills/aisc"]) {
 +    const dest = path.join(workspace, root);
@@ -948,7 +948,7 @@ index 8b5150d..4f52f43 100755
    process.exit(2);
  }
  
-@@ -1415,8 +1506,9 @@ try {
+@@ -1415,10 +1506,11 @@ try {
    gitBinaryMetadata = {path:realGit, sha256:sha256File(realGit), version:null};
    if (arm === "but+skill") realBut = executablePath(args.get("but-bin"), "but");
    if (arm === "jj+skill") realJj = executablePath(args.get("jj-bin"), "jj");
@@ -957,8 +957,11 @@ index 8b5150d..4f52f43 100755
 -    const required = [["git", realGit], ...(arm === "but+skill" ? [["but", realBut]] : arm === "jj+skill" ? [["jj", realJj]] : [])];
 +    const required = [["git", realGit], ...(arm === "but+skill" ? [["but", realBut]] : arm === "jj+skill" ? [["jj", realJj]] : arm === "aisc+skill" ? [["aisc", realAisc]] : [])];
      for (const [name, binary] of required) {
-       const probe = run(binary, ["--version"], {env: butEnv, check: false});
+-      const probe = run(binary, ["--version"], {env: butEnv, check: false});
++      const probe = run(binary, name === "aisc" ? ["--human", "--version"] : ["--version"], {env: butEnv, check: false});
        const observed = probe.status === 0 ? probe.stdout.trim() : null;
+       if (name === "git") {
+         gitBinaryMetadata.version = observed;
 @@ -1439,7 +1531,7 @@ try {
      run(realBut, ["skill", "install", "--path", skillDir], {cwd: runDir, env: butEnv, timeoutMs: 15000});
    }
@@ -1027,7 +1030,7 @@ index 8b5150d..4f52f43 100755
 +  ? {
 +      path: realAisc,
 +      sha256: sha256File(realAisc),
-+      version: run(realAisc, ["--version"], { cwd: workspace }).stdout.trimEnd(),
++      version: run(realAisc, ["--human", "--version"], { cwd: workspace }).stdout.trimEnd(),
 +    }
 +  : null;
 +const toolBinaryMetadata = arm === "but+skill" ? butBinaryMetadata : arm === "jj+skill" ? jjBinaryMetadata : arm === "aisc+skill" ? aiscBinaryMetadata : gitBinaryMetadata;
