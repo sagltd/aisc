@@ -787,7 +787,7 @@ fn place(
 }
 
 /// The blocks a selection names.
-fn selected_blocks(file: &FileChange, selected: &FileSel) -> BTreeSet<usize> {
+pub(super) fn selected_blocks(file: &FileChange, selected: &FileSel) -> BTreeSet<usize> {
     match selected {
         FileSel::Whole => (0..file.blocks.len()).collect(),
         FileSel::Blocks(set) => set.clone(),
@@ -1150,7 +1150,12 @@ fn verify_commits(
 }
 
 /// Whether `blocks` applied to `lines` give exactly the blob `oid`.
-fn rebuilds(git: &Git, lines: &[Line], blocks: &[Block], oid: Option<&str>) -> Result<bool> {
+pub(super) fn rebuilds(
+    git: &Git,
+    lines: &[Line],
+    blocks: &[Block],
+    oid: Option<&str>,
+) -> Result<bool> {
     let every: Vec<&Block> = blocks.iter().collect();
     let (Some(oid), Ok(rebuilt)) = (oid, splice(lines, &every)) else {
         return Ok(false);
@@ -1160,7 +1165,12 @@ fn rebuilds(git: &Git, lines: &[Line], blocks: &[Block], oid: Option<&str>) -> R
 
 /// The file's change as the diff of HEAD's blob and `stored` (the blob Git stores for the
 /// worktree file): exact blocks by construction, whatever filters produced `stored`.
-fn stored_blocks(git: &Git, tip_tree: &str, file: &FileChange, stored: &str) -> Result<FileChange> {
+pub(super) fn stored_blocks(
+    git: &Git,
+    tip_tree: &str,
+    file: &FileChange,
+    stored: &str,
+) -> Result<FileChange> {
     let mode = file
         .new_mode
         .clone()
