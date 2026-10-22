@@ -1,26 +1,27 @@
 //! `aisc agent setup --print`: the block an agent's AGENTS.md or CLAUDE.md carries, so the agent
-//! starts with the one-call workflow instead of Git habits. The skill holds the full syntax.
+//! starts with the one-call workflow instead of Git habits, without opening help or the skill.
 
 pub const SETUP_BLOCK: &str = "\
 <!-- aisc-agent-setup:start -->
 ## Version control
 
-- Use AISC (`aisc`) for version-control inspection and writes: commits, branches, history edits, sync and undo.
-- Most tasks take two calls: `aisc log`, then one aisc command. When the task already names the commits (by subject) and the changes (by path or text), skip `aisc log` and run the command directly; aisc refuses rather than guesses.
-- `aisc log` shows the branch, its commits and every uncommitted hunk with an id, so never run `git status`, `git diff` or `git log` first. `aisc log BRANCH` views another local or `origin/` branch.
-- Selectors are hunk ids, paths, `PATH:L-R` or `\"PATH~text\"`; a commit is its id or exact subject:
-  - commit only some changes on a new branch: `aisc commit -b NEW -m MSG SEL...`
-  - fold fixes into older commits: `aisc amend --into COMMIT SEL... --into COMMIT SEL...`
-  - split, squash, reorder, uncommit: `aisc split`, `aisc squash`, `aisc move`, `aisc uncommit`
-  - throw away selected uncommitted changes: `aisc discard SEL...`
-  - copy commits onto another branch: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]`
-  - bring a branch up to date with its moved base and its own upstream, keeping uncommitted work: `aisc sync --fetch`
-  - integrate finished branches: `aisc land BRANCH... --into main`
-  - undo the last aisc operation: `aisc undo`
-- These replace raw `git checkout`, `reset`, `merge`, `rebase`, `cherry-pick` and `stash`.
-- Writes print their result and the new ids. Do not run anything to verify; answer and stop.
-- Exit 4 means something changed underneath: run `aisc log` and retry. Read `error:` and `hint:` lines before retrying.
-- Commit only this session's changes and leave the rest uncommitted. Do not push unless asked.
-- Exact syntax for every command is in the installed `aisc` skill.
+Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take two calls: `aisc log`, then one command below. If the task already names the commits (exact subject) and the changes (path or text), skip `aisc log`. This syntax is complete: do not run `--help`, open the skill, or use `git status`/`diff`/`log`.
+
+- look: `aisc log [BRANCH]` (commits, every uncommitted hunk with an id; BRANCH may be `origin/NAME`); `aisc show COMMIT`
+- commit some changes: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` new branch; `-b NEW --onto BASE` without leaving this branch)
+- fold into older commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]`
+- split: `aisc split COMMIT --into MSG SEL... [--into MSG SEL...]`
+- squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG COMMIT...]`
+- reorder: `aisc move COMMIT... --before|--after COMMIT`
+- take out of a commit, keep on disk: `aisc uncommit COMMIT SEL...`
+- throw away uncommitted changes: `aisc discard SEL...`
+- copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]`
+- update with moved base and own upstream, keeping uncommitted work: `aisc sync [ONTO] [--fetch]`; on CONFLICTS edit the marked files, then `aisc sync --continue`
+- integrate branches: `aisc land BRANCH... --into main [--switch]`
+- undo the last operation: `aisc undo`
+
+SEL is a hunk id, a path, `PATH:A-B` (new-side lines) or `\"PATH~text\"` (the hunk containing text). COMMIT is an id or exact subject.
+
+Writes print the result, new ids and `clean` when nothing is left; do not verify, answer and stop. Exit 4: run `aisc log`, retry. Exit 1: read `error:`/`hint:`. These replace raw `git checkout`, `reset`, `merge`, `rebase`, `cherry-pick` and `stash`. Leave unrelated changes uncommitted; do not push unless asked.
 <!-- aisc-agent-setup:end -->
 ";

@@ -395,7 +395,20 @@ struct State {
     /// The branch's upstream (`origin/NAME`) when it has commits the branch lacks: they are
     /// replayed first, then the branch's own commits.
     #[serde(default)]
-    upstream: Option<(String, String)>,
+    upstream: Option<Upstream>,
+}
+
+/// Commits someone else pushed to the branch's upstream, to replay before the branch's own.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Upstream {
+    /// `origin/NAME`.
+    label: String,
+    oid: String,
+    /// Merge base of the branch and the upstream: commits below it are shared.
+    base: String,
+    /// Earlier tips of the local branch (its reflog). Upstream commits they contain were the
+    /// user's own before a local rewrite (squash, amend) and are not taken back.
+    seen: Vec<String>,
 }
 
 impl State {
@@ -643,14 +656,10 @@ fn start(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
     drive(git, session, state, args.opts.quiet)
 }
 
-/// `NAME@{upstream}` as (label, oid) when it holds commits that neither the branch nor ONTO
-/// has, i.e. someone pushed to the branch. `None` without an upstream or with nothing new.
-fn new_upstream_commits(
-    git: &Git,
-    name: &str,
-    tip: &str,
-    onto: &str,
-) -> Result<Option<(String, String)>> {
+/// `NAME@{upstream}` when it holds commits that the branch never had: someone else pushed to
+/// it. Commits the branch had before a local rewrite (in its reflog) do not count, so a squash
+/// or amend of pushed work is never undone. `None` without an upstream, a reflog or new commits.
+fn new_upstream_commits(git: &Git, name: &str, tip: &str, onto: &str) -> Result<Option<Upstream>> {
     let spec = format!("{name}@{{upstream}}");
     let Some(refname) =
         git.probe(&["rev-parse", "--verify", "-q", "--symbolic-full-name", &spec])?
@@ -671,11 +680,41 @@ fn new_upstream_commits(
     {
         return Ok(None);
     }
+    // Without the branch's reflog a local rewrite cannot be told from a foreign push.
+    let Ok(log) = std::fs::read_to_string(git.common_dir()?.join("logs/refs/heads").join(name))
+    else {
+        return Ok(None);
+    };
+    let mut seen: Vec<String> = log
+        .lines()
+        .filter_map(|line| line.split(' ').nth(1))
+        .filter(|oid| oid.len() >= 40 && oid.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .filter(|oid| !oid.bytes().all(|byte| byte == b'0'))
+        .map(str::to_owned)
+        .collect();
+    seen.sort();
+    seen.dedup();
+    if seen.len() > 512 {
+        return Ok(None);
+    }
+    let Some(base) = git.probe(&["merge-base", tip, &oid])? else {
+        return Ok(None);
+    };
+    let mut excludes: Vec<&str> = vec![base.as_str(), onto, tip];
+    excludes.extend(seen.iter().map(String::as_str));
+    if load_picks_excluding(git, &oid, &excludes)?.is_empty() {
+        return Ok(None);
+    }
     let label = refname
         .strip_prefix("refs/remotes/")
         .unwrap_or(&refname)
         .to_owned();
-    Ok(Some((label, oid)))
+    Ok(Some(Upstream {
+        label,
+        oid,
+        base,
+        seen,
+    }))
 }
 
 fn resume(repo: &Repo, git: &Git, args: &cli::Sync) -> Result<Outcome> {
@@ -804,12 +843,16 @@ fn abort(repo: &Repo, git: &Git) -> Result<Outcome> {
 /// Replays with the current resolutions, then pauses on conflicts or finishes the rewrite.
 fn drive(git: &Git, session: Session, mut state: State, quiet: bool) -> Result<Outcome> {
     let picks = match &state.upstream {
-        Some((_, upstream)) => {
-            let mut picks = load_picks(git, upstream, &state.onto_oid)?;
+        Some(upstream) => {
+            // Shared history, then the foreign upstream commits, then the branch's own.
+            let mut picks = load_picks(git, &upstream.base, &state.onto_oid)?;
+            let mut excludes: Vec<&str> = vec![&upstream.base, &state.onto_oid, &state.old_tip];
+            excludes.extend(upstream.seen.iter().map(String::as_str));
+            picks.extend(load_picks_excluding(git, &upstream.oid, &excludes)?);
             picks.extend(load_picks_excluding(
                 git,
                 &state.old_tip,
-                &[&state.onto_oid, upstream],
+                &[&upstream.base, &state.onto_oid],
             )?);
             picks
         }
@@ -1263,7 +1306,7 @@ fn finish(
     let with_upstream = state
         .upstream
         .as_ref()
-        .map(|(label, _)| format!(" with {label}"))
+        .map(|upstream| format!(" with {}", upstream.label))
         .unwrap_or_default();
     let mut result = format!(
         "synced {}{with_upstream} onto {onto_label} ({kept} commits, {} dropped); op {}",

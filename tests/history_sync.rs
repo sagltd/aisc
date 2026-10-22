@@ -699,3 +699,56 @@ fn sync_also_takes_new_commits_pushed_to_the_branch_upstream() {
         ["Add local retry setting", "Support document format"]
     );
 }
+
+/// feature pushed to origin/feature, then origin/main moves (by a push from another clone).
+fn pushed_feature(subjects: &[&str]) -> Fixture {
+    let fixture = Fixture::with_files(&[("README.md", "base\n")]);
+    let remote = fixture.directory.path().join("origin.git");
+    let remote = remote.to_str().unwrap().to_owned();
+    fixture.git(&["init", "-q", "--bare", "-b", "main", &remote]);
+    fixture.git(&["remote", "add", "origin", &remote]);
+    fixture.git(&["push", "-q", "-u", "origin", "main"]);
+    fixture.git(&["switch", "-q", "-c", "feature"]);
+    for (index, subject) in subjects.iter().enumerate() {
+        fixture.write(&format!("f{index}.txt"), &format!("{subject}\n"));
+        commit_as(&fixture, subject);
+    }
+    fixture.git(&["push", "-q", "-u", "origin", "feature"]);
+    fixture.git(&["switch", "-q", "main"]);
+    fixture.write("main.txt", "moved\n");
+    commit_as(&fixture, "move main");
+    fixture.git(&["push", "-q", "origin", "main"]);
+    fixture.git(&["reset", "-q", "--hard", "HEAD~1"]);
+    fixture.git(&["switch", "-q", "feature"]);
+    fixture
+}
+
+#[test]
+fn sync_never_takes_back_pushed_commits_the_user_squashed() {
+    let fixture = pushed_feature(&["wip 1", "wip 2"]);
+    fixture
+        .aisc(&["squash", "--into", "Add feature", "wip 1", "wip 2"])
+        .ok();
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(
+        !run.stdout.contains("with origin/feature"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(fixture.subjects("origin/main..HEAD"), ["Add feature"]);
+}
+
+#[test]
+fn sync_never_takes_back_a_pushed_commit_the_user_amended() {
+    let fixture = pushed_feature(&["feature work"]);
+    fixture.write("f0.txt", "feature work, amended\n");
+    fixture
+        .aisc(&["amend", "--into", "feature work", "f0.txt"])
+        .ok();
+    let run = fixture.aisc(&["sync", "--fetch"]);
+    run.ok();
+    assert!(!run.stdout.contains("CONFLICT"), "{}", run.stdout);
+    assert_eq!(fixture.subjects("origin/main..HEAD"), ["feature work"]);
+    assert_eq!(fixture.read("f0.txt"), "feature work, amended\n");
+}

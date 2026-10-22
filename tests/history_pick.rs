@@ -495,14 +495,27 @@ fn log_and_pick_accept_a_remote_tracking_branch() {
 
 #[test]
 fn history_rewrites_still_refuse_a_remote_tracking_branch() {
-    let (fixture, _) = with_remote_feature();
-    let run = fixture.aisc(&[
-        "squash",
-        "--into",
-        "x",
-        "--branch",
-        "origin/feature",
-        "add remote work",
-    ]);
-    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    let (fixture, oid) = with_remote_feature();
+    for args in [
+        &[
+            "uncommit",
+            "--branch",
+            "origin/feature",
+            "add remote work",
+            "f.txt",
+        ][..],
+        &[
+            "move",
+            "--branch",
+            "origin/feature",
+            "add remote work",
+            "--before",
+            "base",
+        ][..],
+    ] {
+        let run = fixture.aisc(args);
+        assert_eq!(run.code, 1, "{args:?}: {} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains("origin/feature"), "{}", run.stderr);
+    }
+    assert_eq!(fixture.git(&["rev-parse", "origin/feature"]), oid);
 }
