@@ -493,6 +493,26 @@ fn hostile_characters_are_escaped_in_text_output() {
 }
 
 #[test]
+fn undo_keeps_a_directory_that_existed_before_the_operation() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.git(&["switch", "-c", "feature"]);
+    fixture.write("logs/x.txt", "x\n");
+    fixture.commit_all("add logs");
+    fixture.git(&["switch", "main"]);
+    std::fs::create_dir(fixture.path("logs")).unwrap();
+    fixture
+        .aisc(&["pick", "--from", "feature", "add logs"])
+        .ok();
+    assert_eq!(fixture.read("logs/x.txt"), "x\n");
+    fixture.aisc(&["undo"]).ok();
+    assert!(!fixture.exists("logs/x.txt"));
+    assert!(
+        fixture.path("logs").is_dir(),
+        "the user's directory is kept"
+    );
+}
+
+#[test]
 fn one_plan_can_replace_a_file_with_a_directory_and_back() {
     let fixture = Fixture::with_files(&[("a", "file\n"), ("keep.txt", "k\n")]);
     fixture.git(&["switch", "-c", "topic"]);

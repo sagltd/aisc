@@ -208,6 +208,34 @@ impl Fixture {
             .unwrap()
     }
 
+    /// Lock, journal and temporary files an interrupted aisc operation may leave behind.
+    pub fn aisc_residue(&self) -> Vec<String> {
+        let mut found: Vec<String> = [
+            ".git/aisc-operation.lock",
+            ".git/index.lock",
+            ".git/aisc/journal.json",
+        ]
+        .into_iter()
+        .filter(|path| self.exists(path))
+        .map(str::to_owned)
+        .collect();
+        if let Ok(entries) = fs::read_dir(self.path(".git/aisc/tmp")) {
+            for entry in entries {
+                found.push(entry.unwrap().file_name().to_string_lossy().into_owned());
+            }
+        }
+        found
+    }
+
+    /// Recovers after a crashed aisc operation the way a user would (any history command, here
+    /// `aisc log`) and asserts that nothing is left behind. Returns the log run.
+    pub fn recover(&self) -> Run {
+        let run = self.aisc(&["log"]);
+        run.ok();
+        assert!(self.aisc_residue().is_empty(), "{:?}", self.aisc_residue());
+        run
+    }
+
     pub fn calls(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
     }

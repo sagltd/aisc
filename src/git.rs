@@ -37,7 +37,7 @@ impl Lock {
             .open(&path)
             .with_context(|| {
                 format!(
-                    "checkout is locked: {}; inspect owner before removing a stale lock",
+                    "checkout is locked: {}; run any aisc history command (e.g. `aisc log`) to recover",
                     path.file_name().unwrap_or_default().to_string_lossy()
                 )
             })?;
