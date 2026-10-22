@@ -342,6 +342,27 @@ pub(crate) fn read(
     limit: usize,
     with_changes: bool,
 ) -> Result<View> {
+    read_view(git, branch, limit, with_changes, false)
+}
+
+/// [`read`] that may also view a remote-tracking branch (`origin/main`), for read-only callers
+/// (`aisc log`, `pick --from`): its commits can be shown and copied, never rewritten.
+pub(crate) fn read_any(
+    git: &Git,
+    branch: Option<&str>,
+    limit: usize,
+    with_changes: bool,
+) -> Result<View> {
+    read_view(git, branch, limit, with_changes, true)
+}
+
+fn read_view(
+    git: &Git,
+    branch: Option<&str>,
+    limit: usize,
+    with_changes: bool,
+    remote_ok: bool,
+) -> Result<View> {
     let (refs, head, status_output, patch) = std::thread::scope(|scope| {
         let refs = scope.spawn(|| read_refs(git));
         let head = scope.spawn(|| git.head_state());
@@ -385,11 +406,20 @@ pub(crate) fn read(
                 .locals
                 .iter()
                 .find(|candidate| candidate.name == name)
+                .or_else(|| {
+                    remote_ok
+                        .then(|| refs.remotes.iter().find(|candidate| candidate.name == name))
+                        .flatten()
+                })
                 .ok_or_else(|| {
                     fail_hint(
                         Code::Selector,
                         format!("unknown branch '{name}'"),
-                        "use a local branch name",
+                        if remote_ok {
+                            "use a local or remote-tracking branch name (origin/NAME)"
+                        } else {
+                            "use a local branch name"
+                        },
                     )
                 })?;
             (Some(name.to_owned()), found.oid.clone(), false)

@@ -458,3 +458,51 @@ fn new_branch_name_must_be_free_and_valid() {
     assert_eq!(bad.code, 1);
     assert_eq!(fixture.snapshot(), before);
 }
+
+/// main plus a remote-tracking `origin/feature` holding one commit that no local branch has.
+fn with_remote_feature() -> (Fixture, String) {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    let origin = fixture.directory.path().join("origin.git");
+    let origin = origin.to_str().unwrap();
+    fixture.git(&["init", "-q", "--bare", origin]);
+    fixture.git(&["remote", "add", "origin", origin]);
+    fixture.git(&["switch", "-q", "-c", "feature"]);
+    fixture.write("f.txt", "remote work\n");
+    fixture.commit_all("add remote work");
+    fixture.git(&["push", "-q", "origin", "feature"]);
+    let oid = fixture.git(&["rev-parse", "HEAD"]);
+    fixture.git(&["switch", "-q", "main"]);
+    fixture.git(&["branch", "-q", "-D", "feature"]);
+    fixture.git(&["fetch", "-q", "origin"]);
+    (fixture, oid)
+}
+
+#[test]
+fn log_and_pick_accept_a_remote_tracking_branch() {
+    let (fixture, oid) = with_remote_feature();
+    let log = fixture.aisc(&["log", "origin/feature"]);
+    log.ok();
+    assert!(log.stdout.contains("add remote work"), "{}", log.stdout);
+    let pick = fixture.aisc(&["pick", "--from", "origin/feature", &oid[..7]]);
+    pick.ok();
+    assert_eq!(fixture.subjects("main")[0], "add remote work");
+    assert_eq!(
+        fixture.git(&["rev-parse", "origin/feature"]),
+        oid,
+        "the remote-tracking branch is never rewritten"
+    );
+}
+
+#[test]
+fn history_rewrites_still_refuse_a_remote_tracking_branch() {
+    let (fixture, _) = with_remote_feature();
+    let run = fixture.aisc(&[
+        "squash",
+        "--into",
+        "x",
+        "--branch",
+        "origin/feature",
+        "add remote work",
+    ]);
+    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+}

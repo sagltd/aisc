@@ -162,6 +162,9 @@ pub(crate) struct MutationOpts {
 
 #[derive(Args, Debug)]
 pub(crate) struct Log {
+    /// Another local or remote-tracking branch to view (`main`, `origin/main`)
+    #[arg(value_name = "BRANCH", conflicts_with = "branch")]
+    pub target: Option<String>,
     #[arg(long, value_name = "BRANCH")]
     pub branch: Option<String>,
     #[arg(long, default_value = "20", value_parser = bounded::<1_000>)]
