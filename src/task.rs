@@ -474,7 +474,7 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     )
 }
 
-pub(crate) fn finish(repo: &Repo, keep: bool, delete_secrets: bool) -> Result<Value> {
+pub(crate) fn finish(repo: &Repo, keep: bool, allow: worktree::Allow) -> Result<Value> {
     let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
     repo.writable()?;
     repo.require_clean()?;
@@ -529,7 +529,7 @@ pub(crate) fn finish(repo: &Repo, keep: bool, delete_secrets: bool) -> Result<Va
         let cleanup = if keep {
             serde_json::Map::from_iter([("removed_worktree".to_owned(), Value::Null)])
         } else {
-            worktree::remove_after_finish(repo, &session.name, delete_secrets)
+            worktree::remove_after_finish(repo, &session.name, allow)
         };
         result
             .as_object_mut()

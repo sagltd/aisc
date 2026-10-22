@@ -1,7 +1,8 @@
 //! `aisc gc`: reports registered worktrees and removes the clean, finished-or-merged ones.
 use super::{
-    Entry, Ignored, Listed, OPERATION_MARKERS, Registration, Size, admin_dirs, is_symlink, list,
-    measure, now, registrations, remove, rescue, same_path, session_at, unregister, unsafe_path,
+    Allow, Entry, Ignored, Listed, OPERATION_MARKERS, Registration, Size, admin_dirs, is_symlink,
+    list, measure, now, registrations, remove, rescue, same_path, session_at, unregister,
+    unsafe_path,
 };
 use crate::cli;
 use crate::git::{Lock, Repo, run_git, text};
@@ -59,7 +60,7 @@ struct Scan<'a> {
     listed: &'a [Listed],
     admins: &'a HashMap<String, PathBuf>,
     min_age: u64,
-    delete_secrets: bool,
+    allow: Allow,
 }
 
 impl Scan<'_> {
@@ -84,7 +85,11 @@ impl Scan<'_> {
         });
         if let Some(reason) = invalid {
             row.state = "invalid";
-            row.reason = format!("{reason}; never acted on");
+            // Only safe paths get "delete by hand" advice; for these, forgetting is the fix.
+            row.reason = format!(
+                "{reason}; invalid registry entry; remove {} to forget it",
+                entry.file.display()
+            );
             return row;
         }
         let path = PathBuf::from(&row.registration.path);
@@ -184,7 +189,7 @@ impl Scan<'_> {
             match ignored {
                 Err(error) => format!("could not list ignored files: {error:#}"),
                 Ok(ignored) => {
-                    let refusal = ignored.refusal(self.delete_secrets);
+                    let refusal = ignored.refusal(self.allow);
                     row.ignored = ignored;
                     refusal.unwrap_or_else(|| {
                         row.action = Action::Remove;
@@ -269,7 +274,10 @@ pub(crate) fn gc(args: &cli::Gc) -> Result<Outcome> {
         listed: &listed,
         admins: &admins,
         min_age: args.min_age,
-        delete_secrets: args.delete_ignored_secrets,
+        allow: Allow {
+            secrets: args.delete_ignored_secrets,
+            nested_repos: args.delete_nested_repos,
+        },
     };
     let mut rows = registrations(&common)
         .into_iter()

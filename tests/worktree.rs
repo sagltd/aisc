@@ -48,7 +48,7 @@ fn repository() -> Fixture {
         ("src/deep/inner.txt", "inner\n"),
         ("docs/guide.txt", "guide\n"),
         ("other/file.txt", "other\n"),
-        (".gitignore", ".env\nbuild/\n*.key\n"),
+        (".gitignore", ".env\nbuild/\n*.key\nsecret/\n"),
     ])
 }
 
@@ -416,6 +416,71 @@ fn finish_keeps_a_worktree_with_ignored_secret_like_files() {
         .json();
     assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
     assert!(!path.exists());
+}
+
+#[test]
+fn finish_keeps_a_worktree_with_a_nested_repository_in_ignored_files() {
+    let fixture = repository();
+    let path = start(&fixture, "nested", &[]);
+    checkpoint_and_verify(&path, "top.txt");
+    let dependency = path.join("build/dep");
+    fs::create_dir_all(&dependency).unwrap();
+    git_at(&dependency, &["init", "-q", "-b", "main"]);
+    git_at(&dependency, &["config", "user.name", "Nested"]);
+    git_at(
+        &dependency,
+        &["config", "user.email", "nested@example.invalid"],
+    );
+    fs::write(dependency.join("local.txt"), "only here\n").unwrap();
+    git_at(&dependency, &["add", "."]);
+    git_at(&dependency, &["commit", "-qm", "local only"]);
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert!(value["removed_worktree"].is_null(), "{value}");
+    let reason = value["kept_reason"].as_str().unwrap();
+    assert!(
+        reason.starts_with("nested git repository: build/dep"),
+        "{reason}"
+    );
+    assert!(reason.contains("--delete-nested-repos"), "{reason}");
+    assert!(dependency.join("local.txt").exists());
+    // Files inside the nested repository count, and their secrets are found too.
+    fs::write(dependency.join(".env"), "TOKEN=x\n").unwrap();
+    let value = aisc_at(&path, &["finish", "--delete-nested-repos"])
+        .ok()
+        .json();
+    assert!(value["removed_worktree"].is_null(), "{value}");
+    let reason = value["kept_reason"].as_str().unwrap();
+    assert!(reason.contains("build/dep/.env"), "{reason}");
+    let value = aisc_at(
+        &path,
+        &[
+            "finish",
+            "--delete-nested-repos",
+            "--delete-ignored-secrets",
+        ],
+    )
+    .ok()
+    .json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+    assert!(!path.exists());
+}
+
+#[test]
+fn secret_like_ignored_files_are_matched_case_insensitively() {
+    let fixture = repository();
+    let path = start(&fixture, "cased", &[]);
+    checkpoint_and_verify(&path, "top.txt");
+    fs::create_dir_all(path.join("secret")).unwrap();
+    for name in [".ENV", "prod.env", "Vault.KDBX"] {
+        fs::write(path.join("secret").join(name), "x\n").unwrap();
+    }
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert!(value["removed_worktree"].is_null(), "{value}");
+    let reason = value["kept_reason"].as_str().unwrap();
+    for name in ["secret/.ENV", "secret/prod.env", "secret/Vault.KDBX"] {
+        assert!(reason.contains(name), "{reason}");
+    }
+    assert_eq!(value["ignored_files"], 3);
 }
 
 #[test]

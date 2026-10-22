@@ -337,7 +337,7 @@ Steps:
    - Runs `git worktree remove P` (never `--force`) from the main checkout's cwd.
    - Keeps the `aisc/NAME` branch (commits are not lost) and deletes the registry entry.
    - Output adds `removed_worktree`, `freed_bytes` and `main_checkout` ("continue in …").
-   - Ignored build output is deleted by design. The output reports `ignored_files`/`ignored_bytes`. A worktree whose ignored files look like secrets (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `.npmrc`, `.netrc`, `credentials*`) is kept with reason `ignored secret-like files: …` unless `--delete-ignored-secrets` is passed (finish and gc).
+   - Ignored build output is deleted by design. The output reports `ignored_files`/`ignored_bytes`. A worktree whose ignored files look like secrets (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `.npmrc`, `.netrc`, `credentials*`) is kept with reason `ignored secret-like files: …` unless `--delete-ignored-secrets` is passed (finish and gc). Names are matched case-insensitively and also cover `.envrc`, `*.env`, `id_ecdsa*`, `id_dsa*`, `.pgpass`, `*.pfx`, `*.jks`, `*.keystore`, `.git-credentials`, `*.ovpn`, `terraform.tfstate*`, `*.kdbx`. Ignored directories are walked (bounded: 200k entries, 10 s; past that the worktree is kept), because Git lists an ignored nested repository as one entry: a `.git` anywhere inside keeps the worktree with `nested git repository: <path>` unless `--delete-nested-repos` is passed.
    - A HEAD that no branch, tag, remote or `refs/aisc/*` ref contains (detached work) is saved as `refs/aisc/rescue/<name>` before removal; output field `rescue_ref`.
    - If Git deletes only part of the files (it drops its admin dir anyway), the output says "partially removed" with the leftover path to delete by hand; gc then lists it as `leftover`.
 4. **`aisc gc [--apply] [--min-age H]`.**
@@ -347,7 +347,7 @@ Steps:
      - Age, branch.
      - State: missing / dirty / clean, plus merged (tip is an ancestor of the base) or finished.
    - Candidates are clean and (merged or finished) and at least min-age old, or missing and at least min-age old (their HEAD is rescued first).
-   - Registry names must match `[A-Za-z0-9._-]` (no `..`) and the file name; registered paths that are relative, `/`, `$HOME`, or contain the main worktree or Git dir are `invalid`, never walked or acted on. A registered path that is a symlink is `unverified` and kept; paths are compared with only the parent resolved.
+   - Registry names must match `[A-Za-z0-9._-]` (no `..`) and the file name; registered paths that are relative, contain `.`/`..` components, are `/` or `$HOME`, or contain the main worktree or Git dir (checked lexically, with the parent resolved, and by file identity so case variants on case-insensitive filesystems match) are `invalid`, never walked or acted on; the reason names the registry file to remove. A registered path that is a symlink is `unverified` and kept; paths are compared with only the parent resolved.
    - Dry run by default. `--apply` runs `git worktree remove` on candidates, then `git worktree prune`, then deletes their registry entries.
    - Text example:
      ```

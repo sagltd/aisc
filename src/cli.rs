@@ -70,6 +70,9 @@ pub(crate) enum Operation {
         /// Remove the worktree even if ignored files look like secrets (.env, *.pem, *.key, ...)
         #[arg(long, conflicts_with = "keep")]
         delete_ignored_secrets: bool,
+        /// Remove the worktree even if ignored directories hold nested Git repositories
+        #[arg(long, conflicts_with = "keep")]
+        delete_nested_repos: bool,
     },
     /// Read a bounded GitHub PR/review/check overview using existing gh auth
     Github {
@@ -326,6 +329,9 @@ pub(crate) struct Gc {
     /// Also remove worktrees whose ignored files look like secrets (.env, *.pem, *.key, ...)
     #[arg(long)]
     pub delete_ignored_secrets: bool,
+    /// Also remove worktrees whose ignored directories hold nested Git repositories
+    #[arg(long)]
+    pub delete_nested_repos: bool,
 }
 
 #[derive(Args)]

@@ -412,6 +412,64 @@ fn registry_paths_that_cover_the_repository_or_home_are_refused_without_walking(
     assert!(fixture.path("top.txt").exists());
 }
 
+#[test]
+fn gc_keeps_worktrees_holding_nested_repositories_in_ignored_dirs() {
+    let fixture = repository();
+    let path = start(&fixture, "vendored");
+    finish_kept(&path);
+    let nested = path.join("build/dep");
+    fs::create_dir_all(&nested).unwrap();
+    git_at(&nested, &["init", "-q"]);
+    let report = gc(&fixture, &["--apply"]);
+    let row = entry(&report, "vendored");
+    assert_eq!(row["action"], "keep", "{report}");
+    assert!(
+        row["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("nested git repository: build/dep"),
+        "{report}"
+    );
+    let report = gc(&fixture, &["--apply", "--delete-nested-repos"]);
+    assert_eq!(entry(&report, "vendored")["action"], "removed", "{report}");
+}
+
+#[test]
+fn registry_paths_with_parent_components_or_case_variants_are_invalid() {
+    let fixture = repository();
+    let root = fixture.root.to_str().unwrap().to_owned();
+    let mut cases = vec![
+        ("dotdot", format!("{root}/src/../..")),
+        ("trailing", format!("{root}/..")),
+        ("inside", format!("{root}/../repo")),
+    ];
+    // On a case-insensitive filesystem (APFS, NTFS) `REPO` is the main worktree.
+    fs::write(fixture.root.join("CaseProbe"), "").unwrap();
+    let insensitive = fixture.root.join("caseprobe").exists();
+    fs::remove_file(fixture.root.join("CaseProbe")).unwrap();
+    if insensitive {
+        let upper = fixture.root.parent().unwrap().join("REPO");
+        cases.push(("upper", upper.to_str().unwrap().to_owned()));
+    }
+    for (name, path) in &cases {
+        write_registry(&fixture, &format!("{name}.json"), name, path);
+    }
+    let report = gc(&fixture, &["--apply"]);
+    for (name, _) in &cases {
+        let row = entry(&report, name);
+        assert_eq!(row["state"], "invalid", "{report}");
+        assert_eq!(row["bytes"], 0, "{name} was walked: {report}");
+        let reason = row["reason"].as_str().unwrap();
+        assert!(
+            reason.contains("invalid registry entry; remove ")
+                && reason.contains(&format!("{name}.json")),
+            "{reason}"
+        );
+        assert!(!reason.contains("by hand"), "{reason}");
+    }
+    assert!(fixture.path("top.txt").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn a_worktree_directory_replaced_by_a_symlink_is_unverified() {
