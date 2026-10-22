@@ -57,6 +57,20 @@ fn agrees(fixture: &Fixture, args: &[&str]) -> Run {
     run
 }
 
+/// `undo` prints the undone op and the tip it restored (the rest is an earlier command's state).
+fn undoes(fixture: &Fixture) {
+    let run = fixture.aisc(&["undo"]);
+    run.ok();
+    let tip = fixture.git(&["rev-parse", "HEAD"]);
+    let subject = fixture.git(&["log", "-1", "--format=%s"]);
+    assert_eq!(
+        run.stdout.lines().skip(1).collect::<Vec<_>>(),
+        [format!("topic {} {subject}", &tip[..7])],
+        "{}",
+        run.stdout
+    );
+}
+
 fn topic() -> Fixture {
     let fixture = Fixture::with_files(&[
         (
@@ -106,7 +120,7 @@ fn rewrites_agree_with_a_fresh_read() {
         &["squash", "--into", "add c and d", "add c", "add d"],
     );
     agrees(&fixture, &["move", "add e", "--before", "add c and d"]);
-    agrees(&fixture, &["undo"]);
+    undoes(&fixture);
     agrees(
         &fixture,
         &[
@@ -122,7 +136,7 @@ fn rewrites_agree_with_a_fresh_read() {
     );
     // Moving a file out of a commit leaves it untracked.
     agrees(&fixture, &["uncommit", "c", "c.txt"]);
-    agrees(&fixture, &["undo"]);
+    undoes(&fixture);
     // With an ignore rule that matches, the untracked file is hidden again.
     fixture.write(".git/info/exclude", "c.txt\n");
     agrees(&fixture, &["uncommit", "c", "c.txt"]);

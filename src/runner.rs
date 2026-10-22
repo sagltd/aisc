@@ -438,16 +438,55 @@ fn system_config_path(root: &Path, common: &Path) -> Option<PathBuf> {
 /// The system attributes file this Git reads (`git var GIT_ATTR_SYSTEM`), remembered like the
 /// system configuration's location; `None` when unknown.
 pub(crate) fn system_attributes_path(root: &Path) -> Option<PathBuf> {
+    git_var_path(
+        root,
+        &common_dir_of(root)?,
+        "GIT_ATTR_SYSTEM",
+        "git-system-attributes",
+    )
+}
+
+/// The first line of `git --version`, remembered like the system configuration's location;
+/// `None` when it cannot be remembered (the caller asks Git itself).
+pub(crate) fn git_version(root: &Path) -> Option<String> {
+    remembered(&common_dir_of(root)?, "git-version", || {
+        let output = crate::git::run_git_raw(root, &["--version"], &[], None, 1 << 16).ok()?;
+        if !output.success() {
+            return None;
+        }
+        let text = String::from_utf8(output.stdout).ok()?;
+        let line = text.lines().next()?.trim();
+        (!line.is_empty()).then(|| line.to_owned())
+    })
+}
+
+/// `$GIT_COMMON_DIR` of the worktree at `root`.
+fn common_dir_of(root: &Path) -> Option<PathBuf> {
     let git_dir = git_dir_of(root)?;
-    let common = match std::fs::read_to_string(git_dir.join("commondir")) {
+    Some(match std::fs::read_to_string(git_dir.join("commondir")) {
         Ok(text) => git_dir.join(text.trim_end_matches(['\n', '\r'])),
         Err(_) => git_dir,
-    };
-    git_var_path(root, &common, "GIT_ATTR_SYSTEM", "git-system-attributes")
+    })
 }
 
 /// A path `git var NAME` prints, cached per Git executable in `$GIT_COMMON_DIR/aisc/FILE`.
 fn git_var_path(root: &Path, common: &Path, name: &str, file: &str) -> Option<PathBuf> {
+    remembered(common, file, || {
+        let output = crate::git::run_git_raw(root, &["var", name], &[], None, 1 << 16).ok()?;
+        if !output.success() {
+            return None;
+        }
+        let path = String::from_utf8(output.stdout).ok()?;
+        let path = path.trim_end_matches('\n');
+        (!path.is_empty() && !path.contains('\n')).then(|| path.to_owned())
+    })
+    .map(PathBuf::from)
+}
+
+/// A one-line answer from the Git executable, cached per executable (path, size, change time,
+/// inode) in `$GIT_COMMON_DIR/aisc/FILE` and in the user's cache directory, so that only the first
+/// command on this machine runs `ask` (a fresh clone or worktree reuses the user cache).
+fn remembered(common: &Path, file: &str, ask: impl FnOnce() -> Option<String>) -> Option<String> {
     use std::os::unix::fs::MetadataExt;
     let program = program();
     let resolved = if Path::new(program).is_absolute() {
@@ -464,30 +503,68 @@ fn git_var_path(root: &Path, common: &Path, name: &str, file: &str) -> Option<Pa
         metadata.ctime_nsec(),
         metadata.ino()
     );
-    let cache = common.join("aisc").join(file);
-    if let Ok(text) = std::fs::read_to_string(&cache)
-        && let Some((seen, path)) = text.split_once('\n')
-        && seen == identity
+    let repository = common.join("aisc");
+    let user = user_cache_dir();
+    if let Some(value) = read_remembered(&repository, file, &identity) {
+        return Some(value);
+    }
+    if let Some(value) = user
+        .as_deref()
+        .and_then(|directory| read_remembered(directory, file, &identity))
     {
-        return Some(PathBuf::from(path.trim_end_matches('\n')));
+        write_remembered(&repository, file, &identity, &value);
+        return Some(value);
     }
-    let output = crate::git::run_git_raw(root, &["var", name], &[], None, 1 << 16).ok()?;
-    if !output.success() {
+    let value = ask()?;
+    if value.contains('\n') {
         return None;
     }
-    let path = String::from_utf8(output.stdout).ok()?;
-    let path = path.trim_end_matches('\n');
-    if path.is_empty() || path.contains('\n') {
+    write_remembered(&repository, file, &identity, &value);
+    if let Some(directory) = user {
+        write_remembered(&directory, file, &identity, &value);
+    }
+    Some(value)
+}
+
+/// `$XDG_CACHE_HOME/aisc`, else `~/Library/Caches/aisc` (macOS) or `~/.cache/aisc`. Unit tests
+/// never touch it; `cargo test` points `XDG_CACHE_HOME` into the build tree (`.cargo/config.toml`).
+fn user_cache_dir() -> Option<PathBuf> {
+    if cfg!(test) {
         return None;
     }
-    let _ = std::fs::create_dir_all(common.join("aisc"));
-    let staged = common
-        .join("aisc")
-        .join(format!("{file}.{}", std::process::id()));
-    if std::fs::write(&staged, format!("{identity}\n{path}\n")).is_ok() {
-        let _ = std::fs::rename(&staged, &cache);
+    if let Some(xdg) = std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from)
+        && xdg.is_absolute()
+    {
+        return Some(xdg.join("aisc"));
     }
-    Some(PathBuf::from(path))
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    if !home.is_absolute() {
+        return None;
+    }
+    Some(if cfg!(target_os = "macos") {
+        home.join("Library/Caches/aisc")
+    } else {
+        home.join(".cache/aisc")
+    })
+}
+
+fn read_remembered(directory: &Path, file: &str, identity: &str) -> Option<String> {
+    let text = std::fs::read_to_string(directory.join(file)).ok()?;
+    let (seen, value) = text.split_once('\n')?;
+    (seen == identity).then(|| value.trim_end_matches('\n').to_owned())
+}
+
+/// Best effort: a read-only or sandboxed directory just means the next command asks again.
+fn write_remembered(directory: &Path, file: &str, identity: &str, value: &str) {
+    if std::fs::create_dir_all(directory).is_err() {
+        return;
+    }
+    let staged = directory.join(format!("{file}.{}", std::process::id()));
+    if std::fs::write(&staged, format!("{identity}\n{value}\n")).is_ok()
+        && std::fs::rename(&staged, directory.join(file)).is_err()
+    {
+        let _ = std::fs::remove_file(&staged);
+    }
 }
 
 /// One configuration file in the plain subset (see [`read_config_files`]); a missing file is

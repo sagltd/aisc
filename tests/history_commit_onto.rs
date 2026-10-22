@@ -477,3 +477,26 @@ fn a_staged_version_that_differs_from_both_is_never_dropped() {
     );
     assert_eq!(before, fixture.snapshot());
 }
+
+#[test]
+fn a_file_changed_between_read_and_onto_commit_is_a_stale_error() {
+    let fixture = parallel();
+    // The edit lands after aisc read the diff and before it hashes the file.
+    let env = fixture.fake_git_after("diff", "printf 'more\\n' >> docs/guide.md");
+    let run = fixture.aisc_env(
+        &[
+            "commit",
+            "-b",
+            "docs",
+            "--onto",
+            "main",
+            "-m",
+            "update guide",
+            "docs/guide.md",
+        ],
+        &env_refs(&env),
+    );
+    assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
+    assert!(fixture.read("docs/guide.md").ends_with("more\n"));
+    assert!(fixture.git(&["branch", "--list", "docs"]).is_empty());
+}

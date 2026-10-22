@@ -105,17 +105,24 @@ fn moved_branches_print_their_new_tip() {
     fixture.commit_all("add b");
     let squash = fixture.aisc(&["squash", "--into", "a and b", "add a", "add b"]);
     squash.ok();
+    assert!(
+        squash.stdout.lines().any(|line| line.starts_with("topic ")
+            && line.contains('→')
+            && line.ends_with(" a and b")),
+        "squash names the old and new tip: {}",
+        squash.stdout
+    );
     let undo = fixture.aisc(&["undo"]);
     undo.ok();
     let tip = fixture.git(&["rev-parse", "HEAD"]);
-    let line = format!("topic {}", &squash_tip(&squash.stdout));
-    assert!(
-        undo.stdout.lines().any(|text| text.starts_with(&line)
-            && text.contains(&tip[..7])
-            && text.ends_with(" add b")),
+    // The undone op, then the restored tip: nothing an earlier command already reported.
+    assert_eq!(
+        undo.stdout.lines().collect::<Vec<_>>()[1..],
+        [format!("topic {} add b", &tip[..7])],
         "undo names the restored tip: {}",
         undo.stdout
     );
+    assert!(undo.stdout.starts_with("undid squash "), "{}", undo.stdout);
     let switch = fixture.aisc(&["switch", "main"]);
     switch.ok();
     let main = fixture.git(&["rev-parse", "HEAD"]);
@@ -124,16 +131,6 @@ fn moved_branches_print_their_new_tip() {
         "switch names the tip it moved to: {}",
         switch.stdout
     );
-}
-
-/// The `old→new` source of the topic line: the squashed tip's 7-character id.
-fn squash_tip(output: &str) -> String {
-    output
-        .lines()
-        .find_map(|line| line.strip_prefix("topic "))
-        .and_then(|rest| rest.split('→').nth(1))
-        .map(|rest| rest.chars().take(7).collect())
-        .unwrap_or_else(|| panic!("no topic line: {output}"))
 }
 
 #[test]
@@ -155,4 +152,42 @@ fn an_attributes_file_only_in_the_index_still_filters_the_hash() {
     let run = fixture.aisc(&["switch", "mod"]);
     assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
     assert_eq!(fixture.read("f.txt"), "yzz\n", "the modified file is kept");
+}
+
+#[test]
+fn git_answers_are_remembered_across_fresh_repositories() {
+    let first = Fixture::with_files(&[("a.txt", "a\n")]);
+    let second = Fixture::with_files(&[("a.txt", "a\n")]);
+    let cache = first.directory.path().join("shared-cache");
+    let cache = cache.to_str().unwrap();
+    let trace = |fixture: &Fixture| {
+        let file = fixture.directory.path().join("trace");
+        fixture.write("a.txt", "a2\n");
+        let run = fixture.aisc_env(
+            &["commit", "-m", "edit", "a.txt"],
+            &[
+                ("XDG_CACHE_HOME", cache),
+                ("GIT_TRACE", file.to_str().unwrap()),
+            ],
+        );
+        assert_eq!(run.code, 0, "{} {}", run.stdout, run.stderr);
+        std::fs::read_to_string(file).unwrap_or_default()
+    };
+    assert!(
+        trace(&first).contains(" var "),
+        "the first repository asks Git"
+    );
+    // A fresh repository with an empty $GIT_COMMON_DIR/aisc reuses the user cache.
+    assert!(!trace(&second).contains(" var "));
+}
+
+#[test]
+fn quiet_undo_prints_one_line_even_with_the_stack_view() {
+    let fixture = Fixture::with_files(&[("a.txt", "a\n")]);
+    fixture.write("a.txt", "a2\n");
+    fixture.aisc(&["commit", "-q", "-m", "two", "a.txt"]).ok();
+    let run = fixture.aisc(&["undo", "--stack", "-q"]);
+    run.ok();
+    assert_eq!(run.stdout.trim().lines().count(), 1, "{}", run.stdout);
+    assert!(run.stdout.starts_with("undid commit"), "{}", run.stdout);
 }

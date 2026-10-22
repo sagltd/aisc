@@ -480,7 +480,8 @@ fn partially_staged_selected_file_keeps_the_users_staging() {
 fn a_file_changed_between_read_and_commit_is_a_stale_error() {
     let fixture = pilot1();
     let hook = "printf 'sneaky\\n' >> README.md";
-    let env = fixture.fake_git("update-index", hook);
+    // The edit lands after aisc read the diff and before it hashes the file.
+    let env = fixture.fake_git_after("diff", hook);
     let before_refs = fixture.git(&["for-each-ref"]);
     let run = fixture.aisc_env(
         &["commit", "-m", "x", "README.md"],

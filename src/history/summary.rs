@@ -162,6 +162,33 @@ fn moves(git: &Git, plan: &Plan) -> Vec<Move> {
     moved
 }
 
+/// The tips the plan this process last applied moved, one `<branch> <id7> <subject>` line each
+/// (`<branch> deleted` for a removed branch). `None` when no plan describes the worktree (a
+/// concurrently changed file was saved aside): print the full summary instead.
+pub(crate) fn restored_tips(git: &Git) -> Option<Vec<String>> {
+    let plan = applied()
+        .lock()
+        .expect("applied plans")
+        .get(&git.dir)
+        .cloned()?;
+    let seven = |oid: &str| oid.chars().take(7).collect::<String>();
+    Some(
+        moves(git, &plan)
+            .iter()
+            .map(|moved| {
+                let name = escape_line(&moved.name);
+                match (&moved.new, &moved.subject) {
+                    (Some(new), Some(subject)) => {
+                        format!("{name} {} {}", seven(new), escape_line(subject))
+                    }
+                    (Some(new), None) => format!("{name} {}", seven(new)),
+                    (None, _) => format!("{name} deleted"),
+                }
+            })
+            .collect(),
+    )
+}
+
 /// The text printed after a mutation: `result`, then the short summary (or the full compact log
 /// with `--stack`).
 pub(crate) fn text(after: &View, result: &str) -> String {

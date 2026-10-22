@@ -166,6 +166,7 @@ impl Fixture {
             .current_dir(&self.root)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("XDG_CACHE_HOME", self.directory.path().join("cache"))
             .env_remove("AISC_OUTPUT")
             .env_remove("NO_COLOR");
         command
@@ -288,6 +289,11 @@ for a in "$@"; do
 done
 if [ "$sub" = "$AISC_TRIGGER" ] && [ ! -e "$AISC_MARK" ]; then
   : > "$AISC_MARK"
+  if [ -n "$AISC_HOOK_AFTER" ]; then
+    "$REAL_GIT" "$@"; status=$?
+    eval "$AISC_HOOK"
+    exit $status
+  fi
   eval "$AISC_HOOK"
 fi
 exec "$REAL_GIT" "$@"
@@ -306,6 +312,14 @@ exec "$REAL_GIT" "$@"
             ("AISC_HOOK".into(), hook.into()),
             ("REAL_GIT".into(), real_git()),
         ]
+    }
+
+    /// Like [`Self::fake_git`], but `hook` runs right after that first `trigger` call finishes,
+    /// so it lands between aisc reading git's answer and its next step.
+    pub fn fake_git_after(&self, trigger: &str, hook: &str) -> Vec<(String, String)> {
+        let mut env = self.fake_git(trigger, hook);
+        env.push(("AISC_HOOK_AFTER".into(), "1".into()));
+        env
     }
 }
 

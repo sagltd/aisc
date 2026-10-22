@@ -5,7 +5,7 @@ use crate::output::escape_block;
 use crate::process::Output;
 use crate::store::{self, Store};
 use anyhow::{Context, Result, bail};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -225,7 +225,7 @@ impl Git {
 
     /// Whether loose objects may be written in process: Git applies `core.sharedRepository`
     /// permissions that the in-process writer does not.
-    fn writes_in_process(&self) -> bool {
+    pub fn writes_in_process(&self) -> bool {
         self.fast(|_| Ok(())).is_some()
             && crate::runner::config(&self.root)
                 .is_ok_and(|config| config.get("core.sharedrepository").is_none())
@@ -563,6 +563,11 @@ impl Git {
     /// filter, end-of-line or encoding conversion can apply. Only then may raw bytes stand in for
     /// Git's filtered hash.
     pub fn no_conversion(&self, path: &str) -> bool {
+        self.no_conversion_all(&[path])
+    }
+
+    /// [`Self::no_conversion`] for every one of `paths` (the index and config are read once).
+    pub fn no_conversion_all(&self, paths: &[&str]) -> bool {
         if self.fast(|_| Ok(())).is_none() {
             return false;
         }
@@ -595,13 +600,15 @@ impl Git {
         };
         // In-tree files: Git reads the worktree copy, or the index copy when the worktree one is
         // missing, so both must be absent or the same bytes.
-        let mut in_tree = vec![".gitattributes".to_owned()];
-        let components: Vec<&str> = path.split('/').collect();
-        let mut directory = String::new();
-        for component in &components[..components.len().saturating_sub(1)] {
-            directory.push_str(component);
-            directory.push('/');
-            in_tree.push(format!("{directory}.gitattributes"));
+        let mut in_tree = BTreeSet::from([".gitattributes".to_owned()]);
+        for path in paths {
+            let components: Vec<&str> = path.split('/').collect();
+            let mut directory = String::new();
+            for component in &components[..components.len().saturating_sub(1)] {
+                directory.push_str(component);
+                directory.push('/');
+                in_tree.insert(format!("{directory}.gitattributes"));
+            }
         }
         let Ok(index) = store::read_index(&self.dir) else {
             return false;
@@ -1210,7 +1217,7 @@ impl Git {
                 messages: String::new(),
             });
         }
-        require_git(2, 43)?;
+        require_git(&self.root, 2, 43)?;
         let base_argument = format!("--merge-base={base}");
         let args = [
             "merge-tree",
@@ -1269,7 +1276,7 @@ impl Git {
         favor: Favor,
         diff3: bool,
     ) -> Result<(Vec<u8>, usize)> {
-        require_git(2, 43)?;
+        require_git(&self.root, 2, 43)?;
         let mut args = vec!["merge-file", "--object-id", "-p"];
         match favor {
             Favor::None => {}
@@ -1439,18 +1446,20 @@ fn split_tab(record: &[u8]) -> Result<(&str, String)> {
     ))
 }
 
-/// Requires Git `major.minor` or newer (cached after the first call).
-pub(crate) fn require_git(major: u32, minor: u32) -> Result<()> {
+/// Requires Git `major.minor` or newer (asked once per Git executable, see
+/// [`crate::runner::git_version`], and cached in the process).
+pub(crate) fn require_git(root: &Path, major: u32, minor: u32) -> Result<()> {
     use std::sync::OnceLock;
     static VERSION: OnceLock<(u32, u32)> = OnceLock::new();
     let version = VERSION.get_or_init(|| {
-        let output = std::process::Command::new(crate::runner::program())
-            .arg("--version")
-            .stdin(std::process::Stdio::null())
-            .output();
-        let text = output
-            .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-            .unwrap_or_default();
+        let text = crate::runner::git_version(root).unwrap_or_else(|| {
+            std::process::Command::new(crate::runner::program())
+                .arg("--version")
+                .stdin(std::process::Stdio::null())
+                .output()
+                .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+                .unwrap_or_default()
+        });
         let mut numbers = text
             .split_whitespace()
             .nth(2)

@@ -310,7 +310,8 @@ fn failures_change_nothing() {
 #[test]
 fn a_file_changed_between_read_and_discard_is_a_stale_error() {
     let fixture = pilot9();
-    let env = fixture.fake_git("update-index", "printf 'sneaky\\n' >> src/format.ts");
+    // The edit lands after aisc read the diff and before it hashes the file.
+    let env = fixture.fake_git_after("diff", "printf 'sneaky\\n' >> src/format.ts");
     let run = fixture.aisc_env(&["discard", "src/format.ts"], &support::env_refs(&env));
     assert_eq!(run.code, 4, "{} {}", run.stdout, run.stderr);
     assert!(

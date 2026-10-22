@@ -104,7 +104,10 @@ the tables below predate that change.
 - **quietest** adds each tool's documented quiet flags:
   - git: `-q` where a command has it;
   - aisc: `-q` (Print only the result line) on commit, amend, split, uncommit,
-    squash, move and sync. `switch`, `undo` and `log` have no quiet flag.
+    squash, move, sync and undo. Earlier runs (the tables below) left `undo`
+    without it because it had no quiet flag then; `undo -q` now exists, so the
+    quietest arm uses it like every other documented quiet flag. `log` is an
+    inspection command and stays the same in both modes.
   - jj: `--quiet`;
   - but: `--no-hint` on status. Its write commands have no quiet flag.
 
