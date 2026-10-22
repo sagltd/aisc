@@ -128,6 +128,18 @@ def scenarios(aisc, jj):
             run(["git", "worktree", "add", "-q", "-b", f"agent-{agent}", scenario / f"wt-{agent}"],
                 scenario / "repo", values)
 
+    def git_no_checkout(scenario, values, agents):
+        for agent in range(agents):
+            run(["git", "worktree", "add", "-q", "--no-checkout", "-b", f"agent-{agent}",
+                 scenario / f"wt-{agent}"], scenario / "repo", values)
+
+    def git_sparse(scenario, values, agents):
+        git_no_checkout(scenario, values, agents)
+        for agent in range(agents):
+            worktree = scenario / f"wt-{agent}"
+            run(["git", "sparse-checkout", "set", "--cone", "src"], worktree, values)
+            run(["git", "checkout", "-q"], worktree, values)
+
     def start(scenario, values, agents):
         aisc_tasks(aisc, scenario, values, agents)
 
@@ -144,6 +156,18 @@ def scenarios(aisc, jj):
         run([aisc, "gc", "--apply", "--min-age", "0"], scenario / "repo", values)
 
     def in_place(scenario, values, agents):
+        # `aisc start NAME` defaults to in-place (D6): every lane shares the one checkout, so
+        # lanes take turns: start, edit, checkpoint, verify, finish.
+        repository = scenario / "repo"
+        for agent in range(agents):
+            target = f"src/group00/agent-{agent}.txt"
+            run([aisc, "start", f"lane-{agent}"], repository, values)
+            (repository / target).write_text(f"agent {agent} result\n")
+            run([aisc, "checkpoint", "-m", f"agent {agent}", "--", target], repository, values)
+            run([aisc, "verify", "--", "true"], repository, values)
+            run([aisc, "finish"], repository, values)
+
+    def in_place_commits(scenario, values, agents):
         repository = scenario / "repo"
         for agent in range(agents):
             target = f"src/group00/agent-{agent}.txt"
@@ -165,15 +189,24 @@ def scenarios(aisc, jj):
 
     found = [
         ("git worktree add", git_worktrees, "N full checkouts"),
+        ("git worktree add --no-checkout", git_no_checkout,
+         "N worktrees with Git metadata only (no index, no files); not usable until checked out"),
+        ("git worktree add + sparse-checkout src", git_sparse,
+         "plain-Git equivalent of aisc start --sparse src"),
         ("aisc start --path", start, "N full checkouts plus registry"),
         ("aisc start --path --sparse src", sparse, "N checkouts of the src cone only"),
         ("aisc finish (worktrees removed)", finished, "start, checkpoint, verify, finish; branches kept"),
         ("aisc gc --apply (after finish --keep)", collected, "finished worktrees reclaimed by gc"),
-        ("aisc in-place commits", in_place, "one checkout, N sequential commits; object growth only"),
+        ("aisc start (in-place default) x N lanes", in_place,
+         "one shared checkout, N sequential start/checkpoint/verify/finish lanes; no parallel "
+         "file isolation, same trade-off as GitButler"),
+        ("aisc commit in place", in_place_commits,
+         "one checkout, N sequential history commits; object growth only"),
     ]
     if GITBUTLER.exists():
         found.append(("gitbutler but branch new", gitbutler,
-                      "but setup plus N virtual branches in one workspace; app data included"))
+                      "but setup plus N virtual branches in one shared workspace; no parallel "
+                      "file isolation; app data included"))
     if jj:
         found.append(("jj workspace add", jujutsu, "colocated jj plus N workspaces"))
     return found
@@ -258,12 +291,12 @@ def main():
           f"added allocated bytes per scenario:")
     for entry in report["scenarios"]:
         if "error" in entry:
-            print(f"  {entry['name']:<40} error: {entry['error'][:120]}")
+            print(f"  {entry['name']:<42} error: {entry['error'][:120]}")
             continue
         ratio = ""
         if baseline and "added_allocated_bytes" in baseline and baseline["added_allocated_bytes"]:
             ratio = f"  {entry['added_allocated_bytes'] / baseline['added_allocated_bytes']:6.1%} of git worktree add"
-        print(f"  {entry['name']:<40} {mebibytes(entry['added_allocated_bytes'])}{ratio}")
+        print(f"  {entry['name']:<42} {mebibytes(entry['added_allocated_bytes'])}{ratio}")
     print(f"wrote {Path(arguments.output).name}")
 
 

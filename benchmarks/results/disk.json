@@ -15,7 +15,23 @@
       "added_apparent_bytes": 207357536,
       "added_allocated_bytes": 247791616,
       "per_agent_allocated_bytes": 61947904,
-      "seconds": 4.04
+      "seconds": 7.47
+    },
+    {
+      "name": "git worktree add --no-checkout",
+      "note": "N worktrees with Git metadata only (no index, no files); not usable until checked out",
+      "added_apparent_bytes": 4848,
+      "added_allocated_bytes": 114688,
+      "per_agent_allocated_bytes": 28672,
+      "seconds": 0.24
+    },
+    {
+      "name": "git worktree add + sparse-checkout src",
+      "note": "plain-Git equivalent of aisc start --sparse src",
+      "added_apparent_bytes": 42991760,
+      "added_allocated_bytes": 51200000,
+      "per_agent_allocated_bytes": 12800000,
+      "seconds": 1.34
     },
     {
       "name": "aisc start --path",
@@ -23,7 +39,7 @@
       "added_apparent_bytes": 207360800,
       "added_allocated_bytes": 247824384,
       "per_agent_allocated_bytes": 61956096,
-      "seconds": 4.94
+      "seconds": 5.41
     },
     {
       "name": "aisc start --path --sparse src",
@@ -31,7 +47,7 @@
       "added_apparent_bytes": 42995200,
       "added_allocated_bytes": 51232768,
       "per_agent_allocated_bytes": 12808192,
-      "seconds": 3.29
+      "seconds": 3.09
     },
     {
       "name": "aisc finish (worktrees removed)",
@@ -39,7 +55,7 @@
       "added_apparent_bytes": 19581,
       "added_allocated_bytes": 114688,
       "per_agent_allocated_bytes": 28672,
-      "seconds": 16.04
+      "seconds": 18.76
     },
     {
       "name": "aisc gc --apply (after finish --keep)",
@@ -47,31 +63,39 @@
       "added_apparent_bytes": 19581,
       "added_allocated_bytes": 114688,
       "per_agent_allocated_bytes": 28672,
-      "seconds": 19.44
+      "seconds": 12.98
     },
     {
-      "name": "aisc in-place commits",
-      "note": "one checkout, N sequential commits; object growth only",
-      "added_apparent_bytes": 23986,
+      "name": "aisc start (in-place default) x N lanes",
+      "note": "one shared checkout, N sequential start/checkpoint/verify/finish lanes; no parallel file isolation, same trade-off as GitButler",
+      "added_apparent_bytes": 26252,
+      "added_allocated_bytes": 122880,
+      "per_agent_allocated_bytes": 30720,
+      "seconds": 7.66
+    },
+    {
+      "name": "aisc commit in place",
+      "note": "one checkout, N sequential history commits; object growth only",
+      "added_apparent_bytes": 24181,
       "added_allocated_bytes": 172032,
       "per_agent_allocated_bytes": 43008,
-      "seconds": 5.31
+      "seconds": 3.53
     },
     {
       "name": "gitbutler but branch new",
-      "note": "but setup plus N virtual branches in one workspace; app data included",
-      "added_apparent_bytes": 257303,
+      "note": "but setup plus N virtual branches in one shared workspace; no parallel file isolation; app data included",
+      "added_apparent_bytes": 257206,
       "added_allocated_bytes": 524288,
       "per_agent_allocated_bytes": 131072,
-      "seconds": 1.74
+      "seconds": 1.72
     },
     {
       "name": "jj workspace add",
       "note": "colocated jj plus N workspaces",
-      "added_apparent_bytes": 206551059,
+      "added_apparent_bytes": 206551063,
       "added_allocated_bytes": 247263232,
       "per_agent_allocated_bytes": 61815808,
-      "seconds": 7.4
+      "seconds": 7.64
     }
   ],
   "repository": {
