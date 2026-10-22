@@ -200,3 +200,108 @@ fn switch_refuses_untracked_file_where_a_directory_is_needed() {
     assert_eq!(run.code, 1, "{}", all(&run));
     assert_eq!(fixture.snapshot(), before);
 }
+
+#[test]
+fn land_delete_removes_the_landed_branches_and_undo_restores_them() {
+    let fixture = pilot12();
+    let before = fixture.git(&[
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        "refs/heads",
+    ]);
+    let run = fixture.aisc(&[
+        "land",
+        "normalize",
+        "greeting",
+        "docs",
+        "--into",
+        "main",
+        "--delete",
+    ]);
+    run.ok();
+    assert!(
+        run.stdout.contains("deleted normalize, greeting, docs"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(
+        fixture.git(&["branch", "--format=%(refname:short)"]),
+        "main"
+    );
+    assert_eq!(
+        fixture.subjects("main"),
+        [
+            "Document greeting usage",
+            "Greet normalized names",
+            "Normalize names",
+            "base"
+        ]
+    );
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(
+        fixture.git(&[
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+            "refs/heads"
+        ]),
+        before
+    );
+}
+
+#[test]
+fn land_delete_refuses_the_checked_out_branch_unless_it_switches_away() {
+    let fixture = pilot12();
+    fixture.git(&["switch", "-q", "docs"]);
+    let refused = fixture.aisc(&["land", "docs", "--into", "main", "--delete"]);
+    assert_eq!(refused.code, 1, "{} {}", refused.stdout, refused.stderr);
+    assert!(fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/docs"]));
+    let run = fixture.aisc(&["land", "docs", "--into", "main", "--switch", "--delete"]);
+    run.ok();
+    assert_eq!(fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert!(!fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/docs"]));
+}
+
+#[test]
+fn land_delete_of_already_landed_branches_and_duplicates() {
+    let fixture = pilot12();
+    fixture
+        .aisc(&["land", "normalize", "greeting", "--into", "main"])
+        .ok();
+    let twice = fixture.aisc(&["land", "greeting", "greeting", "--into", "main", "--delete"]);
+    assert_eq!(twice.code, 1, "{} {}", twice.stdout, twice.stderr);
+    assert!(twice.stderr.contains("named twice"), "{}", twice.stderr);
+    let main = fixture.git(&["rev-parse", "main"]);
+    fixture
+        .aisc(&[
+            "land",
+            "normalize",
+            "greeting",
+            "--into",
+            "main",
+            "--delete",
+        ])
+        .ok();
+    assert_eq!(fixture.git(&["rev-parse", "main"]), main);
+    assert!(!fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/greeting"]));
+    fixture.aisc(&["undo"]).ok();
+    assert!(fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/greeting"]));
+    assert!(fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/normalize"]));
+}
+
+#[test]
+fn land_delete_refuses_a_branch_being_rebased_in_another_worktree() {
+    let fixture = pilot12();
+    let other = fixture.directory.path().join("other");
+    let other = other.to_str().unwrap();
+    fixture.git(&["worktree", "add", "-q", other, "docs"]);
+    // A rebase that stops leaves HEAD detached with rebase-merge/head-name naming docs.
+    let admin = fixture.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    let admin = std::path::Path::new(&admin).join("worktrees/other");
+    std::fs::create_dir_all(admin.join("rebase-merge")).unwrap();
+    std::fs::write(admin.join("rebase-merge/head-name"), "refs/heads/docs\n").unwrap();
+    let docs = fixture.git(&["rev-parse", "docs"]);
+    std::fs::write(admin.join("HEAD"), format!("{docs}\n")).unwrap();
+    let run = fixture.aisc(&["land", "docs", "--into", "main", "--delete"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/docs"]));
+}

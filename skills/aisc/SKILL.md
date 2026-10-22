@@ -13,8 +13,8 @@ Use `aisc` for all version-control writes. Run `aisc log` first for ids and stat
 - reorder: `aisc move COMMIT... --before|--after COMMIT`
 - rebase, keep dirty work: `aisc sync [ONTO] [--fetch] [--prefer-branch|--prefer-onto PATH]`
 - copy: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be a branch; BRANCH may be `origin/NAME`)
-- integrate: `aisc land BRANCH... --into main --switch`
-- discard: `aisc discard SEL...`; switch: `aisc switch [-c] BRANCH`
+- integrate: `aisc land BRANCH... --into main --switch [--delete]` (`--delete` removes the landed branches)
+- discard: `aisc discard SEL...`; switch (also to run tests on another branch; edits come along): `aisc switch [-c] BRANCH`
 - undo (again = redo): `aisc undo`
 
 COMMIT: hex id or exact subject. SEL: `PATH`, `"PATH~text"` (hunk containing text), `PATH:A-B` (new-side lines) or a hunk id from `aisc log`.

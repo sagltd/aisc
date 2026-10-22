@@ -68,7 +68,12 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
     let mut landed = Vec::new();
     let mut rewritten: Vec<(String, String)> = Vec::new();
     let mut total = 0usize;
+    let mut sources: Vec<(String, String)> = Vec::new();
+    let mut named = BTreeSet::new();
     for name in &args.branches {
+        if !named.insert(name) {
+            return Err(fail(Code::Usage, format!("branch '{name}' is named twice")));
+        }
         if *name == target {
             return Err(fail(Code::Usage, "cannot land a branch into itself"));
         }
@@ -79,6 +84,7 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
                 "use a local branch name",
             )
         })?;
+        sources.push((name.clone(), source.clone()));
         if git
             .probe(&["merge-base", "--is-ancestor", &source, &tip])?
             .is_some()
@@ -132,7 +138,7 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
         );
         tip = built.tip;
     }
-    if tip == old_target {
+    if tip == old_target && !args.delete {
         let names = args.branches.join(", ");
         return Ok(Outcome::with_text(
             json!({"verb": "land", "status": "up-to-date", "branch": target, "landed": landed}),
@@ -144,11 +150,35 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
         argv: std::env::args().skip(1).collect(),
         ..Plan::default()
     };
+    // With nothing new to land, the unchanged target is still compare-and-swapped, so deletions
+    // never commit against a target that moved underneath.
     plan.refs.push(RefMove {
         name: target_ref.clone(),
         old: Some(old_target.clone()),
         new: Some(tip.clone()),
     });
+    if args.delete {
+        // Every landed branch's work is now in the target; the same transaction deletes them, so
+        // `aisc undo` brings them back.
+        let checked_out = git.checked_out()?;
+        let head_moves_away = carrying && !here;
+        for (name, oid) in &sources {
+            let reference = format!("refs/heads/{name}");
+            let on_head = head.symbolic.as_deref() == Some(reference.as_str());
+            if (on_head && !head_moves_away) || (!on_head && checked_out.contains(&reference)) {
+                return Err(fail_hint(
+                    Code::State,
+                    format!("'{name}' is checked out, so it cannot be deleted"),
+                    "add --switch to move to the target first, or land without --delete",
+                ));
+            }
+            plan.refs.push(RefMove {
+                name: reference,
+                old: Some(oid.clone()),
+                new: None,
+            });
+        }
+    }
     if carrying {
         let from_oid = if here { &old_target } else { &head.oid };
         let from_tree = git.commit_tree_of(from_oid)?;
@@ -169,8 +199,13 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
     );
     let applied = session.apply(&plan)?;
     let after = super::summary::after(&git, None, true)?;
+    let deleted = if args.delete {
+        format!("; deleted {}", args.branches.join(", "))
+    } else {
+        String::new()
+    };
     let result = format!(
-        "landed {} into {target} ({total} commits, {} → {}); op {}",
+        "landed {} into {target} ({total} commits, {} → {}){deleted}; op {}",
         args.branches.join(", "),
         short(&old_target),
         short(&tip),

@@ -17,11 +17,12 @@ Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take
 - throw away uncommitted changes: `aisc discard SEL...`
 - copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]`
 - update with moved base and own upstream, keeping uncommitted work: `aisc sync [ONTO] [--fetch]`; on CONFLICTS edit the marked files, then `aisc sync --continue`
-- integrate branches: `aisc land BRANCH... --into main [--switch]`
+- integrate branches: `aisc land BRANCH... --into main [--switch] [--delete]` (`--delete` removes the landed branches)
+- work or run tests on another branch: `aisc switch BRANCH` (uncommitted edits come along); never `git worktree` or `git checkout`
 - undo the last operation: `aisc undo`
 
 SEL is a hunk id, a path, `PATH:A-B` (new-side lines) or `\"PATH~text\"` (the hunk containing text). COMMIT is an id or exact subject.
 
-Writes print the result, new ids and `clean` when nothing is left; do not verify, answer and stop. Exit 4: run `aisc log`, retry. Exit 1: read `error:`/`hint:`. These replace raw `git checkout`, `reset`, `merge`, `rebase`, `cherry-pick` and `stash`. Leave unrelated changes uncommitted; do not push unless asked.
+Writes print the result, new ids and `clean` when nothing is left; do not verify, answer and stop. Exit 4: run `aisc log`, retry. Exit 1: read `error:`/`hint:`. These replace raw `git checkout`, `reset`, `merge`, `rebase`, `cherry-pick`, `stash`, `worktree` and `branch -d`. Leave unrelated changes uncommitted; do not push unless asked.
 <!-- aisc-agent-setup:end -->
 ";

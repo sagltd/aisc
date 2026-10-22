@@ -32,7 +32,10 @@ fn help_and_version_are_plain_text_even_when_redirected_or_json_is_requested() {
     for arguments in [vec!["--version"], vec!["--json", "--version"]] {
         let version = invoke(&arguments);
         assert!(version.status.success());
-        assert_eq!(String::from_utf8(version.stdout).unwrap(), "aisc 0.1.0\n");
+        assert_eq!(
+            String::from_utf8(version.stdout).unwrap(),
+            format!("aisc {}\n", env!("CARGO_PKG_VERSION"))
+        );
     }
 }
 
@@ -107,7 +110,7 @@ fn agent_setup_prints_a_plain_text_instructions_block() {
     );
     assert!(text.contains("two calls: `aisc log`"), "{text}");
     // Small enough to sit in every agent session.
-    assert!(text.len() < 2000, "{} bytes", text.len());
+    assert!(text.len() < 2300, "{} bytes", text.len());
     assert!(
         !invoke(&["agent", "setup"]).status.success(),
         "--print is required"
