@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import disk
 from disk import build_repository, content, measure
 
 
@@ -23,6 +24,27 @@ class DiskTests(unittest.TestCase):
             finally:
                 (outside / "big.bin").unlink()
                 outside.rmdir()
+
+    def test_settle_waits_for_late_writers_and_cleanup_survives_them(self):
+        import threading
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "tool"
+            root.mkdir()
+
+            def late_writer():
+                for index in range(4):
+                    time.sleep(0.3)
+                    (root / f"cache{index}.db").write_bytes(b"z" * 5_000)
+
+            writer = threading.Thread(target=late_writer)
+            writer.start()
+            (apparent, _), settled, _ = disk.settle(root)
+            writer.join()
+            self.assertTrue(settled)
+            self.assertGreaterEqual(apparent, 20_000)
+            disk.remove_tree(root)
+            self.assertFalse(root.exists())
 
     def test_synthetic_repository_is_deterministic(self):
         self.assertEqual(content(3, 500), content(3, 500))

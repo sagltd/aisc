@@ -67,6 +67,9 @@ pub(crate) enum Operation {
         /// Keep the worktree created by `start --path` (by default it is removed; the branch stays)
         #[arg(long)]
         keep: bool,
+        /// Remove the worktree even if ignored files look like secrets (.env, *.pem, *.key, ...)
+        #[arg(long, conflicts_with = "keep")]
+        delete_ignored_secrets: bool,
     },
     /// Read a bounded GitHub PR/review/check overview using existing gh auth
     Github {
@@ -320,6 +323,9 @@ pub(crate) struct Gc {
     /// Keep worktrees with Git activity within this many hours
     #[arg(long, default_value = "24", value_name = "HOURS")]
     pub min_age: u64,
+    /// Also remove worktrees whose ignored files look like secrets (.env, *.pem, *.key, ...)
+    #[arg(long)]
+    pub delete_ignored_secrets: bool,
 }
 
 #[derive(Args)]
@@ -332,7 +338,9 @@ pub(crate) struct Start {
     /// Keep this directory and branch; requires a clean committed checkout (the default)
     #[arg(long, group = "location")]
     pub in_place: bool,
-    /// Cone-mode sparse directories for a new worktree (requires --path)
+    /// Cone-mode sparse directories for a new worktree (requires --path). Like `git
+    /// sparse-checkout`, this enables extensions.worktreeConfig in the shared Git config; AISC
+    /// says so when it does and never reverts it
     #[arg(long, requires = "path", num_args = 1.., value_name = "DIR")]
     pub sparse: Vec<String>,
 }

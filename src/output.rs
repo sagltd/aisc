@@ -244,6 +244,9 @@ fn render(operation: &str, value: &Value, colors: bool) -> String {
                 display(&value["path"]),
                 display(&value["head"])
             );
+            if let Some(note) = value["note"].as_str() {
+                let _ = writeln!(result, "Note: {}", safe_block(note));
+            }
         }
         "checkpoint" => {
             let _ = writeln!(
@@ -279,7 +282,20 @@ fn render(operation: &str, value: &Value, colors: bool) -> String {
                     value["freed_bytes"]
                 );
             }
+            if let Some(files) = value["ignored_files"].as_u64().filter(|files| *files > 0) {
+                let verb = if value["removed_worktree"].is_string() {
+                    "Deleted"
+                } else {
+                    "Found"
+                };
+                let _ = writeln!(
+                    result,
+                    "{verb} {files} ignored files ({} bytes)",
+                    value["ignored_bytes"]
+                );
+            }
             for (key, title) in [
+                ("rescue_ref", "Detached HEAD saved as"),
                 ("kept_reason", "Kept worktree:"),
                 ("warning", "Warning:"),
                 ("cd", "Your shell was in the removed worktree; cd"),

@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -20,8 +21,13 @@ from pathlib import Path
 from fixture import environment, git
 
 ROOT = Path(__file__).resolve().parent.parent
-GITBUTLER = Path("/tmp/aisc-gitbutler-bin/but")
+GITBUTLER = Path(os.environ.get("AISC_BENCH_BUT", "/tmp/aisc-gitbutler-bin/but"))
 DIRECTORIES = ("src", "docs", "assets", "tests", "vendor")
+# Process groups of every tool invocation, so lingering background writers can be stopped.
+SPAWNED = []
+SETTLE_INTERVAL = 0.5
+SETTLE_STABLE = 3
+SETTLE_TIMEOUT = 30.0
 
 
 def measure(*roots):
@@ -34,15 +40,60 @@ def measure(*roots):
         pending = [Path(root)]
         while pending:
             path = pending.pop()
-            info = os.lstat(path)
-            if (info.st_dev, info.st_ino) in seen:
+            try:
+                info = os.lstat(path)
+                if (info.st_dev, info.st_ino) in seen:
+                    continue
+                seen.add((info.st_dev, info.st_ino))
+                apparent += info.st_size
+                allocated += info.st_blocks * 512
+                if path.is_dir() and not path.is_symlink():
+                    pending.extend(path.iterdir())
+            except FileNotFoundError:
+                # A tool deleted it while we walked (temporary or journal files).
                 continue
-            seen.add((info.st_dev, info.st_ino))
-            apparent += info.st_size
-            allocated += info.st_blocks * 512
-            if path.is_dir() and not path.is_symlink():
-                pending.extend(path.iterdir())
     return apparent, allocated
+
+
+def settle(*roots):
+    """Measures until the size is unchanged for SETTLE_STABLE readings, since some tools
+    (GitButler) keep writing databases and caches after their command returns."""
+    started = time.perf_counter()
+    readings = [measure(*roots)]
+    while time.perf_counter() - started < SETTLE_TIMEOUT:
+        if len(readings) >= SETTLE_STABLE and len(set(readings[-SETTLE_STABLE:])) == 1:
+            return readings[-1], True, round(time.perf_counter() - started, 2)
+        time.sleep(SETTLE_INTERVAL)
+        readings.append(measure(*roots))
+    return readings[-1], False, round(time.perf_counter() - started, 2)
+
+
+def stop_spawned():
+    """Stops leftover processes in the groups of commands this script started, nothing else."""
+    for signal_number in (signal.SIGTERM, signal.SIGKILL):
+        alive = []
+        for group in SPAWNED:
+            try:
+                os.killpg(group, signal_number)
+                alive.append(group)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if not alive:
+            break
+        time.sleep(0.5)
+    SPAWNED.clear()
+
+
+def remove_tree(path):
+    for _ in range(20):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.5)
+    shutil.rmtree(path, ignore_errors=True)
 
 
 def content(index, size):
@@ -88,12 +139,20 @@ def tool_environment(scenario):
 
 
 def run(arguments, cwd, values):
-    result = subprocess.run([str(part) for part in arguments], cwd=cwd, env=values,
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
-    if result.returncode != 0:
+    process = subprocess.Popen([str(part) for part in arguments], cwd=cwd, env=values,
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, start_new_session=True)
+    SPAWNED.append(process.pid)
+    try:
+        stdout, stderr = process.communicate(timeout=300)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        raise
+    if process.returncode != 0:
         raise RuntimeError(f"{Path(str(arguments[0])).name} {arguments[1:3]} failed: "
-                           f"{result.stderr.strip()[-400:]}")
-    return result.stdout
+                           f"{stderr.strip()[-400:]}")
+    return stdout
 
 
 def version(arguments):
@@ -253,8 +312,8 @@ def main():
         "platform": sys.platform,
         "scenarios": [],
     }
-    with tempfile.TemporaryDirectory(prefix="aisc-disk-") as temporary:
-        work = Path(temporary).resolve()
+    work = Path(tempfile.mkdtemp(prefix="aisc-disk-")).resolve()
+    try:
         template = build_repository(work / "template", arguments.files, arguments.file_bytes)
         apparent, allocated = measure(template)
         checkout = measure(*[path for path in template.iterdir() if path.name != ".git"])
@@ -271,15 +330,20 @@ def main():
             entry = {"name": name, "note": note}
             try:
                 action(scenario, values, arguments.agents)
-                after = measure(scenario)
+                seconds = round(time.perf_counter() - started, 2)
+                after, settled, waited = settle(scenario)
                 entry.update(added_apparent_bytes=after[0] - before[0],
                              added_allocated_bytes=after[1] - before[1],
                              per_agent_allocated_bytes=(after[1] - before[1]) // arguments.agents,
-                             seconds=round(time.perf_counter() - started, 2))
+                             seconds=seconds, settled=settled, settle_seconds=waited)
             except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
                 entry["error"] = str(error).replace(str(work), "<work>")
             report["scenarios"].append(entry)
-            shutil.rmtree(scenario, ignore_errors=True)
+            stop_spawned()
+            remove_tree(scenario)
+    finally:
+        stop_spawned()
+        remove_tree(work)
     text = json.dumps(report, indent=2) + "\n"
     for private in (str(Path.home()), str(ROOT), tempfile.gettempdir()):
         if private in text:

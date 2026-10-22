@@ -1,7 +1,7 @@
 //! `aisc gc`: reports registered worktrees and removes the clean, finished-or-merged ones.
 use super::{
-    Listed, OPERATION_MARKERS, Registration, Size, admin_dirs, list, measure, now, registrations,
-    remove, same_path, session_at, unregister,
+    Entry, Ignored, Listed, OPERATION_MARKERS, Registration, Size, admin_dirs, is_symlink, list,
+    measure, now, registrations, remove, rescue, same_path, session_at, unregister, unsafe_path,
 };
 use crate::cli;
 use crate::git::{Lock, Repo, run_git, text};
@@ -40,38 +40,59 @@ struct Row {
     registration: Registration,
     admin: Option<PathBuf>,
     state: &'static str,
+    head: String,
     merged: bool,
     finished: bool,
     locked: bool,
     age: u64,
     size: Size,
+    ignored: Ignored,
+    rescue_ref: Option<String>,
     action: Action,
     reason: String,
 }
 
 struct Scan<'a> {
     main: &'a Path,
+    common: &'a Path,
     current: &'a Path,
     listed: &'a [Listed],
     admins: &'a HashMap<String, PathBuf>,
     min_age: u64,
+    delete_secrets: bool,
 }
 
 impl Scan<'_> {
-    fn inspect(&self, registration: Registration) -> Row {
+    fn inspect(&self, entry: Entry) -> Row {
         let mut row = Row {
-            admin: self.admins.get(&registration.path).cloned(),
-            registration,
+            admin: None,
+            registration: entry.registration,
             state: "unverified",
+            head: String::new(),
             merged: false,
             finished: false,
             locked: false,
             age: 0,
             size: Size::default(),
+            ignored: Ignored::default(),
+            rescue_ref: None,
             action: Action::Keep,
             reason: String::new(),
         };
+        let invalid = entry.invalid.or_else(|| {
+            unsafe_path(&row.registration.path, self.main, self.common).map(str::to_owned)
+        });
+        if let Some(reason) = invalid {
+            row.state = "invalid";
+            row.reason = format!("{reason}; never acted on");
+            return row;
+        }
         let path = PathBuf::from(&row.registration.path);
+        if is_symlink(&path) {
+            row.reason = "registered path is a symlink; inspect it manually".into();
+            return row;
+        }
+        row.admin = self.admins.get(&row.registration.path).cloned();
         let exists = fs::symlink_metadata(&path).is_ok();
         let Some(listed) = self
             .listed
@@ -102,16 +123,22 @@ impl Scan<'_> {
         };
         let admin = row.admin.clone().unwrap_or_default();
         row.locked = listed.locked;
+        row.head = listed.head.clone().unwrap_or_default();
         row.age = now().saturating_sub(last_activity(&row.registration, &admin));
+        let young = row.age < self.min_age.saturating_mul(3_600);
         if !exists {
             row.state = "missing";
-            (row.action, row.reason) = if listed.locked {
-                (Action::Keep, "locked (`git worktree lock`)".into())
-            } else {
-                (
-                    Action::Remove,
-                    "directory is gone; prune its metadata".into(),
+            row.reason = if listed.locked {
+                "locked (`git worktree lock`)".into()
+            } else if young {
+                format!(
+                    "directory missing but active {} ago (< min-age {}h)",
+                    age(row.age),
+                    self.min_age
                 )
+            } else {
+                row.action = Action::Remove;
+                "directory is gone; prune its metadata (an unreferenced HEAD is saved first)".into()
             };
             return row;
         }
@@ -126,11 +153,14 @@ impl Scan<'_> {
             Ok(_) => "dirty",
             Err(_) => "unreadable",
         };
-        let head = listed.head.clone().unwrap_or_default();
+        let ignored = Ignored::scan(&path);
+        let counts = ignored
+            .as_ref()
+            .map_or((0, 0), |ignored| (ignored.files, ignored.bytes));
         let evidence = task::read_json::<Value>(&admin.join("aisc-evidence.json")).ok();
-        row.finished =
-            session.finished && evidence.is_some_and(|evidence| evidence["head"] == head.as_str());
-        row.merged = self.merged(&row.registration, &head);
+        row.finished = session.finished
+            && evidence.is_some_and(|evidence| evidence["head"] == row.head.as_str());
+        row.merged = self.merged(&row.registration, &row.head);
         row.reason = if listed.locked {
             "locked (`git worktree lock`)".into()
         } else if same_path(&row.registration.path, self.current) {
@@ -148,12 +178,22 @@ impl Scan<'_> {
             "a Git merge/rebase/sequencer is in progress".into()
         } else if !(row.merged || row.finished && listed.branch.is_some()) {
             "commits are neither finished nor merged".into()
-        } else if row.age < self.min_age.saturating_mul(3_600) {
+        } else if young {
             format!("active {} ago (< min-age {}h)", age(row.age), self.min_age)
         } else {
-            row.action = Action::Remove;
-            String::new()
+            match ignored {
+                Err(error) => format!("could not list ignored files: {error:#}"),
+                Ok(ignored) => {
+                    let refusal = ignored.refusal(self.delete_secrets);
+                    row.ignored = ignored;
+                    refusal.unwrap_or_else(|| {
+                        row.action = Action::Remove;
+                        deleted_ignored(&row.ignored)
+                    })
+                }
+            }
         };
+        (row.ignored.files, row.ignored.bytes) = counts;
         row
     }
 
@@ -188,6 +228,18 @@ impl Scan<'_> {
     }
 }
 
+/// What removing a worktree costs beyond its tracked files.
+fn deleted_ignored(ignored: &Ignored) -> String {
+    match ignored.files {
+        0 => String::new(),
+        1 => format!("deletes 1 ignored file ({})", bytes(ignored.bytes, false)),
+        count => format!(
+            "deletes {count} ignored files ({})",
+            bytes(ignored.bytes, false)
+        ),
+    }
+}
+
 /// Newest of creation and the admin dir's HEAD, index and reflog mtimes.
 fn last_activity(registration: &Registration, admin: &Path) -> u64 {
     ["HEAD", "index", "logs/HEAD"]
@@ -212,18 +264,20 @@ pub(crate) fn gc(args: &cli::Gc) -> Result<Outcome> {
     let admins = admin_dirs(&common);
     let scan = Scan {
         main: &main,
+        common: &common,
         current: &repo.root,
         listed: &listed,
         admins: &admins,
         min_age: args.min_age,
+        delete_secrets: args.delete_ignored_secrets,
     };
     let mut rows = registrations(&common)
         .into_iter()
-        .map(|registration| scan.inspect(registration))
+        .map(|entry| scan.inspect(entry))
         .collect::<Vec<_>>();
     let verified = rows
         .iter()
-        .filter(|row| !matches!(row.state, "unverified" | "stale" | "leftover"))
+        .filter(|row| !matches!(row.state, "unverified" | "stale" | "leftover" | "invalid"))
         .map(|row| row.registration.path.clone())
         .collect::<HashSet<_>>();
     let foreign = listed
@@ -256,13 +310,17 @@ fn apply(row: &mut Row, main: &Path, common: &Path) {
         Action::Remove => {
             let admin = row.admin.clone().unwrap_or_default();
             // Holding the worktree's operation lock keeps aisc writes out while Git removes it.
-            match Lock::acquire(admin.join("aisc-operation.lock")) {
-                Err(_) => {
-                    row.action = Action::Keep;
-                    row.reason = "busy: an aisc operation holds the worktree lock".into();
-                    return;
+            let Ok(_lock) = Lock::acquire(admin.join("aisc-operation.lock")) else {
+                row.action = Action::Keep;
+                row.reason = "busy: an aisc operation holds the worktree lock".into();
+                return;
+            };
+            match rescue(main, &row.registration.name, &row.head) {
+                Ok(reference) => {
+                    row.rescue_ref = reference;
+                    remove(main, common, &row.registration)
                 }
-                Ok(_lock) => remove(main, common, &row.registration),
+                Err(error) => Err(error),
             }
         }
         _ => return,
@@ -303,6 +361,9 @@ fn report(rows: &[Row], foreign: usize, applied: bool, pruned: bool) -> Value {
                 "size_partial": row.size.partial,
                 "action": row.action.name(false),
                 "reason": row.reason,
+                "ignored_files": row.ignored.files,
+                "ignored_bytes": row.ignored.bytes,
+                "rescue_ref": row.rescue_ref,
             })
         })
         .collect::<Vec<_>>();
@@ -359,6 +420,9 @@ fn render(rows: &[Row], foreign: usize, applied: bool, cwd: &Path) -> String {
             let mut action = row.action.name(applied).to_owned();
             if !row.reason.is_empty() && row.action != Action::Removed {
                 let _ = write!(action, ": {}", row.reason);
+            }
+            if let Some(reference) = &row.rescue_ref {
+                let _ = write!(action, " (HEAD saved as {reference})");
             }
             [
                 row.registration.name.clone(),

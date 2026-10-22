@@ -337,14 +337,17 @@ Steps:
    - Runs `git worktree remove P` (never `--force`) from the main checkout's cwd.
    - Keeps the `aisc/NAME` branch (commits are not lost) and deletes the registry entry.
    - Output adds `removed_worktree`, `freed_bytes` and `main_checkout` ("continue in …").
-   - Ignored build output is deleted by design; the freed bytes are reported.
+   - Ignored build output is deleted by design. The output reports `ignored_files`/`ignored_bytes`. A worktree whose ignored files look like secrets (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `.npmrc`, `.netrc`, `credentials*`) is kept with reason `ignored secret-like files: …` unless `--delete-ignored-secrets` is passed (finish and gc).
+   - A HEAD that no branch, tag, remote or `refs/aisc/*` ref contains (detached work) is saved as `refs/aisc/rescue/<name>` before removal; output field `rescue_ref`.
+   - If Git deletes only part of the files (it drops its admin dir anyway), the output says "partially removed" with the leftover path to delete by hand; gc then lists it as `leftover`.
 4. **`aisc gc [--apply] [--min-age H]`.**
    - Lists only registry entries that are cross-checked: the path appears in `git worktree list --porcelain`, and that worktree's gitdir has an `aisc-session.json` with the same name. Unverified or foreign worktrees are never touched; they are counted as "N foreign worktrees ignored".
    - Per entry:
      - Size: a std::fs walk without following symlinks, apparent and allocated (`st_blocks*512`), 10 s budget, `≥` if partial.
      - Age, branch.
      - State: missing / dirty / clean, plus merged (tip is an ancestor of the base) or finished.
-   - Candidates are clean and (merged or finished) and at least min-age old, or missing.
+   - Candidates are clean and (merged or finished) and at least min-age old, or missing and at least min-age old (their HEAD is rescued first).
+   - Registry names must match `[A-Za-z0-9._-]` (no `..`) and the file name; registered paths that are relative, `/`, `$HOME`, or contain the main worktree or Git dir are `invalid`, never walked or acted on. A registered path that is a symlink is `unverified` and kept; paths are compared with only the parent resolved.
    - Dry run by default. `--apply` runs `git worktree remove` on candidates, then `git worktree prune`, then deletes their registry entries.
    - Text example:
      ```
@@ -354,6 +357,7 @@ Steps:
      ```
 5. **Sparse.**
    - `start NAME --path P --sparse DIR…` runs `git worktree add --no-checkout -b aisc/NAME P BASE`, then `git -C P sparse-checkout set --cone DIR…`, then `git -C P checkout`.
+   - Like Git's own `sparse-checkout` in a linked worktree, this sets `extensions.worktreeConfig=true` in the shared config. AISC adds a `note` when it is the one enabling it and never reverts it (other worktrees may depend on it).
    - S4 relaxes `Repo::writable()` to allow sparse checkouts, `paths()` to reject paths outside the cone, and the `task.rs` fingerprint to skip skip-worktree entries.
    - History Keep verbs work unchanged; Carry updates only the index for skip-worktree entries (already handled by slice 0).
 6. **Disk metric.**

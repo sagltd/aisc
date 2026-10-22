@@ -48,6 +48,7 @@ fn repository() -> Fixture {
         ("src/deep/inner.txt", "inner\n"),
         ("docs/guide.txt", "guide\n"),
         ("other/file.txt", "other\n"),
+        (".gitignore", ".env\nbuild/\n*.key\n"),
     ])
 }
 
@@ -206,10 +207,12 @@ fn failed_removal_keeps_branch_registration_and_reports_the_leftover() {
     let value = result.ok().json();
     assert_eq!(value["verified"], true);
     assert!(value["removed_worktree"].is_null(), "{value}");
-    assert!(
-        value["warning"].as_str().unwrap().contains("worktree"),
-        "{value}"
-    );
+    let warning = value["warning"].as_str().unwrap();
+    assert!(warning.contains("partially removed"), "{warning}");
+    assert!(warning.contains(path.to_str().unwrap()), "{warning}");
+    assert!(warning.contains("delete by hand"), "{warning}");
+    assert!(!warning.contains("it is kept"), "{warning}");
+    assert_eq!(value["partially_removed"], path.to_str().unwrap());
     // Git drops its metadata even when the delete fails, so the registry entry is what keeps
     // the leftover directory visible; the branch keeps every commit.
     assert!(registry(&fixture, "stuck").exists());
@@ -324,4 +327,109 @@ fn failed_sparse_setup_rolls_back_the_new_worktree() {
     assert!(!listed(&fixture, &path));
     assert!(!fixture.git_ok(&["rev-parse", "--verify", "refs/heads/aisc/rollback"]));
     assert!(!registry(&fixture, "rollback").exists());
+}
+
+#[test]
+fn sparse_start_notes_when_it_enables_per_worktree_config() {
+    let fixture = repository();
+    let first = fixture.root.parent().unwrap().join("first");
+    let value = fixture
+        .aisc(&[
+            "start",
+            "first",
+            "--path",
+            first.to_str().unwrap(),
+            "--sparse",
+            "src",
+        ])
+        .ok()
+        .json();
+    let note = value["note"].as_str().unwrap();
+    assert!(note.contains("extensions.worktreeConfig"), "{note}");
+    assert_eq!(
+        fixture.git(&["config", "--get", "extensions.worktreeConfig"]),
+        "true"
+    );
+    // Already enabled: nothing new to say.
+    let second = fixture.root.parent().unwrap().join("second");
+    let value = fixture
+        .aisc(&[
+            "start",
+            "second",
+            "--path",
+            second.to_str().unwrap(),
+            "--sparse",
+            "src",
+        ])
+        .ok()
+        .json();
+    assert!(value["note"].is_null(), "{value}");
+    let human = fixture.root.parent().unwrap().join("third");
+    let text = fixture
+        .aisc(&[
+            "--human",
+            "start",
+            "third",
+            "--path",
+            human.to_str().unwrap(),
+        ])
+        .ok()
+        .stdout
+        .clone();
+    assert!(!text.contains("worktreeConfig"), "{text}");
+}
+
+#[test]
+fn finish_reports_ignored_build_output_it_deletes() {
+    let fixture = repository();
+    let path = start(&fixture, "built", &[]);
+    checkpoint_and_verify(&path, "top.txt");
+    fs::create_dir_all(path.join("build")).unwrap();
+    fs::write(path.join("build/app.bin"), vec![1_u8; 2048]).unwrap();
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+    assert_eq!(value["ignored_files"], 1);
+    assert_eq!(value["ignored_bytes"], 2048);
+    assert!(!path.exists());
+}
+
+#[test]
+fn finish_keeps_a_worktree_with_ignored_secret_like_files() {
+    let fixture = repository();
+    let path = start(&fixture, "secrets", &[]);
+    checkpoint_and_verify(&path, "top.txt");
+    fs::write(path.join(".env"), "TOKEN=x\n").unwrap();
+    fs::write(path.join("deploy.key"), "k\n").unwrap();
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert!(value["removed_worktree"].is_null(), "{value}");
+    let reason = value["kept_reason"].as_str().unwrap();
+    assert!(
+        reason.starts_with("ignored secret-like files: "),
+        "{reason}"
+    );
+    assert!(reason.contains(".env") && reason.contains("deploy.key"));
+    assert!(reason.contains("--delete-ignored-secrets"), "{reason}");
+    assert_eq!(value["ignored_files"], 2);
+    assert!(path.join(".env").exists());
+    let value = aisc_at(&path, &["finish", "--delete-ignored-secrets"])
+        .ok()
+        .json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+    assert!(!path.exists());
+}
+
+#[test]
+fn finish_on_a_detached_head_saves_the_commit_before_removal() {
+    let fixture = repository();
+    let path = start(&fixture, "loose", &[]);
+    git_at(&path, &["checkout", "-q", "--detach"]);
+    checkpoint_and_verify(&path, "top.txt");
+    let commit = git_at(&path, &["rev-parse", "HEAD"]);
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+    assert_eq!(value["rescue_ref"], "refs/aisc/rescue/loose");
+    assert_eq!(
+        fixture.git(&["rev-parse", "refs/aisc/rescue/loose"]),
+        commit
+    );
 }

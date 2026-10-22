@@ -123,7 +123,10 @@ fn run_task(command: &Operation) -> Result<Value> {
         Operation::Diff { max_bytes, paths } => repo.diff(paths, *max_bytes),
         Operation::Checkpoint { message, paths } => task::checkpoint(&repo, message, paths),
         Operation::Verify { timeout, command } => task::verify(&repo, command, *timeout),
-        Operation::Finish { keep } => task::finish(&repo, *keep),
+        Operation::Finish {
+            keep,
+            delete_ignored_secrets,
+        } => task::finish(&repo, *keep, *delete_ignored_secrets),
         Operation::Github { limit } => github::overview(&repo, *limit),
         Operation::Gitlab { limit } => gitlab::overview(&repo, *limit),
         _ => unreachable!("history verbs are dispatched before task verbs"),

@@ -24,7 +24,11 @@ fn aisc_at(directory: &Path, args: &[&str]) -> Run {
 }
 
 fn repository() -> Fixture {
-    Fixture::with_files(&[("top.txt", "top\n"), ("src/lib.txt", "lib\n")])
+    Fixture::with_files(&[
+        ("top.txt", "top\n"),
+        ("src/lib.txt", "lib\n"),
+        (".gitignore", ".env\nbuild/\n*.pem\n"),
+    ])
 }
 
 fn start(fixture: &Fixture, name: &str) -> PathBuf {
@@ -298,7 +302,178 @@ fn a_registry_entry_naming_the_main_checkout_never_removes_it() {
     )
     .unwrap();
     let report = gc(&fixture, &["--apply"]);
-    assert_eq!(entry(&report, "main")["state"], "unverified", "{report}");
+    assert_eq!(entry(&report, "main")["state"], "invalid", "{report}");
     assert_eq!(entry(&report, "main")["action"], "keep");
     assert!(fixture.path("top.txt").exists());
+}
+
+fn git_at(directory: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(directory)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout)
+        .trim_end()
+        .to_owned()
+}
+
+fn write_registry(fixture: &Fixture, file: &str, name: &str, path: &str) {
+    let directory = fixture.root.join(".git/aisc/worktrees");
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(
+        directory.join(file),
+        serde_json::json!({
+            "name": name, "path": path, "branch": "aisc/x", "base": "x",
+            "base_branch": "main", "created_at": 1, "aisc_version": "0",
+            "command": [], "sparse": null
+        })
+        .to_string(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn missing_directory_respects_min_age_and_rescues_an_unreachable_head() {
+    let fixture = repository();
+    let path = start(&fixture, "moved");
+    git_at(&path, &["checkout", "-q", "--detach"]);
+    fs::write(path.join("top.txt"), "only here\n").unwrap();
+    git_at(&path, &["commit", "-qam", "detached work"]);
+    let commit = git_at(&path, &["rev-parse", "HEAD"]);
+    let moved = fixture.root.parent().unwrap().join("moved-elsewhere");
+    fs::rename(&path, &moved).unwrap();
+    // Default min-age: a recently active worktree is kept even when its directory is gone.
+    let report = fixture.aisc(&["gc", "--json", "--apply"]).ok().json();
+    assert_eq!(entry(&report, "moved")["state"], "missing");
+    assert_eq!(entry(&report, "moved")["action"], "keep", "{report}");
+    assert!(listed(&fixture, &path));
+    // Past min-age it is pruned, but only after its HEAD is saved in a rescue ref.
+    let report = gc(&fixture, &["--apply"]);
+    let row = entry(&report, "moved");
+    assert_eq!(row["action"], "removed", "{report}");
+    assert_eq!(row["rescue_ref"], "refs/aisc/rescue/moved");
+    assert_eq!(
+        fixture.git(&["rev-parse", "refs/aisc/rescue/moved"]),
+        commit
+    );
+    fixture.git(&["reflog", "expire", "--all", "--expire=now"]);
+    fixture.git(&["gc", "-q", "--prune=now"]);
+    assert!(fixture.git_ok(&["cat-file", "-e", &commit]));
+}
+
+#[test]
+fn registry_entries_with_unsafe_names_are_reported_and_never_acted_on() {
+    let fixture = repository();
+    let victim = fixture.root.parent().unwrap().join("victim.json");
+    fs::write(&victim, "keep me").unwrap();
+    let missing = fixture.root.parent().unwrap().join("nowhere");
+    let missing = missing.to_str().unwrap();
+    write_registry(&fixture, "evil.json", "../../../../victim", missing);
+    write_registry(&fixture, "slash.json", "a/b", missing);
+    write_registry(&fixture, "other.json", "mismatch", missing);
+    let report = gc(&fixture, &["--apply"]);
+    let rows = report["worktrees"].as_array().unwrap();
+    assert_eq!(rows.len(), 3, "{report}");
+    for row in rows {
+        assert_eq!(row["state"], "invalid", "{report}");
+        assert_eq!(row["action"], "keep", "{report}");
+    }
+    assert_eq!(fs::read_to_string(&victim).unwrap(), "keep me");
+    assert!(fixture.root.join(".git/aisc/worktrees/evil.json").exists());
+}
+
+#[test]
+fn registry_paths_that_cover_the_repository_or_home_are_refused_without_walking() {
+    let fixture = repository();
+    let parent = fixture.root.parent().unwrap().to_str().unwrap().to_owned();
+    let home = std::env::var("HOME").unwrap();
+    for (name, path) in [
+        ("root", "/"),
+        ("home", home.as_str()),
+        ("above", parent.as_str()),
+    ] {
+        write_registry(&fixture, &format!("{name}.json"), name, path);
+    }
+    let report = gc(&fixture, &["--apply"]);
+    for name in ["root", "home", "above"] {
+        let row = entry(&report, name);
+        assert_eq!(row["state"], "invalid", "{report}");
+        assert_eq!(row["action"], "keep");
+        assert_eq!(row["bytes"], 0, "{name} was walked: {report}");
+    }
+    assert!(fixture.path("top.txt").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_worktree_directory_replaced_by_a_symlink_is_unverified() {
+    let fixture = repository();
+    let path = start(&fixture, "swapped");
+    finish_kept(&path);
+    let foreign = fixture.root.parent().unwrap().join("foreign");
+    fixture.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "foreign",
+        foreign.to_str().unwrap(),
+    ]);
+    fs::remove_dir_all(&path).unwrap();
+    std::os::unix::fs::symlink(&foreign, &path).unwrap();
+    let report = gc(&fixture, &[]);
+    let row = entry(&report, "swapped");
+    assert_eq!(row["state"], "unverified", "{report}");
+    assert_eq!(row["action"], "keep");
+    let report = gc(&fixture, &["--apply"]);
+    assert_eq!(entry(&report, "swapped")["action"], "keep", "{report}");
+    assert!(foreign.join("top.txt").exists() && listed(&fixture, &foreign));
+}
+
+#[test]
+fn ignored_files_are_reported_and_secret_like_ones_block_removal() {
+    let fixture = repository();
+    let build = start(&fixture, "build");
+    finish_kept(&build);
+    fs::create_dir_all(build.join("build")).unwrap();
+    fs::write(build.join("build/out.o"), vec![0_u8; 3000]).unwrap();
+    let secret = start(&fixture, "secret");
+    finish_kept(&secret);
+    fs::write(secret.join(".env"), "TOKEN=x\n").unwrap();
+    fs::write(secret.join("server.pem"), "key\n").unwrap();
+
+    let dry = gc(&fixture, &[]);
+    let row = entry(&dry, "build");
+    assert_eq!(row["action"], "remove", "{dry}");
+    assert_eq!(row["ignored_files"], 1);
+    assert_eq!(row["ignored_bytes"], 3000);
+    let row = entry(&dry, "secret");
+    assert_eq!(row["action"], "keep", "{dry}");
+    assert_eq!(row["ignored_files"], 2);
+    let reason = row["reason"].as_str().unwrap();
+    assert!(
+        reason.starts_with("ignored secret-like files: "),
+        "{reason}"
+    );
+    assert!(
+        reason.contains(".env") && reason.contains("server.pem"),
+        "{reason}"
+    );
+    let text = fixture.aisc(&["gc", "--min-age", "0"]).ok().stdout.clone();
+    assert!(text.contains("1 ignored file"), "{text}");
+
+    let applied = gc(&fixture, &["--apply"]);
+    assert_eq!(entry(&applied, "build")["action"], "removed");
+    assert_eq!(entry(&applied, "secret")["action"], "keep");
+    assert!(secret.join(".env").exists());
+    let forced = gc(&fixture, &["--apply", "--delete-ignored-secrets"]);
+    assert_eq!(entry(&forced, "secret")["action"], "removed", "{forced}");
+    assert!(!secret.exists());
 }

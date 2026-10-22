@@ -131,7 +131,7 @@ pub(crate) fn start(
                 .map(|directory| sparse_directory(directory))
                 .collect::<Result<Vec<_>>>()?;
             let common = repo.common_dir()?;
-            if worktree::registry_path(&common, name).exists() {
+            if worktree::registry_path(&common, name)?.exists() {
                 bail!(
                     "an AISC worktree named {name} is already registered; finish it, run `aisc gc`, or pick another name"
                 );
@@ -155,6 +155,11 @@ pub(crate) fn start(
                 command: std::env::args().collect(),
                 sparse: (!sparse.is_empty()).then(|| sparse.clone()),
             };
+            let worktree_config = |repo: &Repo| {
+                repo.git(&["config", "--bool", "--get", "extensions.worktreeConfig"])
+                    .is_ok_and(|value| value == b"true\n")
+            };
+            let had_worktree_config = worktree_config(repo);
             let prepared = (|| -> Result<()> {
                 let directory = PathBuf::from(
                     text(&git_at(&path, &["rev-parse", "--absolute-git-dir"])?)?
@@ -191,9 +196,15 @@ pub(crate) fn start(
                 };
                 return Err(error.context(format!("could not prepare the worktree; {outcome}")));
             }
-            Ok(
-                json!({"task": name, "mode": "worktree", "branch": branch, "head": base, "path": path, "sparse": registration.sparse}),
-            )
+            let mut result = json!({"task": name, "mode": "worktree", "branch": branch, "head": base, "path": path, "sparse": registration.sparse});
+            if !had_worktree_config && worktree_config(repo) {
+                // Git's sparse-checkout turns this on for per-worktree settings; other worktrees
+                // may come to rely on it, so it is never reverted automatically.
+                result["note"] = json!(
+                    "enabled extensions.worktreeConfig in the shared Git config (per-worktree sparse settings); it stays on"
+                );
+            }
+            Ok(result)
         }
     }
 }
@@ -463,7 +474,7 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     )
 }
 
-pub(crate) fn finish(repo: &Repo, keep: bool) -> Result<Value> {
+pub(crate) fn finish(repo: &Repo, keep: bool, delete_secrets: bool) -> Result<Value> {
     let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
     repo.writable()?;
     repo.require_clean()?;
@@ -518,7 +529,7 @@ pub(crate) fn finish(repo: &Repo, keep: bool) -> Result<Value> {
         let cleanup = if keep {
             serde_json::Map::from_iter([("removed_worktree".to_owned(), Value::Null)])
         } else {
-            worktree::remove_after_finish(repo, &session.name)
+            worktree::remove_after_finish(repo, &session.name, delete_secrets)
         };
         result
             .as_object_mut()
