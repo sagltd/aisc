@@ -353,6 +353,9 @@ pub(crate) struct Land {
     pub into: Option<String>,
     #[arg(long)]
     pub switch: bool,
+    /// Delete the landed branches (undo restores them)
+    #[arg(long)]
+    pub delete: bool,
     #[command(flatten)]
     pub opts: MutationOpts,
 }

@@ -1,0 +1,2322 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch",
+ "agent": "claude CLI 2.1.306, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.0 (release binary)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "AISC's agent block and three commands were improved on these same 13 tasks during an earlier single-run pilot; GitButler and Git use their shipped setup.",
+  "A run fails if the verifier fails or the agent ran a command the arm's policy blocks.",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts, prompts or paths are included."
+ ],
+ "suite_totals_per_repetition": {
+  "aisc+skill": [
+   {
+    "passed": 12,
+    "calls": 38,
+    "tokens": 989684,
+    "cost": 0.603,
+    "wall_s": 243
+   },
+   {
+    "passed": 12,
+    "calls": 41,
+    "tokens": 970656,
+    "cost": 0.605,
+    "wall_s": 207
+   },
+   {
+    "passed": 11,
+    "calls": 45,
+    "tokens": 1093274,
+    "cost": 0.623,
+    "wall_s": 277
+   }
+  ],
+  "but+skill": [
+   {
+    "passed": 13,
+    "calls": 62,
+    "tokens": 1576739,
+    "cost": 0.963,
+    "wall_s": 279
+   },
+   {
+    "passed": 12,
+    "calls": 56,
+    "tokens": 1517747,
+    "cost": 0.935,
+    "wall_s": 238
+   },
+   {
+    "passed": 13,
+    "calls": 65,
+    "tokens": 1766952,
+    "cost": 1.074,
+    "wall_s": 413
+   }
+  ],
+  "git": [
+   {
+    "passed": 13,
+    "calls": 61,
+    "tokens": 1436141,
+    "cost": 0.732,
+    "wall_s": 312
+   },
+   {
+    "passed": 13,
+    "calls": 62,
+    "tokens": 1419873,
+    "cost": 0.727,
+    "wall_s": 324
+   },
+   {
+    "passed": 12,
+    "calls": 65,
+    "tokens": 1440912,
+    "cost": 0.721,
+    "wall_s": 369
+   }
+  ]
+ },
+ "runs": [
+  {
+   "rep": 1,
+   "task": "pilot-1-selective-validation",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7969,
+    "cache_read_input_tokens": 49632,
+    "output_tokens": 276
+   },
+   "cost_usd_reported_by_cli": 0.03961119999999999,
+   "wall_ms": 17446
+  },
+  {
+   "rep": 1,
+   "task": "pilot-1-selective-validation",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 9574,
+    "cache_read_input_tokens": 51279,
+    "output_tokens": 397
+   },
+   "cost_usd_reported_by_cli": 0.0474059,
+   "wall_ms": 15266
+  },
+  {
+   "rep": 1,
+   "task": "pilot-1-selective-validation",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 9661,
+    "cache_read_input_tokens": 149394,
+    "output_tokens": 1845
+   },
+   "cost_usd_reported_by_cli": 0.07206539999999999,
+   "wall_ms": 35131
+  },
+  {
+   "rep": 1,
+   "task": "pilot-10-recover-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8118,
+    "cache_read_input_tokens": 50038,
+    "output_tokens": 275
+   },
+   "cost_usd_reported_by_cli": 0.040237800000000004,
+   "wall_ms": 7785
+  },
+  {
+   "rep": 1,
+   "task": "pilot-10-recover-amend",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 17307,
+    "cache_read_input_tokens": 59061,
+    "output_tokens": 501
+   },
+   "cost_usd_reported_by_cli": 0.08015610000000001,
+   "wall_ms": 11480
+  },
+  {
+   "rep": 1,
+   "task": "pilot-10-recover-amend",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 7628,
+    "cache_read_input_tokens": 67035,
+    "output_tokens": 542
+   },
+   "cost_usd_reported_by_cli": 0.042651499999999995,
+   "wall_ms": 19771
+  },
+  {
+   "rep": 1,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8347,
+    "cache_read_input_tokens": 50528,
+    "output_tokens": 485
+   },
+   "cost_usd_reported_by_cli": 0.0433028,
+   "wall_ms": 18997
+  },
+  {
+   "rep": 1,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 18026,
+    "cache_read_input_tokens": 116427,
+    "output_tokens": 935
+   },
+   "cost_usd_reported_by_cli": 0.09312070000000001,
+   "wall_ms": 23373
+  },
+  {
+   "rep": 1,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 8878,
+    "cache_read_input_tokens": 87064,
+    "output_tokens": 1280
+   },
+   "cost_usd_reported_by_cli": 0.0570384,
+   "wall_ms": 23475
+  },
+  {
+   "rep": 1,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": false,
+   "correctness_passed": true,
+   "compliance_passed": false,
+   "policy_violations": [
+    "git b r a n c h   - D   d o c s   g r e e t i n g   n o r m a l i z e"
+   ],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 9109,
+    "cache_read_input_tokens": 129530,
+    "output_tokens": 962
+   },
+   "cost_usd_reported_by_cli": 0.059037,
+   "wall_ms": 35835
+  },
+  {
+   "rep": 1,
+   "task": "pilot-12-integrate-topics",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 21461,
+    "cache_read_input_tokens": 153897,
+    "output_tokens": 1171
+   },
+   "cost_usd_reported_by_cli": 0.1129677,
+   "wall_ms": 21039
+  },
+  {
+   "rep": 1,
+   "task": "pilot-12-integrate-topics",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7346,
+    "cache_read_input_tokens": 47776,
+    "output_tokens": 498
+   },
+   "cost_usd_reported_by_cli": 0.039153600000000004,
+   "wall_ms": 12949
+  },
+  {
+   "rep": 1,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 8905,
+    "cache_read_input_tokens": 129747,
+    "output_tokens": 872
+   },
+   "cost_usd_reported_by_cli": 0.0573427,
+   "wall_ms": 26245
+  },
+  {
+   "rep": 1,
+   "task": "pilot-13-selective-copy",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 10,
+   "turns": 11,
+   "tokens": {
+    "input_tokens": 20,
+    "cache_creation_input_tokens": 10918,
+    "cache_read_input_tokens": 198948,
+    "output_tokens": 1413
+   },
+   "cost_usd_reported_by_cli": 0.07773679999999998,
+   "wall_ms": 43744
+  },
+  {
+   "rep": 1,
+   "task": "pilot-13-selective-copy",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 7735,
+    "cache_read_input_tokens": 66694,
+    "output_tokens": 472
+   },
+   "cost_usd_reported_by_cli": 0.0423454,
+   "wall_ms": 32292
+  },
+  {
+   "rep": 1,
+   "task": "pilot-2-multi-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8547,
+    "cache_read_input_tokens": 50408,
+    "output_tokens": 380
+   },
+   "cost_usd_reported_by_cli": 0.043040800000000004,
+   "wall_ms": 18077
+  },
+  {
+   "rep": 1,
+   "task": "pilot-2-multi-amend",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 14928,
+    "cache_read_input_tokens": 127340,
+    "output_tokens": 1097
+   },
+   "cost_usd_reported_by_cli": 0.08344,
+   "wall_ms": 30496
+  },
+  {
+   "rep": 1,
+   "task": "pilot-2-multi-amend",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 12,
+   "turns": 13,
+   "tokens": {
+    "input_tokens": 26,
+    "cache_creation_input_tokens": 12281,
+    "cache_read_input_tokens": 271630,
+    "output_tokens": 2793
+   },
+   "cost_usd_reported_by_cli": 0.104269,
+   "wall_ms": 42728
+  },
+  {
+   "rep": 1,
+   "task": "pilot-3-split-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9213,
+    "cache_read_input_tokens": 70385,
+    "output_tokens": 472
+   },
+   "cost_usd_reported_by_cli": 0.0486265,
+   "wall_ms": 13048
+  },
+  {
+   "rep": 1,
+   "task": "pilot-3-split-commit",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 20251,
+    "cache_read_input_tokens": 88952,
+    "output_tokens": 847
+   },
+   "cost_usd_reported_by_cli": 0.09838920000000001,
+   "wall_ms": 21812
+  },
+  {
+   "rep": 1,
+   "task": "pilot-3-split-commit",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 10588,
+    "cache_read_input_tokens": 111714,
+    "output_tokens": 2014
+   },
+   "cost_usd_reported_by_cli": 0.07368739999999999,
+   "wall_ms": 34813
+  },
+  {
+   "rep": 1,
+   "task": "pilot-4-reorder-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8122,
+    "cache_read_input_tokens": 49892,
+    "output_tokens": 237
+   },
+   "cost_usd_reported_by_cli": 0.039859200000000004,
+   "wall_ms": 7816
+  },
+  {
+   "rep": 1,
+   "task": "pilot-4-reorder-commits",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9385,
+    "cache_read_input_tokens": 70529,
+    "output_tokens": 472
+   },
+   "cost_usd_reported_by_cli": 0.049328899999999995,
+   "wall_ms": 16475
+  },
+  {
+   "rep": 1,
+   "task": "pilot-4-reorder-commits",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7002,
+    "cache_read_input_tokens": 47571,
+    "output_tokens": 505
+   },
+   "cost_usd_reported_by_cli": 0.037827099999999995,
+   "wall_ms": 11761
+  },
+  {
+   "rep": 1,
+   "task": "pilot-5-squash-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8140,
+    "cache_read_input_tokens": 49962,
+    "output_tokens": 286
+   },
+   "cost_usd_reported_by_cli": 0.0404282,
+   "wall_ms": 22829
+  },
+  {
+   "rep": 1,
+   "task": "pilot-5-squash-commits",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 10828,
+    "cache_read_input_tokens": 154714,
+    "output_tokens": 842
+   },
+   "cost_usd_reported_by_cli": 0.06723540000000001,
+   "wall_ms": 22112
+  },
+  {
+   "rep": 1,
+   "task": "pilot-5-squash-commits",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 7820,
+    "cache_read_input_tokens": 66433,
+    "output_tokens": 1062
+   },
+   "cost_usd_reported_by_cli": 0.04855929999999999,
+   "wall_ms": 15170
+  },
+  {
+   "rep": 1,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8948,
+    "cache_read_input_tokens": 70047,
+    "output_tokens": 647
+   },
+   "cost_usd_reported_by_cli": 0.0492827,
+   "wall_ms": 20928
+  },
+  {
+   "rep": 1,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 17866,
+    "cache_read_input_tokens": 171530,
+    "output_tokens": 783
+   },
+   "cost_usd_reported_by_cli": 0.096479,
+   "wall_ms": 24067
+  },
+  {
+   "rep": 1,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 11,
+   "turns": 12,
+   "tokens": {
+    "input_tokens": 22,
+    "cache_creation_input_tokens": 11224,
+    "cache_read_input_tokens": 211459,
+    "output_tokens": 2469
+   },
+   "cost_usd_reported_by_cli": 0.09077589999999998,
+   "wall_ms": 54397
+  },
+  {
+   "rep": 1,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9601,
+    "cache_read_input_tokens": 70722,
+    "output_tokens": 950
+   },
+   "cost_usd_reported_by_cli": 0.0549922,
+   "wall_ms": 22061
+  },
+  {
+   "rep": 1,
+   "task": "pilot-7-scoped-review",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 9697,
+    "cache_read_input_tokens": 91019,
+    "output_tokens": 1160
+   },
+   "cost_usd_reported_by_cli": 0.059509900000000004,
+   "wall_ms": 18107
+  },
+  {
+   "rep": 1,
+   "task": "pilot-7-scoped-review",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 8152,
+    "cache_read_input_tokens": 85666,
+    "output_tokens": 741
+   },
+   "cost_usd_reported_by_cli": 0.0486046,
+   "wall_ms": 11516
+  },
+  {
+   "rep": 1,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8653,
+    "cache_read_input_tokens": 49740,
+    "output_tokens": 646
+   },
+   "cost_usd_reported_by_cli": 0.046058,
+   "wall_ms": 19491
+  },
+  {
+   "rep": 1,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 10598,
+    "cache_read_input_tokens": 51597,
+    "output_tokens": 492
+   },
+   "cost_usd_reported_by_cli": 0.052483699999999994,
+   "wall_ms": 18346
+  },
+  {
+   "rep": 1,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7052,
+    "cache_read_input_tokens": 47580,
+    "output_tokens": 384
+   },
+   "cost_usd_reported_by_cli": 0.036818000000000004,
+   "wall_ms": 8184
+  },
+  {
+   "rep": 1,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8253,
+    "cache_read_input_tokens": 50180,
+    "output_tokens": 360
+   },
+   "cost_usd_reported_by_cli": 0.041642,
+   "wall_ms": 12623
+  },
+  {
+   "rep": 1,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 9089,
+    "cache_read_input_tokens": 50962,
+    "output_tokens": 306
+   },
+   "cost_usd_reported_by_cli": 0.0445242,
+   "wall_ms": 12673
+  },
+  {
+   "rep": 1,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7398,
+    "cache_read_input_tokens": 48282,
+    "output_tokens": 329
+   },
+   "cost_usd_reported_by_cli": 0.037722200000000004,
+   "wall_ms": 9670
+  },
+  {
+   "rep": 2,
+   "task": "pilot-1-selective-validation",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7986,
+    "cache_read_input_tokens": 49633,
+    "output_tokens": 286
+   },
+   "cost_usd_reported_by_cli": 0.039779300000000004,
+   "wall_ms": 17250
+  },
+  {
+   "rep": 2,
+   "task": "pilot-1-selective-validation",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 9489,
+    "cache_read_input_tokens": 51287,
+    "output_tokens": 317
+   },
+   "cost_usd_reported_by_cli": 0.0462667,
+   "wall_ms": 9956
+  },
+  {
+   "rep": 2,
+   "task": "pilot-1-selective-validation",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8124,
+    "cache_read_input_tokens": 67690,
+    "output_tokens": 633
+   },
+   "cost_usd_reported_by_cli": 0.045611000000000006,
+   "wall_ms": 25898
+  },
+  {
+   "rep": 2,
+   "task": "pilot-10-recover-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8037,
+    "cache_read_input_tokens": 50034,
+    "output_tokens": 289
+   },
+   "cost_usd_reported_by_cli": 0.0400534,
+   "wall_ms": 10341
+  },
+  {
+   "rep": 2,
+   "task": "pilot-10-recover-amend",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 17520,
+    "cache_read_input_tokens": 87590,
+    "output_tokens": 703
+   },
+   "cost_usd_reported_by_cli": 0.085885,
+   "wall_ms": 12703
+  },
+  {
+   "rep": 2,
+   "task": "pilot-10-recover-amend",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7284,
+    "cache_read_input_tokens": 48013,
+    "output_tokens": 476
+   },
+   "cost_usd_reported_by_cli": 0.038709299999999995,
+   "wall_ms": 19387
+  },
+  {
+   "rep": 2,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 9169,
+    "cache_read_input_tokens": 90856,
+    "output_tokens": 814
+   },
+   "cost_usd_reported_by_cli": 0.05392159999999999,
+   "wall_ms": 36271
+  },
+  {
+   "rep": 2,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "but+skill",
+   "passed": false,
+   "correctness_passed": true,
+   "compliance_passed": false,
+   "policy_violations": [
+    "git f e t c h   o r i g i n"
+   ],
+   "model_tool_calls": 6,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 17535,
+    "cache_read_input_tokens": 171386,
+    "output_tokens": 1107
+   },
+   "cost_usd_reported_by_cli": 0.0983806,
+   "wall_ms": 31399
+  },
+  {
+   "rep": 2,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8363,
+    "cache_read_input_tokens": 48440,
+    "output_tokens": 1020
+   },
+   "cost_usd_reported_by_cli": 0.048508,
+   "wall_ms": 18537
+  },
+  {
+   "rep": 2,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8240,
+    "cache_read_input_tokens": 69446,
+    "output_tokens": 358
+   },
+   "cost_usd_reported_by_cli": 0.04350059999999999,
+   "wall_ms": 10375
+  },
+  {
+   "rep": 2,
+   "task": "pilot-12-integrate-topics",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 18792,
+    "cache_read_input_tokens": 116257,
+    "output_tokens": 735
+   },
+   "cost_usd_reported_by_cli": 0.0941677,
+   "wall_ms": 14719
+  },
+  {
+   "rep": 2,
+   "task": "pilot-12-integrate-topics",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7268,
+    "cache_read_input_tokens": 47778,
+    "output_tokens": 460
+   },
+   "cost_usd_reported_by_cli": 0.0384618,
+   "wall_ms": 11240
+  },
+  {
+   "rep": 2,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": false,
+   "correctness_passed": true,
+   "compliance_passed": false,
+   "policy_violations": [
+    "git w o r k t r e e   a d d   - q   / t m p / c h k   r e v i v e - w o r k t r e e - n o - g r a p h"
+   ],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 8766,
+    "cache_read_input_tokens": 109200,
+    "output_tokens": 898
+   },
+   "cost_usd_reported_by_cli": 0.054987999999999995,
+   "wall_ms": 16556
+  },
+  {
+   "rep": 2,
+   "task": "pilot-13-selective-copy",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 10057,
+    "cache_read_input_tokens": 134041,
+    "output_tokens": 937
+   },
+   "cost_usd_reported_by_cli": 0.0630301,
+   "wall_ms": 24301
+  },
+  {
+   "rep": 2,
+   "task": "pilot-13-selective-copy",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 8141,
+    "cache_read_input_tokens": 144168,
+    "output_tokens": 822
+   },
+   "cost_usd_reported_by_cli": 0.05523280000000001,
+   "wall_ms": 22247
+  },
+  {
+   "rep": 2,
+   "task": "pilot-2-multi-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8554,
+    "cache_read_input_tokens": 50412,
+    "output_tokens": 392
+   },
+   "cost_usd_reported_by_cli": 0.043189200000000004,
+   "wall_ms": 14494
+  },
+  {
+   "rep": 2,
+   "task": "pilot-2-multi-amend",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 19963,
+    "cache_read_input_tokens": 88323,
+    "output_tokens": 594
+   },
+   "cost_usd_reported_by_cli": 0.0946443,
+   "wall_ms": 9820
+  },
+  {
+   "rep": 2,
+   "task": "pilot-2-multi-amend",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 11149,
+    "cache_read_input_tokens": 157164,
+    "output_tokens": 2051
+   },
+   "cost_usd_reported_by_cli": 0.0808544,
+   "wall_ms": 36810
+  },
+  {
+   "rep": 2,
+   "task": "pilot-3-split-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9599,
+    "cache_read_input_tokens": 70425,
+    "output_tokens": 519
+   },
+   "cost_usd_reported_by_cli": 0.0506445,
+   "wall_ms": 10245
+  },
+  {
+   "rep": 2,
+   "task": "pilot-3-split-commit",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 19347,
+    "cache_read_input_tokens": 107046,
+    "output_tokens": 984
+   },
+   "cost_usd_reported_by_cli": 0.09795260000000001,
+   "wall_ms": 23905
+  },
+  {
+   "rep": 2,
+   "task": "pilot-3-split-commit",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 10419,
+    "cache_read_input_tokens": 91030,
+    "output_tokens": 2077
+   },
+   "cost_usd_reported_by_cli": 0.07156900000000001,
+   "wall_ms": 29494
+  },
+  {
+   "rep": 2,
+   "task": "pilot-4-reorder-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8120,
+    "cache_read_input_tokens": 49886,
+    "output_tokens": 234
+   },
+   "cost_usd_reported_by_cli": 0.039820600000000005,
+   "wall_ms": 18609
+  },
+  {
+   "rep": 2,
+   "task": "pilot-4-reorder-commits",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9038,
+    "cache_read_input_tokens": 70423,
+    "output_tokens": 455
+   },
+   "cost_usd_reported_by_cli": 0.0477603,
+   "wall_ms": 18967
+  },
+  {
+   "rep": 2,
+   "task": "pilot-4-reorder-commits",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 7374,
+    "cache_read_input_tokens": 66095,
+    "output_tokens": 635
+   },
+   "cost_usd_reported_by_cli": 0.0424715,
+   "wall_ms": 17371
+  },
+  {
+   "rep": 2,
+   "task": "pilot-5-squash-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8154,
+    "cache_read_input_tokens": 49962,
+    "output_tokens": 331
+   },
+   "cost_usd_reported_by_cli": 0.040934200000000004,
+   "wall_ms": 15533
+  },
+  {
+   "rep": 2,
+   "task": "pilot-5-squash-commits",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 10899,
+    "cache_read_input_tokens": 112362,
+    "output_tokens": 560
+   },
+   "cost_usd_reported_by_cli": 0.0604562,
+   "wall_ms": 22360
+  },
+  {
+   "rep": 2,
+   "task": "pilot-5-squash-commits",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 7756,
+    "cache_read_input_tokens": 85111,
+    "output_tokens": 1185
+   },
+   "cost_usd_reported_by_cli": 0.0514051,
+   "wall_ms": 17541
+  },
+  {
+   "rep": 2,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 10342,
+    "cache_read_input_tokens": 91257,
+    "output_tokens": 1334
+   },
+   "cost_usd_reported_by_cli": 0.06385370000000001,
+   "wall_ms": 20979
+  },
+  {
+   "rep": 2,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 17238,
+    "cache_read_input_tokens": 141029,
+    "output_tokens": 764
+   },
+   "cost_usd_reported_by_cli": 0.09072290000000001,
+   "wall_ms": 13485
+  },
+  {
+   "rep": 2,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 19,
+   "turns": 20,
+   "tokens": {
+    "input_tokens": 36,
+    "cache_creation_input_tokens": 13660,
+    "cache_read_input_tokens": 374655,
+    "output_tokens": 4215
+   },
+   "cost_usd_reported_by_cli": 0.13432750000000002,
+   "wall_ms": 83967
+  },
+  {
+   "rep": 2,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9024,
+    "cache_read_input_tokens": 70029,
+    "output_tokens": 807
+   },
+   "cost_usd_reported_by_cli": 0.051184900000000005,
+   "wall_ms": 12940
+  },
+  {
+   "rep": 2,
+   "task": "pilot-7-scoped-review",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 9814,
+    "cache_read_input_tokens": 111846,
+    "output_tokens": 1000
+   },
+   "cost_usd_reported_by_cli": 0.06046459999999999,
+   "wall_ms": 29404
+  },
+  {
+   "rep": 2,
+   "task": "pilot-7-scoped-review",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8008,
+    "cache_read_input_tokens": 66734,
+    "output_tokens": 665
+   },
+   "cost_usd_reported_by_cli": 0.045371400000000006,
+   "wall_ms": 21681
+  },
+  {
+   "rep": 2,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8443,
+    "cache_read_input_tokens": 49644,
+    "output_tokens": 333
+   },
+   "cost_usd_reported_by_cli": 0.0420824,
+   "wall_ms": 12759
+  },
+  {
+   "rep": 2,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 8602,
+    "cache_read_input_tokens": 88492,
+    "output_tokens": 654
+   },
+   "cost_usd_reported_by_cli": 0.0498172,
+   "wall_ms": 14497
+  },
+  {
+   "rep": 2,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7050,
+    "cache_read_input_tokens": 47580,
+    "output_tokens": 371
+   },
+   "cost_usd_reported_by_cli": 0.03668,
+   "wall_ms": 10682
+  },
+  {
+   "rep": 2,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8223,
+    "cache_read_input_tokens": 50182,
+    "output_tokens": 338
+   },
+   "cost_usd_reported_by_cli": 0.041302200000000004,
+   "wall_ms": 10329
+  },
+  {
+   "rep": 2,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 9119,
+    "cache_read_input_tokens": 50964,
+    "output_tokens": 340
+   },
+   "cost_usd_reported_by_cli": 0.0449844,
+   "wall_ms": 12268
+  },
+  {
+   "rep": 2,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7424,
+    "cache_read_input_tokens": 48282,
+    "output_tokens": 361
+   },
+   "cost_usd_reported_by_cli": 0.0381462,
+   "wall_ms": 8996
+  },
+  {
+   "rep": 3,
+   "task": "pilot-1-selective-validation",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7988,
+    "cache_read_input_tokens": 49636,
+    "output_tokens": 308
+   },
+   "cost_usd_reported_by_cli": 0.040007600000000004,
+   "wall_ms": 15255
+  },
+  {
+   "rep": 3,
+   "task": "pilot-1-selective-validation",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 9578,
+    "cache_read_input_tokens": 51287,
+    "output_tokens": 375
+   },
+   "cost_usd_reported_by_cli": 0.0472027,
+   "wall_ms": 22975
+  },
+  {
+   "rep": 3,
+   "task": "pilot-1-selective-validation",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 8476,
+    "cache_read_input_tokens": 87375,
+    "output_tokens": 827
+   },
+   "cost_usd_reported_by_cli": 0.050931500000000005,
+   "wall_ms": 28749
+  },
+  {
+   "rep": 3,
+   "task": "pilot-10-recover-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8248,
+    "cache_read_input_tokens": 50174,
+    "output_tokens": 289
+   },
+   "cost_usd_reported_by_cli": 0.0409114,
+   "wall_ms": 12682
+  },
+  {
+   "rep": 3,
+   "task": "pilot-10-recover-amend",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 16736,
+    "cache_read_input_tokens": 58398,
+    "output_tokens": 451
+   },
+   "cost_usd_reported_by_cli": 0.0773098,
+   "wall_ms": 17264
+  },
+  {
+   "rep": 3,
+   "task": "pilot-10-recover-amend",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 7545,
+    "cache_read_input_tokens": 66805,
+    "output_tokens": 636
+   },
+   "cost_usd_reported_by_cli": 0.0432365,
+   "wall_ms": 26177
+  },
+  {
+   "rep": 3,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8381,
+    "cache_read_input_tokens": 50396,
+    "output_tokens": 387
+   },
+   "cost_usd_reported_by_cli": 0.0424456,
+   "wall_ms": 18527
+  },
+  {
+   "rep": 3,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 16682,
+    "cache_read_input_tokens": 164768,
+    "output_tokens": 1054
+   },
+   "cost_usd_reported_by_cli": 0.0937728,
+   "wall_ms": 47586
+  },
+  {
+   "rep": 3,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8625,
+    "cache_read_input_tokens": 67982,
+    "output_tokens": 1217
+   },
+   "cost_usd_reported_by_cli": 0.0534842,
+   "wall_ms": 26475
+  },
+  {
+   "rep": 3,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": false,
+   "correctness_passed": true,
+   "compliance_passed": false,
+   "policy_violations": [
+    "git b r a n c h   - D   d o c s   n o r m a l i z e   g r e e t i n g"
+   ],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 8856,
+    "cache_read_input_tokens": 109208,
+    "output_tokens": 804
+   },
+   "cost_usd_reported_by_cli": 0.05440879999999999,
+   "wall_ms": 44303
+  },
+  {
+   "rep": 3,
+   "task": "pilot-12-integrate-topics",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 13288,
+    "cache_read_input_tokens": 121560,
+    "output_tokens": 1002
+   },
+   "cost_usd_reported_by_cli": 0.075352,
+   "wall_ms": 31245
+  },
+  {
+   "rep": 3,
+   "task": "pilot-12-integrate-topics",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7419,
+    "cache_read_input_tokens": 47726,
+    "output_tokens": 592
+   },
+   "cost_usd_reported_by_cli": 0.0403806,
+   "wall_ms": 23130
+  },
+  {
+   "rep": 3,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": false,
+   "correctness_passed": true,
+   "compliance_passed": false,
+   "policy_violations": [
+    "git w o r k t r e e   a d d   - q   - - d e t a c h   / t m p / w t 1 3   r e v i v e - w o r k t r e e - n o - g r a p h"
+   ],
+   "model_tool_calls": 9,
+   "turns": 10,
+   "tokens": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 9468,
+    "cache_read_input_tokens": 170952,
+    "output_tokens": 1227
+   },
+   "cost_usd_reported_by_cli": 0.0672732,
+   "wall_ms": 28644
+  },
+  {
+   "rep": 3,
+   "task": "pilot-13-selective-copy",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 14,
+   "turns": 16,
+   "tokens": {
+    "input_tokens": 30,
+    "cache_creation_input_tokens": 20562,
+    "cache_read_input_tokens": 381112,
+    "output_tokens": 2499
+   },
+   "cost_usd_reported_by_cli": 0.1454092,
+   "wall_ms": 100394
+  },
+  {
+   "rep": 3,
+   "task": "pilot-13-selective-copy",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 7894,
+    "cache_read_input_tokens": 66873,
+    "output_tokens": 524
+   },
+   "cost_usd_reported_by_cli": 0.0435193,
+   "wall_ms": 26785
+  },
+  {
+   "rep": 3,
+   "task": "pilot-2-multi-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8556,
+    "cache_read_input_tokens": 50417,
+    "output_tokens": 395
+   },
+   "cost_usd_reported_by_cli": 0.0432277,
+   "wall_ms": 23414
+  },
+  {
+   "rep": 3,
+   "task": "pilot-2-multi-amend",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 19278,
+    "cache_read_input_tokens": 89177,
+    "output_tokens": 546
+   },
+   "cost_usd_reported_by_cli": 0.0915097,
+   "wall_ms": 27267
+  },
+  {
+   "rep": 3,
+   "task": "pilot-2-multi-amend",
+   "arm": "git",
+   "passed": false,
+   "correctness_passed": false,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 16,
+   "turns": 17,
+   "tokens": {
+    "input_tokens": 26,
+    "cache_creation_input_tokens": 12536,
+    "cache_read_input_tokens": 272593,
+    "output_tokens": 2750
+   },
+   "cost_usd_reported_by_cli": 0.1049553,
+   "wall_ms": 59442
+  },
+  {
+   "rep": 3,
+   "task": "pilot-3-split-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9194,
+    "cache_read_input_tokens": 70393,
+    "output_tokens": 486
+   },
+   "cost_usd_reported_by_cli": 0.04869129999999999,
+   "wall_ms": 15383
+  },
+  {
+   "rep": 3,
+   "task": "pilot-3-split-commit",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 20180,
+    "cache_read_input_tokens": 88860,
+    "output_tokens": 732
+   },
+   "cost_usd_reported_by_cli": 0.096946,
+   "wall_ms": 20127
+  },
+  {
+   "rep": 3,
+   "task": "pilot-3-split-commit",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 10607,
+    "cache_read_input_tokens": 111562,
+    "output_tokens": 2252
+   },
+   "cost_usd_reported_by_cli": 0.0761282,
+   "wall_ms": 34447
+  },
+  {
+   "rep": 3,
+   "task": "pilot-4-reorder-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8109,
+    "cache_read_input_tokens": 49878,
+    "output_tokens": 290
+   },
+   "cost_usd_reported_by_cli": 0.0403358,
+   "wall_ms": 12417
+  },
+  {
+   "rep": 3,
+   "task": "pilot-4-reorder-commits",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 16645,
+    "cache_read_input_tokens": 57893,
+    "output_tokens": 399
+   },
+   "cost_usd_reported_by_cli": 0.0763753,
+   "wall_ms": 16833
+  },
+  {
+   "rep": 3,
+   "task": "pilot-4-reorder-commits",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 8439,
+    "cache_read_input_tokens": 142366,
+    "output_tokens": 1311
+   },
+   "cost_usd_reported_by_cli": 0.06113460000000001,
+   "wall_ms": 20970
+  },
+  {
+   "rep": 3,
+   "task": "pilot-5-squash-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 8132,
+    "cache_read_input_tokens": 49961,
+    "output_tokens": 284
+   },
+   "cost_usd_reported_by_cli": 0.040376100000000005,
+   "wall_ms": 18835
+  },
+  {
+   "rep": 3,
+   "task": "pilot-5-squash-commits",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 10452,
+    "cache_read_input_tokens": 154815,
+    "output_tokens": 816
+   },
+   "cost_usd_reported_by_cli": 0.06548150000000001,
+   "wall_ms": 44685
+  },
+  {
+   "rep": 3,
+   "task": "pilot-5-squash-commits",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 7915,
+    "cache_read_input_tokens": 104398,
+    "output_tokens": 1248
+   },
+   "cost_usd_reported_by_cli": 0.0546038,
+   "wall_ms": 35026
+  },
+  {
+   "rep": 3,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8781,
+    "cache_read_input_tokens": 70010,
+    "output_tokens": 611
+   },
+   "cost_usd_reported_by_cli": 0.048250999999999995,
+   "wall_ms": 17309
+  },
+  {
+   "rep": 3,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 17801,
+    "cache_read_input_tokens": 171725,
+    "output_tokens": 808
+   },
+   "cost_usd_reported_by_cli": 0.0964885,
+   "wall_ms": 33129
+  },
+  {
+   "rep": 3,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 11,
+   "turns": 12,
+   "tokens": {
+    "input_tokens": 22,
+    "cache_creation_input_tokens": 9923,
+    "cache_read_input_tokens": 203167,
+    "output_tokens": 1734
+   },
+   "cost_usd_reported_by_cli": 0.0773927,
+   "wall_ms": 44841
+  },
+  {
+   "rep": 3,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 10065,
+    "cache_read_input_tokens": 131743,
+    "output_tokens": 1372
+   },
+   "cost_usd_reported_by_cli": 0.0671823,
+   "wall_ms": 41022
+  },
+  {
+   "rep": 3,
+   "task": "pilot-7-scoped-review",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9353,
+    "cache_read_input_tokens": 70712,
+    "output_tokens": 787
+   },
+   "cost_usd_reported_by_cli": 0.052369200000000005,
+   "wall_ms": 19398
+  },
+  {
+   "rep": 3,
+   "task": "pilot-7-scoped-review",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7879,
+    "cache_read_input_tokens": 48064,
+    "output_tokens": 459
+   },
+   "cost_usd_reported_by_cli": 0.0409244,
+   "wall_ms": 13180
+  },
+  {
+   "rep": 3,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8563,
+    "cache_read_input_tokens": 49767,
+    "output_tokens": 396
+   },
+   "cost_usd_reported_by_cli": 0.0432047,
+   "wall_ms": 13192
+  },
+  {
+   "rep": 3,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 15983,
+    "cache_read_input_tokens": 83790,
+    "output_tokens": 592
+   },
+   "cost_usd_reported_by_cli": 0.07825100000000001,
+   "wall_ms": 16979
+  },
+  {
+   "rep": 3,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7052,
+    "cache_read_input_tokens": 47580,
+    "output_tokens": 385
+   },
+   "cost_usd_reported_by_cli": 0.03682800000000001,
+   "wall_ms": 19167
+  },
+  {
+   "rep": 3,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 8744,
+    "cache_read_input_tokens": 70248,
+    "output_tokens": 445
+   },
+   "cost_usd_reported_by_cli": 0.046466799999999996,
+   "wall_ms": 15638
+  },
+  {
+   "rep": 3,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 16836,
+    "cache_read_input_tokens": 58868,
+    "output_tokens": 396
+   },
+   "cost_usd_reported_by_cli": 0.07720679999999999,
+   "wall_ms": 15183
+  },
+  {
+   "rep": 3,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 7415,
+    "cache_read_input_tokens": 48284,
+    "output_tokens": 331
+   },
+   "cost_usd_reported_by_cli": 0.0378104,
+   "wall_ms": 10507
+  }
+ ]
+}

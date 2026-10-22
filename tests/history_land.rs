@@ -200,3 +200,63 @@ fn switch_refuses_untracked_file_where_a_directory_is_needed() {
     assert_eq!(run.code, 1, "{}", all(&run));
     assert_eq!(fixture.snapshot(), before);
 }
+
+#[test]
+fn land_delete_removes_the_landed_branches_and_undo_restores_them() {
+    let fixture = pilot12();
+    let before = fixture.git(&[
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        "refs/heads",
+    ]);
+    let run = fixture.aisc(&[
+        "land",
+        "normalize",
+        "greeting",
+        "docs",
+        "--into",
+        "main",
+        "--delete",
+    ]);
+    run.ok();
+    assert!(
+        run.stdout.contains("deleted normalize, greeting, docs"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(
+        fixture.git(&["branch", "--format=%(refname:short)"]),
+        "main"
+    );
+    assert_eq!(
+        fixture.subjects("main"),
+        [
+            "Document greeting usage",
+            "Greet normalized names",
+            "Normalize names",
+            "base"
+        ]
+    );
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(
+        fixture.git(&[
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+            "refs/heads"
+        ]),
+        before
+    );
+}
+
+#[test]
+fn land_delete_refuses_the_checked_out_branch_unless_it_switches_away() {
+    let fixture = pilot12();
+    fixture.git(&["switch", "-q", "docs"]);
+    let refused = fixture.aisc(&["land", "docs", "--into", "main", "--delete"]);
+    assert_eq!(refused.code, 1, "{} {}", refused.stdout, refused.stderr);
+    assert!(fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/docs"]));
+    let run = fixture.aisc(&["land", "docs", "--into", "main", "--switch", "--delete"]);
+    run.ok();
+    assert_eq!(fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert!(!fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/docs"]));
+}
