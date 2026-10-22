@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from run import one_run
-from scenarios import TOOLS, build_template, environment, scenarios
+from scenarios import MODES, TOOLS, Q, build_template, environment, for_mode, scenarios
 
 
 def count(text):
@@ -29,15 +29,25 @@ class ScenarioTests(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.root, ignore_errors=True)
 
-    def run_git(self, scenario):
-        return one_run(scenario, "git", self.root / "templates" / scenario.name, self.root, self.binaries, count, 0)
+    def run_git(self, scenario, mode="default"):
+        return one_run(scenario, "git", self.root / "templates" / scenario.name, self.root, self.binaries, count, 0, mode)
 
-    def test_git_reference_passes_every_scenario(self):
+    def test_git_reference_passes_every_scenario_in_both_modes(self):
+        for mode in MODES:
+            for scenario in scenarios():
+                with self.subTest(scenario=scenario.name, mode=mode):
+                    result = self.run_git(scenario, mode)
+                    self.assertIsNone(result["error"])
+                    self.assertTrue(result["passed"], result["checks"])
+
+    def test_quiet_flags_exist_only_in_quietest_mode(self):
         for scenario in scenarios():
-            with self.subTest(scenario=scenario.name):
-                result = self.run_git(scenario)
-                self.assertIsNone(result["error"])
-                self.assertTrue(result["passed"], result["checks"])
+            for tool, steps in scenario.solutions.items():
+                for step in steps:
+                    if hasattr(step, "argv") and not callable(step.argv):
+                        quiet = [part for part in step.argv if isinstance(part, Q)]
+                        self.assertEqual(for_mode(step.argv, "quietest"), [str(part) for part in step.argv])
+                        self.assertEqual(len(for_mode(step.argv, "default")), len(step.argv) - len(quiet))
 
     def test_noop_fails_every_scenario(self):
         for scenario in scenarios():

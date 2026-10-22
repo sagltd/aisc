@@ -18,7 +18,8 @@ import sys
 import time
 from pathlib import Path
 
-from scenarios import TOOLS, Edit, adopt, build_template, environment, git, scenarios, settle, verify, write_files
+from scenarios import (MODES, TOOLS, Edit, adopt, build_template, environment, for_mode, git, scenarios, settle,
+                       verify, write_files)
 
 TIMEOUT = 120
 
@@ -51,12 +52,17 @@ def version(binaries, tool):
     return (result.stdout or result.stderr).strip().splitlines()[0]
 
 
-def command_line(step, argv):
-    prefix = "".join(key + "=" + shlex.quote(value) + " " for key, value in step.env.items())
+def step_env(step, mode):
+    """A tuple value is (default-mode value, quietest-mode value)."""
+    return {key: (value[MODES.index(mode)] if isinstance(value, tuple) else value) for key, value in step.env.items()}
+
+
+def command_line(extra, argv):
+    prefix = "".join(key + "=" + shlex.quote(value) + " " for key, value in extra.items())
     return prefix + " ".join(shlex.quote(part) for part in argv)
 
 
-def execute(steps, repository, env, binaries, scrub, log=None, records=None, context=None):
+def execute(steps, repository, env, binaries, scrub, log=None, records=None, context=None, mode="default"):
     """Run steps; return per-step records. With `log`, record Git calls seen by the PATH wrapper."""
     context = {"outputs": []} if context is None else context
     records = [] if records is None else records
@@ -67,9 +73,10 @@ def execute(steps, repository, env, binaries, scrub, log=None, records=None, con
             records.append({"kind": "edit", "path": step.path, "authored": step.path + "\n" + step.content,
                             "read": "", "wall_ms": 0.0, "exit_code": 0})
             continue
-        argv = step.argv(context) if callable(step.argv) else list(step.argv)
+        argv = for_mode(step.argv(context) if callable(step.argv) else step.argv, mode)
+        extra = step_env(step, mode)
         values = dict(env)
-        values.update(step.env)
+        values.update(extra)
         seen = len(log.read_text().splitlines()) if log else 0
         started = time.perf_counter()
         result = subprocess.run([binaries[argv[0]], *argv[1:]], cwd=repository, env=values,
@@ -77,8 +84,8 @@ def execute(steps, repository, env, binaries, scrub, log=None, records=None, con
         elapsed = (time.perf_counter() - started) * 1000
         output = scrub(result.stdout.decode(errors="replace") + result.stderr.decode(errors="replace"))
         context["outputs"].append(output)
-        authored = "$ " + command_line(step, argv) + "\n" + (step.stdin or "")
-        records.append({"kind": "run", "command": command_line(step, argv), "stdin": step.stdin,
+        authored = "$ " + command_line(extra, argv) + "\n" + (step.stdin or "")
+        records.append({"kind": "run", "command": command_line(extra, argv), "stdin": step.stdin,
                         "authored": authored, "read": output, "wall_ms": elapsed,
                         "exit_code": result.returncode})
         if log:
@@ -86,12 +93,12 @@ def execute(steps, repository, env, binaries, scrub, log=None, records=None, con
             calls = [line.split("\t") for line in log.read_text().splitlines()[seen:]]
             records[-1]["git_calls"] = calls[:-1] if argv[0] == "git" else calls
         if result.returncode and not step.may_fail:
-            raise RuntimeError("step failed: " + command_line(step, argv) + "\n" + output)
+            raise RuntimeError("step failed: " + command_line(extra, argv) + "\n" + output)
     return records
 
 
-def one_run(scenario, tool, template, scratch, binaries, count, index):
-    root = scratch / ("run-" + scenario.name + "-" + tool + "-" + str(index))
+def one_run(scenario, tool, template, scratch, binaries, count, index, mode="default"):
+    root = scratch / ("run-" + scenario.name + "-" + tool + "-" + mode + "-" + str(index))
     if root.exists():
         shutil.rmtree(root)
     shutil.copytree(template, root, symlinks=True)
@@ -105,12 +112,12 @@ def one_run(scenario, tool, template, scratch, binaries, count, index):
         adopt(tool, repository, root, env, binaries)
         write_files(repository, scenario.dirty)
         if scenario.before:
-            execute(scenario.before[tool], repository, env, binaries, scrub)
+            execute(scenario.before[tool], repository, env, binaries, scrub, mode=mode)
             settle(tool)
         main_before = git(repository, "rev-parse", "refs/heads/main").strip()
         records, error = [], None
         try:
-            execute(scenario.solutions[tool], repository, env, binaries, scrub, records=records)
+            execute(scenario.solutions[tool], repository, env, binaries, scrub, records=records, mode=mode)
         except (RuntimeError, LookupError, subprocess.TimeoutExpired) as failure:
             error = scrub(str(failure))[:2000]
         settle(tool)  # untimed: let a background `but` fetch finish before grading and the next run
@@ -125,7 +132,8 @@ def one_run(scenario, tool, template, scratch, binaries, count, index):
         shutil.rmtree(root, ignore_errors=True)
     authored = "".join(record["authored"] for record in records)
     return {
-        "scenario": scenario.name, "tool": tool, "index": index, "error": error,
+        "scenario": scenario.name, "tool": tool, "mode": mode, "index": index, "error": error,
+        "working_copy_expectation": "tool-specific" if tool in scenario.tool_dirty else "shared",
         "commands": sum(record["kind"] == "run" for record in records),
         "edits": sum(record["kind"] == "edit" for record in records),
         "output_bytes": len(read.encode()), "authored_bytes": len(authored.encode()),
@@ -148,6 +156,7 @@ def summarize(runs, tools, names):
             first = sample[0]
             rows.append({
                 "scenario": name, "tool": tool, "runs": len(sample),
+                "working_copy_expectation": first["working_copy_expectation"],
                 "passes": sum(run["passed"] for run in sample),
                 "commands": first["commands"], "edits": first["edits"], "tool_calls": first["commands"] + first["edits"],
                 "output_bytes": statistics.median(run["output_bytes"] for run in sample),
@@ -313,9 +322,36 @@ def profile(binaries, scratch, templates, chosen, repetitions):
 
 
 
+def build_aisc(source, target_dir):
+    """Build the candidate with the release profile so a debug binary can never be measured."""
+    values = dict(os.environ, CARGO_TARGET_DIR=str(target_dir))
+    subprocess.run(["cargo", "build", "--release", "--locked", "--quiet"], cwd=source, env=values, check=True,
+                   stdin=subprocess.DEVNULL, timeout=1800)
+    return target_dir / "release" / "aisc"
+
+
+def build_record(source, binary, built):
+    def read(*argv):
+        return subprocess.run(argv, cwd=source, capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()
+    binary = Path(binary).resolve()
+    if binary.parent.name != "release":
+        raise SystemExit("--aisc must be a cargo release build (<target>/release/aisc); omit --aisc to build one")
+    manifest = (source / "Cargo.toml").read_text()
+    release = manifest.split("[profile.release]", 1)[1].split("\n[", 1)[0] if "[profile.release]" in manifest else ""
+    return {
+        "cargo_profile": "release", "built_by_runner": built,
+        "profile_release_overrides": [line.strip() for line in release.strip().splitlines() if line.strip()],
+        "debug_assertions": "debug-assertions = true" in release.replace("  ", " "),  # cargo release default: off
+        "binary": "target/release/aisc", "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+        "git_commit": read("git", "rev-parse", "HEAD"),
+        "source_clean": read("git", "status", "--porcelain", "--", "src", "Cargo.toml", "Cargo.lock") == "",
+        "rustc": read("rustc", "-V"),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--aisc", required=True)
+    parser.add_argument("--aisc", default=None, help="a release binary; omitted: build with cargo --release")
     parser.add_argument("--but", default=None)
     parser.add_argument("--jj", default=None)
     parser.add_argument("--output", type=Path, required=True)
@@ -323,12 +359,19 @@ def main():
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--scenarios", nargs="*", default=None)
     parser.add_argument("--tools", nargs="*", default=list(TOOLS))
+    parser.add_argument("--modes", nargs="*", default=list(MODES), choices=MODES)
     parser.add_argument("--no-profile", action="store_true")
     arguments = parser.parse_args()
     if arguments.repetitions < 10:
         print("note: fewer than 10 repetitions; medians are less stable", file=sys.stderr)
+    source = Path(__file__).resolve().parent.parent.parent
+    built = arguments.aisc is None and "aisc" in arguments.tools
+    if built:
+        arguments.aisc = str(build_aisc(source, source / "target"))
+    build = build_record(source, arguments.aisc, built) if "aisc" in arguments.tools else None
     binaries, skipped = resolve_binaries(arguments)
     tools = [tool for tool in arguments.tools if tool in binaries]
+    modes = arguments.modes
     label, count = tokenizer()
     scratch = Path(__file__).resolve().parent.parent / ".scratch" / "commands"
     if scratch.exists():
@@ -344,22 +387,24 @@ def main():
     runs = []
     load_before = os.getloadavg()
     total = arguments.warmup + arguments.repetitions
+    pairs = [(mode, tool) for mode in modes for tool in tools]
     try:
         for repetition in range(total):
             for position, scenario in enumerate(chosen):
-                shift = (repetition + position) % len(tools)
-                order = tools[shift:] + tools[:shift]  # each tool takes every slot equally often
-                for tool in order:
+                shift = (repetition * len(tools) + position) % len(pairs)
+                order = pairs[shift:] + pairs[:shift]  # each (mode, tool) takes every slot over the run
+                for mode, tool in order:
                     if scenario.solutions.get(tool) is None:
                         continue
-                    run = one_run(scenario, tool, templates / scenario.name, scratch, binaries, count, repetition)
+                    run = one_run(scenario, tool, templates / scenario.name, scratch, binaries, count, repetition, mode)
                     run["warmup"] = repetition < arguments.warmup
                     runs.append(run)
                     if not run["passed"]:
-                        print("FAIL", scenario.name, tool, run["error"] or run["checks"], file=sys.stderr)
+                        print("FAIL", scenario.name, tool, mode, run["error"] or run["checks"], file=sys.stderr)
             print("repetition", repetition + 1, "of", total, file=sys.stderr)
         measured = [run for run in runs if not run["warmup"]]
-        rows, totals = summarize(measured, tools, [scenario.name for scenario in chosen])
+        summary = {mode: summarize([run for run in measured if run["mode"] == mode], tools,
+                                   [scenario.name for scenario in chosen]) for mode in modes}
         profiled = None if arguments.no_profile else profile(
             {tool: path for tool, path in binaries.items() if tool in tools or tool == "cat"},
             scratch, templates, chosen, arguments.repetitions)
@@ -368,34 +413,39 @@ def main():
         shutil.rmtree(scratch, ignore_errors=True)
     samples = {}
     for run in measured:
-        samples.setdefault((run["scenario"], run["tool"]), run)
+        samples.setdefault((run["scenario"], run["tool"], run["mode"]), run)
     result = {
-        "schema": 2, "benchmark": "commands-v2",
+        "schema": 3, "benchmark": "commands-v2",
         "metric_kind": "deterministic_command_transcripts_not_provider_usage",
         "tokenizer": label,
         "token_text": "output = stdout+stderr of each command; authored = '$ ' + command line (+ stdin), or path + content for an edit step; run paths scrubbed to <run>",
         "timing": "sum of per-command wall time (perf_counter around each subprocess); fixture copy, tool adoption (but setup/apply, jj git init) and grading excluded; warm filesystem",
+        "modes": {"default": "no quiet flags anywhere",
+                  "quietest": "each tool's documented quiet flags: git -q, aisc -q (not on switch/undo/log, which have none), jj --quiet, but status --no-hint (but has no quiet flag on writes)"},
         "repetitions": arguments.repetitions, "warmup": arguments.warmup,
-        "order": "tools rotate through every slot across repetitions and scenarios",
+        "order": "(mode, tool) pairs rotate through every slot across repetitions and scenarios",
         "platform": platform.system() + " " + platform.machine(), "cpu_count": os.cpu_count(),
         "load_average_1_5_15": {"before": [round(value, 2) for value in load_before],
                                 "after": [round(value, 2) for value in load_after]},
         "python": platform.python_version(),
         "versions": {tool: version(binaries, tool) for tool in tools},
-        "aisc_sha256": hashlib.sha256(Path(binaries["aisc"]).read_bytes()).hexdigest() if "aisc" in tools else None,
+        "aisc_build": build,
         "skipped": skipped,
         "scenarios": [{"name": scenario.name, "family": scenario.family, "task": scenario.task,
                        "notes": scenario.notes,
+                       "graded_against_tool_specific_working_copy": sorted(scenario.tool_dirty),
                        "unsupported": [tool for tool in tools if scenario.solutions.get(tool) is None]}
                       for scenario in chosen],
-        "totals": totals, "rows": rows, "profile": profiled,
-        "sample_transcripts": [{"scenario": key[0], "tool": key[1], "steps": value["transcript"],
+        "totals": {mode: summary[mode][1] for mode in modes},
+        "rows": {mode: summary[mode][0] for mode in modes},
+        "profile_mode": "default", "profile": profiled,
+        "sample_transcripts": [{"scenario": key[0], "tool": key[1], "mode": key[2], "steps": value["transcript"],
                                 "checks": value["checks"]} for key, value in samples.items()],
         "runs": [{key: value for key, value in run.items() if key != "transcript"} for run in runs],
     }
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(json.dumps(result, indent=1) + "\n")
-    print(json.dumps(totals, indent=1))
+    print(json.dumps(result["totals"], indent=1))
 
 
 if __name__ == "__main__":

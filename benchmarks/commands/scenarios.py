@@ -85,6 +85,17 @@ MAIN_FILES = {"app.py": APP, "README.md": README, "docs/guide.md": GUIDE,
 
 # ---------------------------------------------------------------- steps
 
+MODES = ("default", "quietest")
+
+
+class Q(str):
+    """An argument that exists only to reduce output; dropped in the "default" mode."""
+
+
+def for_mode(argv, mode):
+    return [str(part) for part in argv if mode == "quietest" or not isinstance(part, Q)]
+
+
 @dataclass
 class Run:
     argv: object  # list[str] or callable(context) -> list[str]
@@ -168,51 +179,77 @@ def sequence_editor(script):
 
 # ---------------------------------------------------------------- scenarios
 
+def git_reflog_before_rewrite(context, index=-1):
+    """First reflog entry that is not part of a rebase: the tip before the last rewrite."""
+    for line in context["outputs"][index].splitlines():
+        sha, _, message = line.partition(" ")
+        if not message.split(": ", 1)[-1].startswith("rebase"):
+            return sha
+    raise LookupError("no pre-rewrite reflog entry")
+
+
+# Inspection rule: the agent knows the task text (branch names, commit subjects,
+# paths, and a phrase from the hunk to select). Each sequence runs exactly the
+# reads its tool needs to turn that into arguments the tool accepts:
+#   git  - hunk order for `add -p` (diff) and the pre-rewrite reflog entry for undo;
+#          commits are addressed by subject in rebase todo edits or `:/subject`.
+#   aisc - none: commits by subject, hunks by `path~text`.
+#   but  - short IDs for commits, hunks and committed files (status/diff); paths
+#          and branch names are accepted directly, so those need no lookup.
+#   jj   - commits by `subject()` revsets; to commit part of a file it must read
+#          the file (no non-interactive hunk selection).
+# Quiet flags are wrapped in Q() and appear only in the "quietest" mode.
+q, jq, nh = Q("-q"), Q("--quiet"), Q("--no-hint")
+
+
 def scenarios():
     helper = ("add helper", {"lib.py": "def helper():\n    return 1\n"})
     parser_cli = [("add parser", {"parser.py": PARSER}), ("add cli", {"cli.py": "import parser\n"})]
     squash_series = [("add parser", {"parser.py": PARSER_TYPO}), ("fix parser typo", {"parser.py": PARSER}),
                      ("add cli", {"cli.py": "import parser\n"})]
     squashed = [("add parser module", {"parser.py": PARSER}), ("add cli", {"cli.py": "import parser\n"})]
-    git_squash = Run(["git", "rebase", "-q", "-i", "--autostash", "main"], env=sequence_editor(
-        "perl -pi -e 's/^pick(.* fix parser typo)$/fixup$1\\nexec git commit -q --amend -m \"add parser module\"/'"))
-    aisc_squash = Run(["aisc", "squash", "--into", "add parser module", "add parser", "fix parser typo"])
-    but_squash = [Run(["but", "status", "--no-hint"]),
+    squash_editor = "perl -pi -e 's/^pick(.* fix parser typo)$/fixup$1\\nexec git commit {}--amend -m \"add parser module\"/'"
+    git_squash = Run(["git", "rebase", q, "-i", "--autostash", "main"], env={"GIT_SEQUENCE_EDITOR": (
+        squash_editor.format(""), squash_editor.format("-q "))})
+    aisc_squash = Run(["aisc", "squash", q, "--into", "add parser module", "add parser", "fix parser typo"])
+    but_squash = [Run(["but", "status", nh]),
                   Run(lambda c: ["but", "squash", but_commit(c, "fix parser typo"), "--target",
                                  but_commit(c, "add parser"), "-m", "add parser module"])]
-    jj_squash = Run(["jj", "squash", "--from", 'subject("fix parser typo")', "--into", 'subject("add parser")',
+    jj_squash = Run(["jj", "squash", jq, "--from", 'subject("fix parser typo")', "--into", 'subject("add parser")',
                      "-m", "add parser module"])
     return [
         Scenario(
             "select_hunks", "selective commit (pilot-1)",
-            "Commit only the validation hunk of app.py plus the new test as 'add validation'; keep the logging hunk, README edit and untracked notes uncommitted.",
+            "Commit only the validation hunk of app.py (the one raising ValueError) plus the new test as 'add validation'; keep the logging hunk, README edit and untracked notes uncommitted.",
             [helper], {"app.py": APP_BOTH, "tests/test_app.py": TEST_MORE, "README.md": README_EDIT, "notes.txt": "scratch\n"},
             [helper, ("add validation", {"app.py": APP_VALIDATED, "tests/test_app.py": TEST_MORE})],
             {"app.py": APP_BOTH, "README.md": README_EDIT, "notes.txt": "scratch\n"},
             {"git": [Run(["git", "diff", "--", "app.py"]),
                      Run(["git", "add", "-p", "--", "app.py"], stdin="y\nn\n"),
-                     Run(["git", "commit", "-q", "-i", "-m", "add validation", "--", "tests/test_app.py"])],
-             "aisc": [Run(["aisc", "commit", "-m", "add validation", "app.py~ValueError", "tests/test_app.py"])],
+                     Run(["git", "commit", q, "-i", "-m", "add validation", "--", "tests/test_app.py"])],
+             "aisc": [Run(["aisc", "commit", q, "-m", "add validation", "app.py~ValueError", "tests/test_app.py"])],
              "but": [Run(["but", "diff"]),
                      Run(lambda c: ["but", "commit", "-m", "add validation", but_hunk(c, "app.py", "ValueError"),
-                                    but_hunk(c, "tests/test_app.py", "load_rejects_empty").split(":")[0]])],
+                                    "tests/test_app.py"])],
              "jj": [Run(["cat", "app.py"]), Edit("app.py", APP_VALIDATED),
-                    Run(["jj", "commit", "-m", "add validation", "app.py", "tests/test_app.py"]),
+                    Run(["jj", "commit", jq, "-m", "add validation", "app.py", "tests/test_app.py"]),
                     Edit("app.py", APP_BOTH),
-                    Run(["jj", "bookmark", "move", "feature", "--to", "@-"])]},
-            notes={"jj": "jj has no non-interactive hunk selection; the agent reads the file, writes the partial version, commits, then restores it",
-                   "git": "git add -p answered on stdin after reading the diff to learn hunk order"}),
+                    Run(["jj", "bookmark", "move", jq, "feature", "--to", "@-"])]},
+            notes={"aisc": "hunk chosen by its text with the `path~text` selector, no lookup",
+                   "but": "hunk chosen by the short hunk ID read from `but diff`; the test file by path",
+                   "jj": "closest non-interactive equivalent: read the file, write the partial version, `jj commit` with a fileset, restore the file",
+                   "git": "`git add -p` answered on stdin after reading the diff to learn hunk order"}),
         Scenario(
             "amend_older", "multi-amend (pilot-2)",
             "Fold the uncommitted parser.py fix into the older commit 'add parser'; keep the README edit uncommitted.",
             parser_cli, {"parser.py": PARSER_FIXED, "README.md": README_EDIT},
             [("add parser", {"parser.py": PARSER_FIXED}), parser_cli[1]], {"README.md": README_EDIT},
-            {"git": [Run(["git", "commit", "-q", "--fixup", ":/add parser", "--", "parser.py"]),
-                     Run(["git", "rebase", "-q", "-i", "--autosquash", "--autostash", "main"], env=sequence_editor("true"))],
-             "aisc": [Run(["aisc", "amend", "--into", "add parser", "parser.py"])],
-             "but": [Run(["but", "status", "--no-hint"]),
-                     Run(lambda c: ["but", "amend", "-t", but_commit(c, "add parser"), but_file(c, "parser.py")])],
-             "jj": [Run(["jj", "squash", "--into", 'subject("add parser")', "parser.py"])]}),
+            {"git": [Run(["git", "commit", q, "--fixup", ":/add parser", "--", "parser.py"]),
+                     Run(["git", "rebase", q, "-i", "--autosquash", "--autostash", "main"], env=sequence_editor("true"))],
+             "aisc": [Run(["aisc", "amend", q, "--into", "add parser", "parser.py"])],
+             "but": [Run(["but", "status", nh]),
+                     Run(lambda c: ["but", "amend", "-t", but_commit(c, "add parser"), "parser.py"])],
+             "jj": [Run(["jj", "squash", jq, "--into", 'subject("add parser")', "parser.py"])]}),
         Scenario(
             "split_commit", "split commit (pilot-3)",
             "Split 'add models' into 'add user model' (user.py) then 'add order model' (order.py), below 'add api'.",
@@ -220,20 +257,20 @@ def scenarios():
              ("add api", {"api.py": "from user import User\n"})], {},
             [("add user model", {"user.py": "class User:\n    pass\n"}),
              ("add order model", {"order.py": "class Order:\n    pass\n"}), ("add api", {"api.py": "from user import User\n"})], {},
-            {"git": [Run(["git", "rebase", "-q", "-i", "main"], env=sequence_editor("sed -i.bak '/add models/s/^pick/edit/'")),
-                     Run(["git", "reset", "-q", "--soft", "HEAD~"]),
-                     Run(["git", "commit", "-q", "-m", "add user model", "--", "user.py"]),
-                     Run(["git", "commit", "-q", "-m", "add order model"]),
+            {"git": [Run(["git", "rebase", q, "-i", "main"], env=sequence_editor("sed -i.bak '/add models/s/^pick/edit/'")),
+                     Run(["git", "reset", q, "--soft", "HEAD~"]),
+                     Run(["git", "commit", q, "-m", "add user model", "--", "user.py"]),
+                     Run(["git", "commit", q, "-m", "add order model"]),
                      Run(["git", "rebase", "--continue"])],
-             "aisc": [Run(["aisc", "split", "add models", "--into", "add user model", "user.py", "--into", "add order model", "order.py"])],
-             "but": [Run(["but", "status", "-f", "--no-hint"]),
+             "aisc": [Run(["aisc", "split", q, "add models", "--into", "add user model", "user.py", "--into", "add order model", "order.py"])],
+             "but": [Run(["but", "status", "-f", nh]),
                      Run(lambda c: ["but", "uncommit", "--status-after", but_file(c, "order.py")]),
                      Run(lambda c: ["but", "reword", but_commit(c, "add models"), "-m", "add user model"]),
                      Run(lambda c: ["but", "commit", "-A", but_commit(c, "add models", -2), "-m", "add order model",
-                                    but_file(c, "order.py", -2)])],
-             "jj": [Run(["jj", "split", "-r", 'subject("add models")', "-m", "add user model", "user.py"]),
-                    Run(["jj", "describe", "-r", 'subject("add models")', "-m", "add order model"])]},
-            notes={"but": "no split verb: uncommit the file, reword the commit, commit the file above it"}),
+                                    "order.py"])],
+             "jj": [Run(["jj", "split", jq, "-r", 'subject("add models")', "-m", "add user model", "user.py"]),
+                    Run(["jj", "describe", jq, "-r", 'subject("add models")', "-m", "add order model"])]},
+            notes={"but": "no split verb: uncommit the file (status-after prints the new IDs), reword the commit, commit the file above it"}),
         Scenario(
             "reorder_commits", "reorder commits (pilot-4)",
             "Reorder so 'add config' comes after 'add sender': add retry, add sender, add config.",
@@ -241,13 +278,13 @@ def scenarios():
              ("add sender", {"sender.py": "def send():\n    pass\n"})], {},
             [("add retry", {"retry.py": "TRIES = 2\n"}), ("add sender", {"sender.py": "def send():\n    pass\n"}),
              ("add config", {"config.py": "LIMIT = 3\n"})], {},
-            {"git": [Run(["git", "rebase", "-q", "-i", "main"],
+            {"git": [Run(["git", "rebase", q, "-i", "main"],
                          env=sequence_editor("sed -i.bak -e '/add config/{h;d;}' -e '/add sender/G'"))],
-             "aisc": [Run(["aisc", "move", "add config", "--after", "add sender"])],
-             "but": [Run(["but", "status", "--no-hint"]),
+             "aisc": [Run(["aisc", "move", q, "add config", "--after", "add sender"])],
+             "but": [Run(["but", "status", nh]),
                      Run(lambda c: ["but", "move", but_commit(c, "add config"), "--above", but_commit(c, "add sender")])],
-             "jj": [Run(["jj", "rebase", "-r", 'subject("add config")', "-A", 'subject("add sender")']),
-                    Run(["jj", "bookmark", "move", "feature", "--to", 'subject("add config")'])]}),
+             "jj": [Run(["jj", "rebase", jq, "-r", 'subject("add config")', "-A", 'subject("add sender")']),
+                    Run(["jj", "bookmark", "move", jq, "feature", "--to", 'subject("add config")'])]}),
         Scenario(
             "squash_commits", "squash commits (pilot-5)",
             "Squash 'add parser' and 'fix parser typo' into one commit 'add parser module'.",
@@ -260,58 +297,59 @@ def scenarios():
              ("add docs", {"docs/guide.md": GUIDE_EDIT})], {},
             [("add api", {"api.py": "ROUTES = []\n"}), ("add docs", {"docs/guide.md": GUIDE_EDIT})],
             {"notes/private.md": "private\n"},
-            {"git": [Run(["git", "rebase", "-q", "-i", "main"], env=sequence_editor("sed -i.bak '/add api/s/^pick/edit/'")),
-                     Run(["git", "rm", "-q", "--cached", "notes/private.md"]),
-                     Run(["git", "commit", "-q", "--amend", "--no-edit"]),
+            {"git": [Run(["git", "rebase", q, "-i", "main"], env=sequence_editor("sed -i.bak '/add api/s/^pick/edit/'")),
+                     Run(["git", "rm", q, "--cached", "notes/private.md"]),
+                     Run(["git", "commit", q, "--amend", "--no-edit"]),
                      Run(["git", "rebase", "--continue"])],
-             "aisc": [Run(["aisc", "uncommit", "add api", "notes/private.md"])],
-             "but": [Run(["but", "status", "-f", "--no-hint"]),
+             "aisc": [Run(["aisc", "uncommit", q, "add api", "notes/private.md"])],
+             "but": [Run(["but", "status", "-f", nh]),
                      Run(lambda c: ["but", "uncommit", but_file(c, "notes/private.md")])],
-             "jj": [Run(["jj", "squash", "--from", 'subject("add api")', "--into", "@", "notes/private.md"])]}),
+             "jj": [Run(["jj", "squash", jq, "--from", 'subject("add api")', "--into", "@", "notes/private.md"])]}),
         Scenario(
             "undo_rewrite", "undo last operation (oplog)",
             "The squash of 'add parser' + 'fix parser typo' was a mistake: undo it, keeping the README edit.",
             squash_series, {"README.md": README_EDIT}, squash_series, {"README.md": README_EDIT},
-            {"git": [Run(["git", "reset", "-q", "--keep", "feature@{1}"])],
+            {"git": [Run(["git", "reflog", "-n", "5", "feature"]),
+                     Run(lambda c: ["git", "reset", q, "--keep", git_reflog_before_rewrite(c)])],
              "aisc": [Run(["aisc", "undo"])],
              "but": [Run(["but", "undo"])],
-             "jj": [Run(["jj", "undo"])]},
+             "jj": [Run(["jj", "undo", jq])]},
             before={"git": [git_squash], "aisc": [aisc_squash], "but": but_squash, "jj": [jj_squash]},
-            notes={"git": "git has no operation log; the branch reflog entry from the rebase is used"}),
+            notes={"git": "no operation log: read the branch reflog, reset to the entry before the rebase"}),
         Scenario(
             "sync_conflict", "update dirty branch onto moved upstream (pilot-6/11)",
             "Fetch origin, rebase feature onto origin/main, resolve notify.py keeping push and sms, keep the README edit.",
             [("add sms channel", {"notify.py": NOTIFY_SMS})], {"README.md": README_EDIT},
             [("add sms channel", {"notify.py": NOTIFY_BOTH})], {"README.md": README_EDIT},
-            {"git": [Run(["git", "pull", "-q", "--rebase", "--autostash", "origin", "main"], may_fail=True),
+            {"git": [Run(["git", "pull", q, "--rebase", "--autostash", "origin", "main"], may_fail=True),
                      Edit("notify.py", NOTIFY_BOTH), Run(["git", "add", "notify.py"]),
                      Run(["git", "rebase", "--continue"])],
-             "aisc": [Run(["aisc", "sync", "origin/main", "--fetch"], may_fail=True),
-                      Edit("notify.py", NOTIFY_BOTH), Run(["aisc", "sync", "--continue"])],
+             "aisc": [Run(["aisc", "sync", q, "origin/main", "--fetch"], may_fail=True),
+                      Edit("notify.py", NOTIFY_BOTH), Run(["aisc", "sync", q, "--continue"])],
              "but": [Run(["but", "pull"]),
                      Run(lambda c: ["but", "resolve", but_commit(c, "add sms channel")]),
                      Edit("notify.py", NOTIFY_BOTH), Run(["but", "resolve", "finish"])],
-             "jj": [Run(["jj", "git", "fetch"]), Run(["jj", "rebase", "-b", "feature", "-o", "main@origin"]),
-                    Edit("notify.py", NOTIFY_BOTH), Run(["jj", "squash", "notify.py"])]},
+             "jj": [Run(["jj", "git", "fetch", jq]), Run(["jj", "rebase", jq, "-b", "feature", "-o", "main@origin"]),
+                    Edit("notify.py", NOTIFY_BOTH), Run(["jj", "squash", jq, "notify.py"])]},
+            notes={"but": "the conflicted commit ID comes from the `but pull` summary, so no status call"},
             upstream=[("add push channel", {"notify.py": NOTIFY_PUSH})], rebased=True),
         Scenario(
             "parallel_branch", "parallel branch / stack",
             "Commit the docs/guide.md edit as 'update guide' on a new branch docs based on main; feature and its app.py WIP stay as they are.",
             [helper], {"app.py": APP_LOGGED, "docs/guide.md": GUIDE_EDIT},
             [helper], {"app.py": APP_LOGGED},
-            {"git": [Run(["git", "switch", "-q", "-c", "docs", "main"]),
-                     Run(["git", "commit", "-q", "-m", "update guide", "--", "docs/guide.md"]),
-                     Run(["git", "switch", "-q", "feature"])],
+            {"git": [Run(["git", "switch", q, "-c", "docs", "main"]),
+                     Run(["git", "commit", q, "-m", "update guide", "--", "docs/guide.md"]),
+                     Run(["git", "switch", q, "feature"])],
              "aisc": [Run(["aisc", "switch", "main"]),
-                      Run(["aisc", "commit", "-b", "docs", "-m", "update guide", "docs/guide.md"]),
+                      Run(["aisc", "commit", q, "-b", "docs", "-m", "update guide", "docs/guide.md"]),
                       Run(["aisc", "switch", "feature"])],
-             "but": [Run(["but", "status", "--no-hint"]),
-                     Run(lambda c: ["but", "commit", "-b", "docs", "-m", "update guide", but_file(c, "docs/guide.md")])],
-             "jj": [Run(["jj", "split", "-o", "main", "-m", "update guide", "docs/guide.md"]),
-                    Run(["jj", "bookmark", "create", "docs", "-r", 'subject("update guide")'])]},
+             "but": [Run(["but", "commit", "-b", "docs", "-m", "update guide", "docs/guide.md"])],
+             "jj": [Run(["jj", "split", jq, "-o", "main", "-m", "update guide", "docs/guide.md"]),
+                    Run(["jj", "bookmark", "create", jq, "docs", "-r", 'subject("update guide")'])]},
             side={"docs": [("update guide", {"docs/guide.md": GUIDE_EDIT})]},
             tool_dirty={"but": {"app.py": APP_LOGGED, "docs/guide.md": GUIDE_EDIT}},
-            notes={"but": "both branches stay applied in the GitButler workspace, so the guide edit stays on disk"}),
+            notes={"but": "graded against a different expected working copy: both branches stay applied in the GitButler workspace, so the guide edit stays on disk"}),
         Scenario(
             "inspect_state", "inspect status/log/diff",
             "Report the branch, its commits since main, and every changed path with line counts. Change nothing.",
@@ -320,7 +358,7 @@ def scenarios():
             {"git": [Run(["git", "status", "--short", "--branch"]), Run(["git", "log", "--oneline", "main..HEAD"]),
                      Run(["git", "diff", "--numstat"])],
              "aisc": [Run(["aisc", "log"])],
-             "but": [Run(["but", "status", "--no-hint"]), Run(["git", "diff", "--numstat"])],
+             "but": [Run(["but", "status", nh]), Run(["git", "diff", "--numstat"])],
              "jj": [Run(["jj", "log", "-r", "main..@"]), Run(["jj", "diff", "--stat"])]},
             read_only=True, facts=("feature", "add parser", "add cli", "parser.py", "README.md", "notes.txt")),
     ]
