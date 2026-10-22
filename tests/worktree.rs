@@ -48,7 +48,10 @@ fn repository() -> Fixture {
         ("src/deep/inner.txt", "inner\n"),
         ("docs/guide.txt", "guide\n"),
         ("other/file.txt", "other\n"),
-        (".gitignore", ".env\nbuild/\n*.key\nsecret/\n"),
+        (
+            ".gitignore",
+            ".env\nbuild/\n*.key\nsecret/\nlocal/\nnode_modules/\n",
+        ),
     ])
 }
 
@@ -408,12 +411,10 @@ fn finish_keeps_a_worktree_with_ignored_secret_like_files() {
         "{reason}"
     );
     assert!(reason.contains(".env") && reason.contains("deploy.key"));
-    assert!(reason.contains("--delete-ignored-secrets"), "{reason}");
+    assert!(reason.contains("--delete-ignored"), "{reason}");
     assert_eq!(value["ignored_files"], 2);
     assert!(path.join(".env").exists());
-    let value = aisc_at(&path, &["finish", "--delete-ignored-secrets"])
-        .ok()
-        .json();
+    let value = aisc_at(&path, &["finish", "--delete-ignored"]).ok().json();
     assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
     assert!(!path.exists());
 }
@@ -441,28 +442,128 @@ fn finish_keeps_a_worktree_with_a_nested_repository_in_ignored_files() {
         reason.starts_with("nested git repository: build/dep"),
         "{reason}"
     );
-    assert!(reason.contains("--delete-nested-repos"), "{reason}");
+    assert!(reason.contains("--delete-ignored"), "{reason}");
     assert!(dependency.join("local.txt").exists());
-    // Files inside the nested repository count, and their secrets are found too.
-    fs::write(dependency.join(".env"), "TOKEN=x\n").unwrap();
-    let value = aisc_at(&path, &["finish", "--delete-nested-repos"])
-        .ok()
-        .json();
-    assert!(value["removed_worktree"].is_null(), "{value}");
-    let reason = value["kept_reason"].as_str().unwrap();
-    assert!(reason.contains("build/dep/.env"), "{reason}");
-    let value = aisc_at(
-        &path,
-        &[
-            "finish",
-            "--delete-nested-repos",
-            "--delete-ignored-secrets",
-        ],
-    )
-    .ok()
-    .json();
+    let value = aisc_at(&path, &["finish", "--delete-ignored"]).ok().json();
     assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
     assert!(!path.exists());
+}
+
+/// Starts a worktree task with one checkpointed, verified edit and returns its path.
+fn verified(fixture: &Fixture, name: &str) -> PathBuf {
+    let path = start(fixture, name, &[]);
+    checkpoint_and_verify(&path, "top.txt");
+    path
+}
+
+fn kept_reason(path: &Path, args: &[&str]) -> String {
+    let mut all = vec!["finish"];
+    all.extend_from_slice(args);
+    let value = aisc_at(path, &all).ok().json();
+    assert!(value["removed_worktree"].is_null(), "{value}");
+    value["kept_reason"].as_str().unwrap().to_owned()
+}
+
+#[test]
+fn ignored_files_outside_regenerable_dirs_keep_the_worktree() {
+    let fixture = repository();
+    let path = verified(&fixture, "unknown");
+    fs::create_dir_all(path.join("local")).unwrap();
+    fs::write(path.join("local/todo.txt"), "mine\n").unwrap();
+    let reason = kept_reason(&path, &[]);
+    assert_eq!(
+        reason,
+        "ignored files not known to be regenerable: local/todo.txt (pass --delete-ignored to remove anyway)"
+    );
+    let value = aisc_at(&path, &["finish", "--delete-ignored"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+}
+
+#[test]
+fn bare_repositories_and_secret_dirs_inside_build_output_keep_the_worktree() {
+    let fixture = repository();
+    let path = verified(&fixture, "bare");
+    let bare = path.join("build/remote.git");
+    fs::create_dir_all(&bare).unwrap();
+    git_at(&bare, &["init", "-q", "--bare"]);
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("nested git repository: build/remote.git"),
+        "{reason}"
+    );
+
+    let path = verified(&fixture, "secretdirs");
+    for file in [
+        "build/secrets/db.yml",
+        "build/.aws/config",
+        "build/gcloud/application_default_credentials.json",
+        "build/service-account.json",
+    ] {
+        fs::create_dir_all(path.join(file).parent().unwrap()).unwrap();
+        fs::write(path.join(file), "x\n").unwrap();
+    }
+    let reason = kept_reason(&path, &[]);
+    assert!(
+        reason.starts_with("ignored secret-like files: "),
+        "{reason}"
+    );
+    assert!(reason.contains("and 1 more"), "{reason}");
+}
+
+#[test]
+fn node_modules_with_git_dependencies_is_regenerable() {
+    let fixture = repository();
+    let path = verified(&fixture, "npm");
+    for package in 0..30 {
+        let directory = path.join(format!("node_modules/pkg{package}/lib"));
+        fs::create_dir_all(&directory).unwrap();
+        for file in 0..20 {
+            fs::write(directory.join(format!("f{file}.js")), "x").unwrap();
+        }
+    }
+    // A git dependency checked out with its own .git directory.
+    fs::create_dir_all(path.join("node_modules/gitdep/.git/objects")).unwrap();
+    fs::write(path.join("node_modules/gitdep/.git/HEAD"), "ref\n").unwrap();
+    let value = aisc_at(&path, &["finish"]).ok().json();
+    assert_eq!(value["removed_worktree"], path.to_str().unwrap(), "{value}");
+    assert_eq!(value["ignored_scan_truncated"], false);
+    assert!(value["ignored_files"].as_u64().unwrap() >= 600);
+}
+
+#[test]
+fn a_truncated_ignored_scan_fails_closed() {
+    let fixture = repository();
+    let path = verified(&fixture, "huge");
+    fs::create_dir_all(path.join("build")).unwrap();
+    for file in 0..20 {
+        fs::write(path.join(format!("build/f{file}.o")), "x").unwrap();
+    }
+    // Verification evidence binds the environment, so verify and finish share the limit.
+    let limited = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_aisc"))
+            .args(args)
+            .current_dir(&path)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("AISC_IGNORED_SCAN_LIMIT", "5")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()
+    };
+    limited(&["verify", "--", "true"]);
+    let value = limited(&["finish"]);
+    assert!(value["removed_worktree"].is_null(), "{value}");
+    assert_eq!(value["ignored_scan_truncated"], true);
+    let reason = value["kept_reason"].as_str().unwrap();
+    assert!(
+        reason.starts_with("ignored file scan truncated"),
+        "{reason}"
+    );
 }
 
 #[test]

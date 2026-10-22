@@ -154,6 +154,16 @@ pub(crate) fn start(
                 aisc_version: env!("CARGO_PKG_VERSION").to_owned(),
                 command: std::env::args().collect(),
                 sparse: (!sparse.is_empty()).then(|| sparse.clone()),
+                // gc recognizes a leftover directory by this `.git` file pointing back.
+                gitdir: fs::read_to_string(path.join(".git"))
+                    .ok()
+                    .and_then(|content| {
+                        content
+                            .trim_end()
+                            .strip_prefix("gitdir: ")
+                            .map(str::to_owned)
+                    }),
+                partially_removed: false,
             };
             let worktree_config = |repo: &Repo| {
                 repo.git(&["config", "--bool", "--get", "extensions.worktreeConfig"])
@@ -474,7 +484,7 @@ pub(crate) fn verify(repo: &Repo, command: &[String], timeout: usize) -> Result<
     )
 }
 
-pub(crate) fn finish(repo: &Repo, keep: bool, allow: worktree::Allow) -> Result<Value> {
+pub(crate) fn finish(repo: &Repo, keep: bool, delete_ignored: bool) -> Result<Value> {
     let _guard = Lock::acquire(repo.directory.join("aisc-operation.lock"))?;
     repo.writable()?;
     repo.require_clean()?;
@@ -529,7 +539,7 @@ pub(crate) fn finish(repo: &Repo, keep: bool, allow: worktree::Allow) -> Result<
         let cleanup = if keep {
             serde_json::Map::from_iter([("removed_worktree".to_owned(), Value::Null)])
         } else {
-            worktree::remove_after_finish(repo, &session.name, allow)
+            worktree::remove_after_finish(repo, &session.name, delete_ignored)
         };
         result
             .as_object_mut()

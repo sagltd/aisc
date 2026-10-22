@@ -1,8 +1,8 @@
 //! `aisc gc`: reports registered worktrees and removes the clean, finished-or-merged ones.
 use super::{
-    Allow, Entry, Ignored, Listed, OPERATION_MARKERS, Registration, Size, admin_dirs, is_symlink,
-    list, measure, now, registrations, remove, rescue, same_path, session_at, unregister,
-    unsafe_path,
+    Entry, Ignored, Listed, OPERATION_MARKERS, Registration, Size, admin_dirs, has_aisc_marker,
+    is_symlink, list, measure, now, registrations, remove, rescue, same_path, session_at,
+    unregister, unsafe_path,
 };
 use crate::cli;
 use crate::git::{Lock, Repo, run_git, text};
@@ -60,7 +60,7 @@ struct Scan<'a> {
     listed: &'a [Listed],
     admins: &'a HashMap<String, PathBuf>,
     min_age: u64,
-    allow: Allow,
+    delete_ignored: bool,
 }
 
 impl Scan<'_> {
@@ -104,7 +104,13 @@ impl Scan<'_> {
             .iter()
             .find(|entry| same_path(&entry.path, &path))
         else {
-            if exists {
+            if exists && !has_aisc_marker(&row.registration, self.common) {
+                row.state = "unknown";
+                row.reason = format!(
+                    "not a Git worktree and no AISC marker; never sized or removed; remove {} to forget it",
+                    entry.file.display()
+                );
+            } else if exists {
                 // Git drops its metadata even when deleting the files fails partway.
                 row.state = "leftover";
                 row.size = measure(&path);
@@ -159,9 +165,9 @@ impl Scan<'_> {
             Err(_) => "unreadable",
         };
         let ignored = Ignored::scan(&path);
-        let counts = ignored
-            .as_ref()
-            .map_or((0, 0), |ignored| (ignored.files, ignored.bytes));
+        let counts = ignored.as_ref().map_or((0, 0, false), |ignored| {
+            (ignored.files, ignored.bytes, ignored.truncated)
+        });
         let evidence = task::read_json::<Value>(&admin.join("aisc-evidence.json")).ok();
         row.finished = session.finished
             && evidence.is_some_and(|evidence| evidence["head"] == row.head.as_str());
@@ -189,7 +195,7 @@ impl Scan<'_> {
             match ignored {
                 Err(error) => format!("could not list ignored files: {error:#}"),
                 Ok(ignored) => {
-                    let refusal = ignored.refusal(self.allow);
+                    let refusal = ignored.refusal(self.delete_ignored);
                     row.ignored = ignored;
                     refusal.unwrap_or_else(|| {
                         row.action = Action::Remove;
@@ -198,7 +204,7 @@ impl Scan<'_> {
                 }
             }
         };
-        (row.ignored.files, row.ignored.bytes) = counts;
+        (row.ignored.files, row.ignored.bytes, row.ignored.truncated) = counts;
         row
     }
 
@@ -274,10 +280,7 @@ pub(crate) fn gc(args: &cli::Gc) -> Result<Outcome> {
         listed: &listed,
         admins: &admins,
         min_age: args.min_age,
-        allow: Allow {
-            secrets: args.delete_ignored_secrets,
-            nested_repos: args.delete_nested_repos,
-        },
+        delete_ignored: args.delete_ignored,
     };
     let mut rows = registrations(&common)
         .into_iter()
@@ -371,6 +374,7 @@ fn report(rows: &[Row], foreign: usize, applied: bool, pruned: bool) -> Value {
                 "reason": row.reason,
                 "ignored_files": row.ignored.files,
                 "ignored_bytes": row.ignored.bytes,
+                "ignored_scan_truncated": row.ignored.truncated,
                 "rescue_ref": row.rescue_ref,
             })
         })

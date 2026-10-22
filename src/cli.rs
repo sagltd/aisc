@@ -67,12 +67,10 @@ pub(crate) enum Operation {
         /// Keep the worktree created by `start --path` (by default it is removed; the branch stays)
         #[arg(long)]
         keep: bool,
-        /// Remove the worktree even if ignored files look like secrets (.env, *.pem, *.key, ...)
-        #[arg(long, conflicts_with = "keep")]
-        delete_ignored_secrets: bool,
-        /// Remove the worktree even if ignored directories hold nested Git repositories
-        #[arg(long, conflicts_with = "keep")]
-        delete_nested_repos: bool,
+        /// Remove the worktree even if it holds ignored files outside regenerable build/cache dirs
+        /// (target, node_modules, build, dist, .venv, ...), secret-like files or nested repositories
+        #[arg(long, conflicts_with = "keep", aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
+        delete_ignored: bool,
     },
     /// Read a bounded GitHub PR/review/check overview using existing gh auth
     Github {
@@ -326,12 +324,10 @@ pub(crate) struct Gc {
     /// Keep worktrees with Git activity within this many hours
     #[arg(long, default_value = "24", value_name = "HOURS")]
     pub min_age: u64,
-    /// Also remove worktrees whose ignored files look like secrets (.env, *.pem, *.key, ...)
-    #[arg(long)]
-    pub delete_ignored_secrets: bool,
-    /// Also remove worktrees whose ignored directories hold nested Git repositories
-    #[arg(long)]
-    pub delete_nested_repos: bool,
+    /// Also remove worktrees holding ignored files outside regenerable build/cache dirs
+    /// (target, node_modules, build, dist, .venv, ...), secret-like files or nested repositories
+    #[arg(long, aliases = ["delete-ignored-secrets", "delete-nested-repos"])]
+    pub delete_ignored: bool,
 }
 
 #[derive(Args)]

@@ -125,16 +125,8 @@ fn run_task(command: &Operation) -> Result<Value> {
         Operation::Verify { timeout, command } => task::verify(&repo, command, *timeout),
         Operation::Finish {
             keep,
-            delete_ignored_secrets,
-            delete_nested_repos,
-        } => task::finish(
-            &repo,
-            *keep,
-            worktree::Allow {
-                secrets: *delete_ignored_secrets,
-                nested_repos: *delete_nested_repos,
-            },
-        ),
+            delete_ignored,
+        } => task::finish(&repo, *keep, *delete_ignored),
         Operation::Github { limit } => github::overview(&repo, *limit),
         Operation::Gitlab { limit } => gitlab::overview(&repo, *limit),
         _ => unreachable!("history verbs are dispatched before task verbs"),

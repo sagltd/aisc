@@ -27,9 +27,10 @@ const OPERATION_MARKERS: &[&str] = &[
     "sequencer",
 ];
 /// Ignored paths named in a refusal before the list is shortened.
-const SECRETS_SHOWN: usize = 3;
-/// Ignored entries inspected for secrets and nested repositories before giving up.
-const IGNORED_ENTRY_BUDGET: usize = 200_000;
+const SAMPLE_SHOWN: usize = 3;
+/// Ignored entries inspected before the scan gives up and keeps the worktree (fail closed).
+const IGNORED_ENTRY_BUDGET: usize = 2_000_000;
+const SCAN_BUDGET: Duration = Duration::from_secs(30);
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub(crate) struct Registration {
@@ -42,7 +43,18 @@ pub(crate) struct Registration {
     pub aisc_version: String,
     pub command: Vec<String>,
     pub sparse: Option<Vec<String>>,
+    /// The worktree's Git admin dir; its `.git` file points here.
+    #[serde(default)]
+    pub gitdir: Option<String>,
+    /// Set by AISC when `git worktree remove` failed partway and left files behind.
+    #[serde(default)]
+    pub partially_removed: bool,
 }
+
+/// Directories never treated as a worktree, whatever the registry says.
+const SYSTEM_DIRS: &[&str] = &[
+    "/Users", "/home", "/Volumes", "/private", "/var", "/tmp", "/System", "/opt", "/usr",
+];
 
 /// Registry names become file names: `[A-Za-z0-9._-]`, no `..`, never a path.
 fn valid_name(name: &str) -> bool {
@@ -150,12 +162,7 @@ fn unsafe_path(path: &str, main: &Path, common: &Path) -> Option<&'static str> {
     };
     let target = identity(path);
     let same = |other: &Path| target.is_some() && identity(other) == target;
-    if std::env::var_os("HOME").is_some_and(|home| {
-        let home = Path::new(&home);
-        path == home || resolved.as_deref() == fs::canonicalize(home).ok().as_deref() || same(home)
-    }) {
-        return Some("registered path is the home directory");
-    }
+    // A path covers `protected` when it is that path or one of its ancestors.
     let covers = |protected: &Path| {
         let canonical = fs::canonicalize(protected).unwrap_or_else(|_| protected.to_path_buf());
         protected.starts_with(path)
@@ -164,10 +171,44 @@ fn unsafe_path(path: &str, main: &Path, common: &Path) -> Option<&'static str> {
                 .is_some_and(|resolved| canonical.starts_with(resolved))
             || canonical.ancestors().any(same)
     };
+    if std::env::var_os("HOME").is_some_and(|home| covers(Path::new(&home))) {
+        return Some("registered path is the home directory or one of its ancestors");
+    }
     if covers(main) || covers(common) {
         return Some("registered path contains the main worktree or the Git dir");
     }
+    let system = SYSTEM_DIRS.iter().any(|directory| {
+        let directory = Path::new(directory);
+        path == directory
+            || resolved.as_deref() == fs::canonicalize(directory).ok().as_deref()
+            || same(directory)
+    });
+    if system {
+        return Some("registered path is a system directory");
+    }
     None
+}
+
+/// Whether an unlisted registered directory still carries AISC's worktree marker: a `.git`
+/// file pointing at the admin dir recorded at start (or, for older entries, any admin dir).
+fn has_aisc_marker(registration: &Registration, common: &Path) -> bool {
+    if registration.partially_removed {
+        return true;
+    }
+    let marker = Path::new(&registration.path).join(".git");
+    if !fs::symlink_metadata(&marker).is_ok_and(|metadata| metadata.is_file()) {
+        return false;
+    }
+    let Ok(content) = fs::read_to_string(&marker) else {
+        return false;
+    };
+    let Some(target) = content.trim_end().strip_prefix("gitdir: ") else {
+        return false;
+    };
+    match &registration.gitdir {
+        Some(gitdir) => target == gitdir,
+        None => Path::new(target).parent() == Some(common.join("worktrees").as_path()),
+    }
 }
 
 pub(crate) fn now() -> u64 {
@@ -304,27 +345,102 @@ fn measure(root: &Path) -> Size {
     size
 }
 
-/// What the caller allowed `git worktree remove` to delete among ignored files.
-#[derive(Clone, Copy, Default)]
-pub(crate) struct Allow {
-    pub secrets: bool,
-    pub nested_repos: bool,
+/// Directories whose contents tools regenerate; ignored content elsewhere may be the user's.
+const REGENERABLE_DIRS: &[&str] = &[
+    "target",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    "dist",
+    "build",
+    "out",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    ".parcel-cache",
+    ".gradle",
+    ".cache",
+    "coverage",
+    ".nyc_output",
+    "DerivedData",
+];
+const REGENERABLE_SUFFIXES: &[&str] = &[".pyc", ".o"];
+/// Directories that hold credentials wherever they appear (compared case-insensitively).
+const SECRET_DIRS: &[&str] = &[
+    ".aws", ".kube", ".ssh", ".gnupg", ".docker", "gcloud", "secrets", "secret",
+];
+
+/// A few example paths plus the total count.
+#[derive(Default)]
+struct Sample {
+    paths: Vec<String>,
+    count: usize,
 }
 
-/// Ignored files that `git worktree remove` deletes along with the worktree. Git lists an ignored
-/// nested repository as one directory entry, so directories are walked (bounded) to find
-/// secrets and `.git` entries inside them.
+impl Sample {
+    fn push(&mut self, path: &str) {
+        self.count += 1;
+        if self.paths.len() < SAMPLE_SHOWN {
+            self.paths.push(path.to_owned());
+        }
+    }
+
+    fn describe(&self) -> String {
+        let mut shown = self.paths.join(", ");
+        if self.count > self.paths.len() {
+            shown.push_str(&format!(" and {} more", self.count - self.paths.len()));
+        }
+        shown
+    }
+}
+
+/// Ignored content that `git worktree remove` would delete. Removal is automatic only when all
+/// of it is regenerable (an allowlist), with no secret-like names and no nested repositories.
 #[derive(Default)]
 struct Ignored {
     files: u64,
     bytes: u64,
-    secrets: Vec<String>,
-    nested: Vec<String>,
-    incomplete: bool,
+    secrets: Sample,
+    nested: Sample,
+    unknown: Sample,
+    truncated: bool,
+}
+
+/// Classification inherited from the directories above a path.
+#[derive(Clone, Copy, Default)]
+struct Lineage {
+    regenerable: bool,
+    node_modules: bool,
+    secret: bool,
+}
+
+impl Lineage {
+    fn enter(self, directory: &str) -> Self {
+        let lower = directory.to_ascii_lowercase();
+        Self {
+            regenerable: self.regenerable || REGENERABLE_DIRS.contains(&directory),
+            node_modules: self.node_modules || directory == "node_modules",
+            secret: self.secret || SECRET_DIRS.contains(&lower.as_str()),
+        }
+    }
+}
+
+fn scan_limit() -> usize {
+    std::env::var("AISC_IGNORED_SCAN_LIMIT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(IGNORED_ENTRY_BUDGET)
 }
 
 impl Ignored {
     fn scan(worktree: &Path) -> Result<Self> {
+        // `--directory` reports a wholly ignored directory once instead of every file in it.
         let output = run_git(
             worktree,
             &[
@@ -333,83 +449,113 @@ impl Ignored {
                 "--others",
                 "--ignored",
                 "--exclude-standard",
+                "--directory",
             ],
             None,
         )?;
         let started = Instant::now();
+        let limit = scan_limit();
         let mut ignored = Self::default();
         let mut pending = Vec::new();
         for path in output
             .split(|byte| *byte == 0)
             .filter(|path| !path.is_empty())
         {
-            pending.push(text(path)?.trim_end_matches('/').to_owned());
+            let relative = text(path)?.trim_end_matches('/').to_owned();
+            let mut context = Lineage::default();
+            let mut parts = relative.split('/').collect::<Vec<_>>();
+            parts.pop();
+            for part in parts {
+                context = context.enter(part);
+            }
+            pending.push((relative, context));
         }
         let mut visited = 0_usize;
-        while let Some(relative) = pending.pop() {
+        while let Some((relative, context)) = pending.pop() {
             visited += 1;
-            if visited > IGNORED_ENTRY_BUDGET || started.elapsed() > SIZE_BUDGET {
-                ignored.incomplete = true;
+            if visited > limit || started.elapsed() > SCAN_BUDGET {
+                ignored.truncated = true;
                 break;
             }
             let full = worktree.join(&relative);
             let Ok(metadata) = fs::symlink_metadata(&full) else {
                 continue;
             };
+            let name = relative.rsplit('/').next().unwrap_or(&relative);
             if !metadata.is_dir() {
-                ignored.files += 1;
-                ignored.bytes += metadata.len();
-                if secret_like(&relative) {
-                    ignored.secrets.push(relative);
-                }
+                ignored.file(&relative, name, metadata.len(), context);
                 continue;
             }
+            let inner = context.enter(name);
+            if !inner.node_modules && (name == ".git" || is_bare_repository(&full)) {
+                ignored.nested.push(if name == ".git" {
+                    relative.rsplit_once('/').map_or(".", |(parent, _)| parent)
+                } else {
+                    &relative
+                });
+            }
             let Ok(entries) = fs::read_dir(&full) else {
-                ignored.incomplete = true;
+                ignored.truncated = true;
                 continue;
             };
             for entry in entries.filter_map(|entry| entry.ok()) {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if name == ".git" {
-                    ignored.nested.push(relative.clone());
-                }
-                pending.push(format!("{relative}/{name}"));
+                let child = entry.file_name().to_string_lossy().into_owned();
+                pending.push((format!("{relative}/{child}"), inner));
             }
         }
-        ignored.secrets.sort();
-        ignored.nested.sort();
         Ok(ignored)
     }
 
-    /// Why removal is refused, unless the caller allowed deleting what was found.
-    fn refusal(&self, allow: Allow) -> Option<String> {
-        if self.incomplete && !(allow.secrets && allow.nested_repos) {
-            return Some(
-                "too many ignored files to check for secrets and nested repositories; pass --delete-ignored-secrets --delete-nested-repos to remove anyway".into(),
-            );
+    fn file(&mut self, relative: &str, name: &str, size: u64, context: Lineage) {
+        self.files += 1;
+        self.bytes += size;
+        if name == ".git" && !context.node_modules {
+            // A `.git` file: a linked worktree or a --separate-git-dir checkout.
+            self.nested
+                .push(relative.rsplit_once('/').map_or(".", |(parent, _)| parent));
         }
-        if !self.nested.is_empty() && !allow.nested_repos {
-            return Some(format!(
-                "nested git repository: {} (pass --delete-nested-repos to remove anyway)",
-                shortened(&self.nested)
-            ));
+        if context.secret || secret_like(name) {
+            self.secrets.push(relative);
+        } else if !(context.regenerable
+            || REGENERABLE_SUFFIXES
+                .iter()
+                .any(|suffix| name.ends_with(suffix)))
+        {
+            self.unknown.push(relative);
         }
-        if !self.secrets.is_empty() && !allow.secrets {
-            return Some(format!(
-                "ignored secret-like files: {} (pass --delete-ignored-secrets to remove anyway)",
-                shortened(&self.secrets)
-            ));
-        }
-        None
+    }
+
+    /// Why removal is refused, unless the caller passed `--delete-ignored`.
+    fn refusal(&self, delete_ignored: bool) -> Option<String> {
+        let reason = if delete_ignored {
+            return None;
+        } else if self.truncated {
+            format!(
+                "ignored file scan truncated after {} entries or {} s",
+                scan_limit(),
+                SCAN_BUDGET.as_secs()
+            )
+        } else if self.nested.count > 0 {
+            format!("nested git repository: {}", self.nested.describe())
+        } else if self.secrets.count > 0 {
+            format!("ignored secret-like files: {}", self.secrets.describe())
+        } else if self.unknown.count > 0 {
+            format!(
+                "ignored files not known to be regenerable: {}",
+                self.unknown.describe()
+            )
+        } else {
+            return None;
+        };
+        Some(format!("{reason} (pass --delete-ignored to remove anyway)"))
     }
 }
 
-fn shortened(paths: &[String]) -> String {
-    let mut shown = paths[..paths.len().min(SECRETS_SHOWN)].join(", ");
-    if paths.len() > SECRETS_SHOWN {
-        shown.push_str(&format!(" and {} more", paths.len() - SECRETS_SHOWN));
-    }
-    shown
+/// A bare repository: `HEAD` plus `objects/` and `refs/`.
+fn is_bare_repository(directory: &Path) -> bool {
+    directory.join("HEAD").is_file()
+        && directory.join("objects").is_dir()
+        && directory.join("refs").is_dir()
 }
 
 /// Credential-looking file names, compared case-insensitively like gitignore on macOS/Windows.
@@ -431,6 +577,8 @@ fn secret_like(path: &str) -> bool {
         "id_dsa",
         "credentials",
         "terraform.tfstate",
+        "service-account",
+        "secrets.",
     ];
     const SUFFIXES: &[&str] = &[
         ".env",
@@ -446,6 +594,7 @@ fn secret_like(path: &str) -> bool {
     EXACT.contains(&name.as_str())
         || PREFIXES.iter().any(|prefix| name.starts_with(prefix))
         || SUFFIXES.iter().any(|suffix| name.ends_with(suffix))
+        || name.contains("credential")
 }
 
 /// Saves `head` as `refs/aisc/rescue/<name>` unless a branch, tag, remote or AISC ref already
@@ -494,11 +643,24 @@ fn rescue(main: &Path, name: &str, head: &str) -> Result<Option<String>> {
 
 /// Removes a verified AISC worktree (Git refuses dirty or locked ones), then its registry entry.
 fn remove(main: &Path, common: &Path, registration: &Registration) -> Result<()> {
-    run_git(
+    if let Err(error) = run_git(
         main,
         &["worktree", "remove", "--", &registration.path],
         None,
-    )?;
+    ) {
+        // Git drops its admin dir (and maybe the `.git` file) even when deleting the files
+        // fails partway; record that so gc still recognizes the directory as AISC's leftover.
+        let path = Path::new(&registration.path);
+        let listed = list(main).map_or(true, |listed| {
+            listed.iter().any(|entry| same_path(&entry.path, path))
+        });
+        if !listed && fs::symlink_metadata(path).is_ok() {
+            let mut partial = registration.clone();
+            partial.partially_removed = true;
+            let _ = register(common, &partial);
+        }
+        return Err(error);
+    }
     unregister(common, &registration.name).context(
         "worktree removed but its registry entry could not be deleted; `aisc gc --apply` forgets it",
     )
@@ -515,10 +677,14 @@ fn current_directory_inside(root: &Path) -> bool {
 /// After a successful `finish` in a worktree session: removes the worktree unless it is not
 /// AISC's, locked, holds ignored secret-like files, or Git refuses. Never fails the finish;
 /// problems become `kept_reason` or `warning` fields.
-pub(crate) fn remove_after_finish(repo: &Repo, name: &str, allow: Allow) -> Map<String, Value> {
+pub(crate) fn remove_after_finish(
+    repo: &Repo,
+    name: &str,
+    delete_ignored: bool,
+) -> Map<String, Value> {
     let mut fields = Map::new();
     fields.insert("removed_worktree".into(), Value::Null);
-    match try_remove_after_finish(repo, name, allow, &mut fields) {
+    match try_remove_after_finish(repo, name, delete_ignored, &mut fields) {
         Ok(Some(reason)) => {
             fields.insert("kept_reason".into(), json!(reason));
         }
@@ -538,7 +704,7 @@ pub(crate) fn remove_after_finish(repo: &Repo, name: &str, allow: Allow) -> Map<
 fn try_remove_after_finish(
     repo: &Repo,
     name: &str,
-    allow: Allow,
+    delete_ignored: bool,
     fields: &mut Map<String, Value>,
 ) -> Result<Option<String>> {
     let common = repo.common_dir()?;
@@ -569,7 +735,8 @@ fn try_remove_after_finish(
     let ignored = Ignored::scan(&repo.root)?;
     fields.insert("ignored_files".into(), json!(ignored.files));
     fields.insert("ignored_bytes".into(), json!(ignored.bytes));
-    if let Some(reason) = ignored.refusal(allow) {
+    fields.insert("ignored_scan_truncated".into(), json!(ignored.truncated));
+    if let Some(reason) = ignored.refusal(delete_ignored) {
         return Ok(Some(reason));
     }
     if let Some(reference) = rescue(&main, name, &repo.head()?)? {

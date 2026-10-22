@@ -395,21 +395,65 @@ fn registry_paths_that_cover_the_repository_or_home_are_refused_without_walking(
     let fixture = repository();
     let parent = fixture.root.parent().unwrap().to_str().unwrap().to_owned();
     let home = std::env::var("HOME").unwrap();
-    for (name, path) in [
+    let home_parent = Path::new(&home)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let cases = [
         ("root", "/"),
         ("home", home.as_str()),
+        ("homeparent", home_parent.as_str()),
         ("above", parent.as_str()),
-    ] {
+        ("users", "/Users"),
+        ("tmp", "/tmp"),
+        ("var", "/var"),
+        ("usr", "/usr"),
+    ];
+    for (name, path) in cases {
         write_registry(&fixture, &format!("{name}.json"), name, path);
     }
     let report = gc(&fixture, &["--apply"]);
-    for name in ["root", "home", "above"] {
+    for (name, _) in cases {
         let row = entry(&report, name);
         assert_eq!(row["state"], "invalid", "{report}");
         assert_eq!(row["action"], "keep");
         assert_eq!(row["bytes"], 0, "{name} was walked: {report}");
     }
     assert!(fixture.path("top.txt").exists());
+}
+
+#[test]
+fn an_unlisted_directory_without_the_aisc_marker_is_unknown_and_never_sized() {
+    let fixture = repository();
+    let stranger = fixture.root.parent().unwrap().join("stranger");
+    fs::create_dir_all(&stranger).unwrap();
+    fs::write(stranger.join("data.bin"), vec![0_u8; 4096]).unwrap();
+    write_registry(
+        &fixture,
+        "stranger.json",
+        "stranger",
+        stranger.to_str().unwrap(),
+    );
+    // Git dropped its metadata, but the `.git` file AISC's worktree had still points back.
+    let leftover = start(&fixture, "leftover");
+    fixture.git(&["worktree", "prune"]);
+    fs::remove_dir_all(fixture.root.join(".git/worktrees/leftover")).unwrap();
+    let report = gc(&fixture, &["--apply"]);
+    let row = entry(&report, "stranger");
+    assert_eq!(row["state"], "unknown", "{report}");
+    assert_eq!(row["action"], "keep");
+    assert_eq!(row["bytes"], 0);
+    assert!(
+        !row["reason"].as_str().unwrap().contains("by hand"),
+        "{report}"
+    );
+    assert!(stranger.join("data.bin").exists());
+    let row = entry(&report, "leftover");
+    assert_eq!(row["state"], "leftover", "{report}");
+    assert!(row["bytes"].as_u64().unwrap() > 0);
+    assert!(leftover.join("top.txt").exists());
 }
 
 #[test]
