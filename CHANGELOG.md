@@ -41,6 +41,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Known limitations
 
+- `aisc sync` takes commits someone else pushed to the branch's upstream. It recognises your
+  own pushed commits from Git's records of `git push` to a named remote; after pushing to a bare
+  URL instead, a later local squash of those commits can be undone by the next sync (use
+  `aisc undo`).
+
 - Do not mix an `aisc` binary from before this release with a new one on the
   same checkout. Old binaries write operation locks with no flock and no owner
   tag, so the two versions cannot see each other's locks and can both run at
