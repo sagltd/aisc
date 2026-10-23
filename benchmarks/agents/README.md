@@ -13,6 +13,8 @@ script below.
 | [`pins.json`](pins.json) | Exact tool versions the harness checks before each run |
 | [`../results/agent-runs-v0.1.0.json`](../results/agent-runs-v0.1.0.json) | 117 runs: AISC v0.1.0, GitButler 0.22.3 and Git 2.50, 3 repetitions each |
 | [`../results/agent-runs-v0.1.1.json`](../results/agent-runs-v0.1.1.json) | 39 runs: AISC v0.1.1, same settings |
+| [`heldout/tasks.md`](heldout/tasks.md) | Six held-out task prompts, committed before any agent ran them |
+| [`../results/agent-runs-heldout-v0.1.1.json`](../results/agent-runs-heldout-v0.1.1.json) | 54 runs on the held-out tasks: AISC v0.1.1, GitButler 0.22.3, Git 2.50 |
 
 ```sh
 python3 benchmarks/agents/summarize.py benchmarks/results/agent-runs-v0.1.0.json
@@ -46,8 +48,7 @@ Model text, prompts beyond `tasks.md`, and machine paths are not included: tempo
 ## What to keep in mind
 
 - **Tuned tasks.** AISC's agent block and several commands were improved after watching AISC's
-  runs on these same 13 tasks; GitButler and Git ran with their shipped setup. New tasks the
-  tool was never tuned on are the stronger test, and this folder is the place to add them.
+  runs on these same 13 tasks; GitButler and Git ran with their shipped setup. The six held-out tasks in [`heldout/`](heldout) test that, and GitButler won them.
 - **Separate v0.1.1 runs.** The v0.1.1 runs are AISC-only, made a few hours after the 117-run
   batch with identical settings. GitButler and Git were not re-run.
 - **Variation.** Agents vary from run to run, which is why every number is reported with its

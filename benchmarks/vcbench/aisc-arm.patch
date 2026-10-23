@@ -297,6 +297,45 @@ index 0000000..d40d43d
 +    linked_worktrees_after: after.worktree_count,
 +  };
 +}
+diff --git a/scripts/lib/heldout-common.mjs b/scripts/lib/heldout-common.mjs
+new file mode 100644
+index 0000000..d070754
+--- /dev/null
++++ b/scripts/lib/heldout-common.mjs
+@@ -0,0 +1,33 @@
++// Shared fixture and verification helpers for the held-out tasks (heldout-1 .. heldout-6).
++// Written and frozen before any agent ran them; see benchmarks/agents/heldout in the AISC repo.
++import { gitLike } from './arms.mjs';
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, butChanges } from './scenario-cleanup.mjs';
++export { gitLike, commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, butChanges };
++
++export const BASE = {
++  'README.md': 'Service example.\n',
++  'src/app.ts': 'export const name = "service";\n',
++  'src/config.ts': 'export const port = 8080;\nexport const MAX_RETRIES = 3;\n',
++  'docs/api.md': '# API\n\nGET /items lists items.\n',
++};
++// Subjects of BRANCH's commits above main, newest first.
++export const subjects = (ctx, branch, base = 'main') => {
++  const out = commands(ctx).g('log', '--format=%s', `${base}..${branch}`);
++  return out ? out.split('\n') : [];
++};
++// Every commit on BRANCH above main still has the fixture author and committer identity.
++export const authorsKept = (ctx, branch, base = 'main') =>
++  commands(ctx).g('log', '--format=%an <%ae>', `${base}..${branch}`).split('\n').filter(Boolean).every(line => line === 'Bench Author <bench@example.com>');
++// Refs other than the ones the task may change are byte-identical.
++export function othersUnchanged(ctx, before, mayChange) {
++  const now = refs(ctx);
++  const pick = r => Object.fromEntries(Object.entries(r).filter(([name]) => !mayChange.includes(name)));
++  return same(pick(now), pick(before));
++}
++// "Uncommitted" in the tool's own model: Git's index for git-like arms, But's change lists.
++export function pending(ctx, paths) {
++  const { g } = commands(ctx);
++  if (gitLike(ctx.arm)) return paths.every(p => g('diff', '--cached', '--name-only', '--', p) === '' && g('status', '--porcelain', '--', p) !== '');
++  const b = butChanges(ctx);
++  return !!b && paths.every(p => b.uncommitted.includes(p) || b.assigned.includes(p));
++}
 diff --git a/scripts/lib/performance.mjs b/scripts/lib/performance.mjs
 index 2b525ea..e2b3d24 100644
 --- a/scripts/lib/performance.mjs
@@ -401,6 +440,322 @@ index cc2bcb1..9e3c13b 100644
 -solve(o){const c=context(o),m=o.metadata;if(o.arm==='but+skill'){c.but('pick',m.S,'--branch',destination);}else if(o.arm==='jj+skill'){c.jj('duplicate',m.S,'-d','main');const copy=c.jj('log','-r',`children(main) & description(substring:"Revive worktree command")`,'--no-graph','-T','commit_id').trim();c.jj('bookmark','create',destination,'-r',copy);c.jj('git','export');}else{c.git('switch','-c',destination,'main');c.git('cherry-pick',m.S);}return 'Copied the independent command revival with its original attribution; source, UI work and scratch note are intact.';}
 +solve(o){const c=context(o),m=o.metadata;if(o.arm==='aisc+skill'){c.aisc('pick','--from','revive-worktree-command','Revive worktree command','-b',destination,'--onto','main');}else if(o.arm==='but+skill'){c.but('pick',m.S,'--branch',destination);}else if(o.arm==='jj+skill'){c.jj('duplicate',m.S,'-d','main');const copy=c.jj('log','-r',`children(main) & description(substring:"Revive worktree command")`,'--no-graph','-T','commit_id').trim();c.jj('bookmark','create',destination,'-r',copy);c.jj('git','export');}else{c.git('switch','-c',destination,'main');c.git('cherry-pick',m.S);}return 'Copied the independent command revival with its original attribution; source, UI work and scratch note are intact.';}
  };
+diff --git a/scripts/lib/scenario-heldout1.mjs b/scripts/lib/scenario-heldout1.mjs
+new file mode 100644
+index 0000000..9f413c5
+--- /dev/null
++++ b/scripts/lib/scenario-heldout1.mjs
+@@ -0,0 +1,46 @@
++// Held-out 1: fix a typo in a middle commit's message.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending } from './heldout-common.mjs';
++export const ID = 'heldout-1-reword';
++const WANT = ['Add auth tests', 'Fix token refresh', 'Add token cache'];
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'fix-auth');
++  write(ctx.repoDir, { 'src/cache.ts': 'export const cache = new Map<string, string>();\n' }); save(ctx, 'Add token cache');
++  write(ctx.repoDir, { 'src/auth.ts': 'export function refresh(token: string) {\n  return token.trim();\n}\n' }); save(ctx, 'Fix tokne refresh');
++  write(ctx.repoDir, { 'tests/auth.test.ts': 'import { refresh } from "../src/auth";\nif (refresh(" a ") !== "a") throw new Error("refresh");\n' }); save(ctx, 'Add auth tests');
++  const metadata = { refs: refs(ctx), trees: [0, 1, 2].map(k => g('rev-parse', `fix-auth~${k}^{tree}`)) };
++  adopt(ctx, 'fix-auth');
++  write(ctx.repoDir, { 'README.md': 'Service example.\nAuth refresh notes (draft).\n' });
++  metadata.expectedDisk = disk(ctx.repoDir);
++  return metadata;
++}
++function verify(ctx) {
++  const { g } = commands(ctx), m = ctx.metadata;
++  return result({
++    messages_fixed: same(subjects(ctx, 'fix-auth'), WANT),
++    contents_unchanged: [0, 1, 2].every(k => g('rev-parse', `fix-auth~${k}^{tree}`) === m.trees[k]),
++    authors_kept: authorsKept(ctx, 'fix-auth'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['fix-auth']),
++    files_on_disk_unchanged: same(disk(ctx.repoDir), m.expectedDisk),
++    readme_edit_uncommitted: pending(ctx, ['README.md']),
++    same_branch: active(ctx, 'fix-auth'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b } = commands(ctx);
++  if (ctx.arm === 'git') {
++    const env = { ...process.env, GIT_AUTHOR_NAME: 'Bench Author', GIT_AUTHOR_EMAIL: 'bench@example.com', GIT_COMMITTER_NAME: 'Bench Author', GIT_COMMITTER_EMAIL: 'bench@example.com', GIT_AUTHOR_DATE: '2026-09-01T12:00:00Z', GIT_COMMITTER_DATE: '2026-09-01T12:00:00Z' };
++    const { execute } = commands({ ...ctx, env });
++    const middle = execute('git', ['commit-tree', g('rev-parse', 'fix-auth~1^{tree}'), '-p', g('rev-parse', 'fix-auth~2'), '-m', 'Fix token refresh']).stdout.trim();
++    const top = execute('git', ['commit-tree', g('rev-parse', 'fix-auth^{tree}'), '-p', middle, '-m', 'Add auth tests']).stdout.trim();
++    g('update-ref', 'refs/heads/fix-auth', top);
++  } else if (ctx.arm === 'but+skill') {
++    const state = JSON.parse(b('status', '-fv', '--json'));
++    const commit = state.stacks.flatMap(s => s.branches).find(x => x.name === 'fix-auth').commits.find(c => (c.message ?? '').startsWith('Fix tokne refresh'));
++    b('reword', commit.cliId, '-m', 'Fix token refresh');
++  } else {
++    throw new Error('No reference: AISC 0.1.1 has no command that changes a commit message');
++  }
++}
++export default { id: ID, researchRank: 101, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout2.mjs b/scripts/lib/scenario-heldout2.mjs
+new file mode 100644
+index 0000000..efc0a1a
+--- /dev/null
++++ b/scripts/lib/scenario-heldout2.mjs
+@@ -0,0 +1,46 @@
++// Held-out 2: drop one commit from the middle of a branch.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged } from './heldout-common.mjs';
++export const ID = 'heldout-2-drop';
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-export');
++  write(ctx.repoDir, { 'src/export.ts': 'export const toCsv = (rows: string[][]) => rows.map(r => r.join(",")).join("\\n");\n' }); save(ctx, 'Add CSV export');
++  const first = g('rev-parse', 'HEAD');
++  write(ctx.repoDir, { 'src/debug.ts': 'export const debug = (...args: unknown[]) => console.log("[debug]", ...args);\n', 'src/app.ts': 'export const name = "service";\nexport const verbose = true;\n' }); save(ctx, 'Add debug logging');
++  write(ctx.repoDir, { 'tests/export.test.ts': 'import { toCsv } from "../src/export";\nif (toCsv([["a", "b"]]) !== "a,b") throw new Error("csv");\n' }); save(ctx, 'Add export tests');
++  const metadata = { refs: refs(ctx) };
++  // The expected result, built once with plain Git on a scratch branch and then removed.
++  g('switch', '-q', '-c', 'expected', first); g('cherry-pick', 'feature-export');
++  metadata.expectedTree = exactTree(ctx, 'expected'); metadata.firstTree = g('rev-parse', `${first}^{tree}`);
++  g('switch', '-q', 'feature-export'); g('branch', '-D', 'expected');
++  adopt(ctx, 'feature-export');
++  write(ctx.repoDir, { 'notes.md': 'Release checklist (mine, not for commit).\n' });
++  const expectedDisk = {}; for (const [p, e] of Object.entries(metadata.expectedTree)) expectedDisk[p] = e;
++  expectedDisk['notes.md'] = disk(ctx.repoDir)['notes.md']; metadata.expectedDisk = expectedDisk;
++  return metadata;
++}
++function verify(ctx) {
++  const { g } = commands(ctx), m = ctx.metadata;
++  const ok = subjects(ctx, 'feature-export').join('|') === 'Add export tests|Add CSV export';
++  return result({
++    debug_commit_removed: ok,
++    remaining_commits_correct: ok && g('rev-parse', 'feature-export~1^{tree}') === m.firstTree && same(exactTree(ctx, 'feature-export'), m.expectedTree),
++    authors_kept: authorsKept(ctx, 'feature-export'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['feature-export']),
++    files_on_disk_match: same(disk(ctx.repoDir), m.expectedDisk),
++    notes_untracked: g('ls-files', '--', 'notes.md') === '',
++    same_branch: active(ctx, 'feature-export'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a } = commands(ctx);
++  if (ctx.arm === 'git') g('rebase', '--onto', 'feature-export~2', 'feature-export~1', 'feature-export');
++  else if (ctx.arm === 'aisc+skill') { a('uncommit', 'Add debug logging', 'src/debug.ts', 'src/app.ts'); a('discard', 'src/debug.ts', 'src/app.ts'); }
++  else {
++    const state = JSON.parse(b('status', '-fv', '--json'));
++    const commit = state.stacks.flatMap(s => s.branches).find(x => x.name === 'feature-export').commits.find(c => (c.message ?? '').startsWith('Add debug logging'));
++    b('discard', commit.cliId);
++  }
++}
++export default { id: ID, researchRank: 102, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout3.mjs b/scripts/lib/scenario-heldout3.mjs
+new file mode 100644
+index 0000000..0fcc9e1
+--- /dev/null
++++ b/scripts/lib/scenario-heldout3.mjs
+@@ -0,0 +1,45 @@
++// Held-out 3: turn working-tree changes into two commits by topic, leaving one change out.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending, gitLike } from './heldout-common.mjs';
++export const ID = 'heldout-3-two-commits';
++const DOCS = { 'docs/api.md': '# API\n\nGET /items lists items.\nPOST /items creates an item.\n', 'docs/usage.md': 'Run the service with `npm start`.\n' };
++const TESTS = { 'tests/api.test.ts': 'import { name } from "../src/app";\nif (name !== "service") throw new Error("name");\n' };
++const SRC = { 'src/app.ts': 'export const name = "service";\nexport const debugPort = 9229;\n' };
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'docs-and-tests');
++  write(ctx.repoDir, { 'docs/outline.md': 'Outline: endpoints, usage, tests.\n' }); save(ctx, 'Add API outline');
++  const metadata = { refs: refs(ctx), baseTree: exactTree(ctx, 'HEAD') };
++  adopt(ctx, 'docs-and-tests');
++  write(ctx.repoDir, { ...DOCS, ...TESTS, ...SRC });
++  metadata.expectedDisk = disk(ctx.repoDir);
++  const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++  metadata.docsTree = { ...metadata.baseTree, ...enc(DOCS) };
++  metadata.bothTree = { ...metadata.docsTree, ...enc(TESTS) };
++  return metadata;
++}
++function verify(ctx) {
++  const m = ctx.metadata;
++  const ok = subjects(ctx, 'docs-and-tests').join('|') === 'Add API tests|Update API docs|Add API outline';
++  return result({
++    two_commits_in_order: ok,
++    docs_commit_exact: ok && same(exactTree(ctx, 'docs-and-tests~1'), m.docsTree),
++    tests_commit_exact: ok && same(exactTree(ctx, 'docs-and-tests'), m.bothTree),
++    authors_kept: authorsKept(ctx, 'docs-and-tests'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['docs-and-tests']),
++    files_on_disk_unchanged: same(disk(ctx.repoDir), m.expectedDisk),
++    src_change_uncommitted: pending(ctx, ['src/app.ts']),
++    same_branch: active(ctx, 'docs-and-tests'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a } = commands(ctx);
++  if (ctx.arm === 'git') { g('add', 'docs'); g('commit', '-q', '-m', 'Update API docs'); g('add', 'tests'); g('commit', '-q', '-m', 'Add API tests'); }
++  else if (ctx.arm === 'aisc+skill') { a('commit', '-m', 'Update API docs', 'docs/api.md', 'docs/usage.md'); a('commit', '-m', 'Add API tests', 'tests/api.test.ts'); }
++  else {
++    const ids = paths => JSON.parse(b('status', '--json')).uncommittedChanges.filter(c => paths.includes(c.filePath)).map(c => c.cliId);
++    b('commit', '-b', 'docs-and-tests', '-m', 'Update API docs', ...ids(Object.keys(DOCS)));
++    b('commit', '-b', 'docs-and-tests', '-m', 'Add API tests', ...ids(Object.keys(TESTS)));
++  }
++}
++export default { id: ID, researchRank: 103, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout4.mjs b/scripts/lib/scenario-heldout4.mjs
+new file mode 100644
+index 0000000..1c20dff
+--- /dev/null
++++ b/scripts/lib/scenario-heldout4.mjs
+@@ -0,0 +1,54 @@
++// Held-out 4: move a commit made on the wrong branch onto the branch it belongs to.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged } from './heldout-common.mjs';
++export const ID = 'heldout-4-move-commit';
++const EXPORT = { 'src/billing/export.ts': 'export const exportInvoices = (ids: string[]) => ids.join("\\n");\n' };
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-billing');
++  write(ctx.repoDir, { 'src/billing/invoice.ts': 'export interface Invoice { id: string; total: number }\n' }); save(ctx, 'Add invoice model');
++  g('switch', '-q', 'main'); g('switch', '-c', 'feature-search');
++  write(ctx.repoDir, { 'src/search/index.ts': 'export const index = new Map<string, string[]>();\n' }); save(ctx, 'Add search index');
++  write(ctx.repoDir, EXPORT); save(ctx, 'Add billing export');
++  write(ctx.repoDir, { 'src/search/rank.ts': 'export const rank = (hits: string[]) => [...hits].sort();\n' }); save(ctx, 'Add search ranking');
++  const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++  const metadata = { refs: refs(ctx) };
++  const searchTree = exactTree(ctx, 'feature-search'); delete searchTree['src/billing/export.ts'];
++  metadata.searchTree = searchTree;
++  metadata.billingTree = { ...exactTree(ctx, 'feature-billing'), ...enc(EXPORT) };
++  adopt(ctx, 'feature-search', ['feature-billing']);
++  metadata.billingDisk = ctx.arm === 'but+skill';
++  return metadata;
++}
++function verify(ctx) {
++  const m = ctx.metadata;
++  const search = subjects(ctx, 'feature-search').join('|') === 'Add search ranking|Add search index';
++  const billing = subjects(ctx, 'feature-billing').join('|') === 'Add billing export|Add invoice model';
++  const onDisk = disk(ctx.repoDir);
++  // Git-like arms work tree = feature-search; But's workspace shows every applied branch.
++  const expectedDisk = m.billingDisk ? { ...m.searchTree, ...m.billingTree } : m.searchTree;
++  return result({
++    removed_from_search: search && same(exactTree(ctx, 'feature-search'), m.searchTree),
++    added_to_billing: billing && same(exactTree(ctx, 'feature-billing'), m.billingTree),
++    authors_kept: authorsKept(ctx, 'feature-search') && authorsKept(ctx, 'feature-billing'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['feature-search', 'feature-billing']),
++    files_on_disk_match: same(onDisk, expectedDisk),
++    same_branch: active(ctx, 'feature-search', ['feature-billing']),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a } = commands(ctx);
++  if (ctx.arm === 'git') {
++    const moved = g('rev-parse', 'feature-search~1');
++    g('switch', '-q', 'feature-billing'); g('cherry-pick', moved);
++    g('switch', '-q', 'feature-search'); g('rebase', '--onto', 'feature-search~2', 'feature-search~1', 'feature-search');
++  } else if (ctx.arm === 'aisc+skill') {
++    a('pick', 'Add billing export', '--to', 'feature-billing');
++    a('uncommit', 'Add billing export', 'src/billing/export.ts'); a('discard', 'src/billing/export.ts');
++  } else {
++    const state = JSON.parse(b('status', '-fv', '--json'));
++    const commit = state.stacks.flatMap(s => s.branches).find(x => x.name === 'feature-search').commits.find(c => (c.message ?? '').startsWith('Add billing export'));
++    b('move', commit.cliId, '--branch', 'feature-billing');
++  }
++}
++export default { id: ID, researchRank: 104, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout5.mjs b/scripts/lib/scenario-heldout5.mjs
+new file mode 100644
+index 0000000..3273163
+--- /dev/null
++++ b/scripts/lib/scenario-heldout5.mjs
+@@ -0,0 +1,37 @@
++// Held-out 5: find which commit first set a value, without changing anything.
++import { commands, write, initialize, save, adopt, refs, disk, same, result, residue, BASE } from './heldout-common.mjs';
++export const ID = 'heldout-5-find-commit';
++const ANSWER = 'Raise retry limit for flaky uploads';
++const HISTORY = [
++  ['Add upload client', { 'src/upload.ts': 'export const upload = (path: string) => path;\n' }],
++  ['Document configuration', { 'docs/config.md': 'Retries default to 3.\n' }],
++  [ANSWER, { 'src/config.ts': 'export const port = 8080;\nexport const MAX_RETRIES = 7;\n' }],
++  ['Rename port setting', { 'src/config.ts': 'export const port = 8080; // http\nexport const MAX_RETRIES = 7;\n' }],
++  ['Retry uploads once more', { 'src/config.ts': 'export const port = 8080; // http\nexport const MAX_RETRIES = 9;\n' }],
++  ['Restore retry limit', { 'src/config.ts': 'export const port = 8080; // http\nexport const MAX_RETRIES = 7;\n' }],
++];
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  for (const [subject, files] of HISTORY) { write(ctx.repoDir, files); save(ctx, subject); }
++  adopt(ctx, 'main');
++  return { refs: refs(ctx), files: disk(ctx.repoDir), index: g('ls-files', '--stage') };
++}
++const answered = response => {
++  const text = String(response ?? '').trim().replace(/^[`"'*\s]+|[`"'*.\s]+$/g, '');
++  return text === ANSWER || text.split('\n').some(line => line.trim().replace(/^[`"'*\-\s]+|[`"'*.\s]+$/g, '') === ANSWER);
++};
++function verify(ctx) {
++  const { g } = commands(ctx), m = ctx.metadata;
++  return result({
++    response_correct: answered(ctx.response),
++    refs_unchanged: same(refs(ctx), m.refs),
++    files_unchanged: same(disk(ctx.repoDir), m.files),
++    index_unchanged: ctx.arm === 'but+skill' || g('ls-files', '--stage') === m.index,
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g } = commands(ctx);
++  return g('log', '--reverse', '--format=%s', '-S', 'MAX_RETRIES = 7', 'main').split('\n')[0];
++}
++export default { id: ID, researchRank: 105, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout6.mjs b/scripts/lib/scenario-heldout6.mjs
+new file mode 100644
+index 0000000..f246573
+--- /dev/null
++++ b/scripts/lib/scenario-heldout6.mjs
+@@ -0,0 +1,52 @@
++// Held-out 6: commit one uncommitted change onto another existing branch without leaving this one.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending, gitLike } from './heldout-common.mjs';
++export const ID = 'heldout-6-commit-elsewhere';
++const FIX = { 'src/config.ts': 'export const port = 3000;\nexport const MAX_RETRIES = 3;\n' };
++const UI = { 'src/ui.ts': 'export const theme = "dark";\nexport const compact = true;\n' };
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'hotfix'); write(ctx.repoDir, { 'CHANGELOG.md': '## Unreleased\n' }); save(ctx, 'Prepare hotfix');
++  g('switch', '-q', 'main'); g('switch', '-c', 'feature-ui'); write(ctx.repoDir, { 'src/ui.ts': 'export const theme = "dark";\n' }); save(ctx, 'Add theme toggle');
++  const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++  const metadata = { refs: refs(ctx), hotfixTree: { ...exactTree(ctx, 'hotfix'), ...enc(FIX) } };
++  adopt(ctx, 'feature-ui', ['hotfix']);
++  const committed = disk(ctx.repoDir);
++  write(ctx.repoDir, { ...FIX, ...UI });
++  // Git-like arms: the fix leaves this branch's work tree. But: every applied branch is in the
++  // workspace, so the fix stays on disk, committed on hotfix.
++  metadata.expectedDisk = gitLike(ctx.arm) ? { ...committed, ...enc(UI) } : disk(ctx.repoDir);
++  return metadata;
++}
++function verify(ctx) {
++  const m = ctx.metadata;
++  const ok = subjects(ctx, 'hotfix').join('|') === 'Fix default port|Prepare hotfix';
++  return result({
++    fix_committed_on_hotfix: ok && same(exactTree(ctx, 'hotfix'), m.hotfixTree),
++    authors_kept: authorsKept(ctx, 'hotfix'),
++    feature_ui_unchanged: othersUnchanged(ctx, m.refs, ['hotfix']),
++    files_on_disk_match: same(disk(ctx.repoDir), m.expectedDisk),
++    ui_edit_uncommitted: pending(ctx, ['src/ui.ts']),
++    same_branch: active(ctx, 'feature-ui', ['hotfix']),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a, execute } = commands(ctx);
++  if (ctx.arm === 'git') {
++    // A temporary index on hotfix, so this branch's work tree and index are never touched.
++    const tmp = `${ctx.repoDir}/.git/hotfix-index`, env = { ...(ctx.env ?? process.env), GIT_INDEX_FILE: tmp };
++    commands({ ...ctx, env }).g('read-tree', 'hotfix');
++    const blob = g('hash-object', '-w', 'src/config.ts');
++    commands({ ...ctx, env }).g('update-index', '--cacheinfo', `100644,${blob},src/config.ts`);
++    const tree = commands({ ...ctx, env }).g('write-tree');
++    const commit = g('commit-tree', tree, '-p', 'hotfix', '-m', 'Fix default port');
++    g('update-ref', 'refs/heads/hotfix', commit); g('checkout', '--', 'src/config.ts');
++    execute('rm', ['-f', tmp]);
++  } else if (ctx.arm === 'aisc+skill') {
++    a('commit', '-b', 'hotfix', '--onto', 'hotfix', '--existing', '-m', 'Fix default port', 'src/config.ts');
++  } else {
++    const id = JSON.parse(b('status', '--json')).uncommittedChanges.find(c => c.filePath === 'src/config.ts').cliId;
++    b('commit', '-b', 'hotfix', '-m', 'Fix default port', id);
++  }
++}
++export default { id: ID, researchRank: 106, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-integration.mjs b/scripts/lib/scenario-integration.mjs
 index dd80987..19973f2 100644
 --- a/scripts/lib/scenario-integration.mjs
@@ -496,6 +851,23 @@ index cc9f6e1..043fe1e 100644
      butStatus:()=>{const r=run(butBin,['status','--json'],{cwd:repo,env,check:false});if(r.status===0)return JSON.parse(r.stdout);let e=null;try{e=JSON.parse(r.stdout||r.stderr);}catch{}if(e?.error==='setup_required')return null;throw new Error(`but status --json failed (${r.status}): ${r.stdout}${r.stderr}`);}};
  }
  export function write(repo,files){for(const [p,s] of Object.entries(files)){fs.mkdirSync(path.dirname(path.join(repo,p)),{recursive:true});fs.writeFileSync(path.join(repo,p),s);}}
+diff --git a/scripts/lib/scenarios.mjs b/scripts/lib/scenarios.mjs
+index c7fc9f8..460d3de 100644
+--- a/scripts/lib/scenarios.mjs
++++ b/scripts/lib/scenarios.mjs
+@@ -6,6 +6,12 @@ export const SCENARIO_TASKS = [
+   { id: 'pilot-11-dual-source-sync', researchRank: 9, label: 'Two-source synchronization', module: 'sync' },
+   { id: 'pilot-12-integrate-topics', researchRank: 8, label: 'Integrate local topics', module: 'integration' },
+   { id: 'pilot-13-selective-copy', researchRank: 10, label: 'Selective copy', module: 'copy' },
++  { id: 'heldout-1-reword', researchRank: 101, label: 'Held-out: reword a commit', module: 'heldout1' },
++  { id: 'heldout-2-drop', researchRank: 102, label: 'Held-out: drop a commit', module: 'heldout2' },
++  { id: 'heldout-3-two-commits', researchRank: 103, label: 'Held-out: two commits by topic', module: 'heldout3' },
++  { id: 'heldout-4-move-commit', researchRank: 104, label: 'Held-out: move a commit to another branch', module: 'heldout4' },
++  { id: 'heldout-5-find-commit', researchRank: 105, label: 'Held-out: find the commit that set a value', module: 'heldout5' },
++  { id: 'heldout-6-commit-elsewhere', researchRank: 106, label: 'Held-out: commit onto another branch', module: 'heldout6' },
+ ].map(task => ({ ...task, taskDir: `tasks/${task.id}` }));
+ 
+ export async function loadScenario(id) {
 diff --git a/scripts/lib/tool-policy.mjs b/scripts/lib/tool-policy.mjs
 index 7fe8f7b..bbf7c97 100644
 --- a/scripts/lib/tool-policy.mjs
@@ -1219,6 +1591,144 @@ index 8370765..40f420f 100644
  {
    const repo = fixture("noop");
    expect("noop", repo, false);
+diff --git a/tasks/heldout-1-reword/instruction.md b/tasks/heldout-1-reword/instruction.md
+new file mode 100644
+index 0000000..4c58b7e
+--- /dev/null
++++ b/tasks/heldout-1-reword/instruction.md
+@@ -0,0 +1 @@
++On `fix-auth`, the commit "Fix tokne refresh" has a typo in its message: it should read "Fix token refresh". Fix that message only. Keep every commit's content, the other commit messages and the commit order as they are, and leave my uncommitted README.md edit alone. Do not publish anything.
+diff --git a/tasks/heldout-1-reword/task.toml b/tasks/heldout-1-reword/task.toml
+new file mode 100644
+index 0000000..5b06e93
+--- /dev/null
++++ b/tasks/heldout-1-reword/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-1-reword"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-2-drop/instruction.md b/tasks/heldout-2-drop/instruction.md
+new file mode 100644
+index 0000000..bc04819
+--- /dev/null
++++ b/tasks/heldout-2-drop/instruction.md
+@@ -0,0 +1 @@
++Remove the commit "Add debug logging" from `feature-export` completely, as if it had never been made. Keep the other two commits with their changes and messages, stay on `feature-export`, and leave my untracked notes.md alone. Do not publish anything.
+diff --git a/tasks/heldout-2-drop/task.toml b/tasks/heldout-2-drop/task.toml
+new file mode 100644
+index 0000000..7b01d01
+--- /dev/null
++++ b/tasks/heldout-2-drop/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-2-drop"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-3-two-commits/instruction.md b/tasks/heldout-3-two-commits/instruction.md
+new file mode 100644
+index 0000000..dbedb35
+--- /dev/null
++++ b/tasks/heldout-3-two-commits/instruction.md
+@@ -0,0 +1 @@
++On `docs-and-tests`, commit my documentation changes (everything under docs/) as "Update API docs", then my test changes (everything under tests/) as "Add API tests": two commits, in that order. Leave my change to src/app.ts uncommitted. Do not publish anything.
+diff --git a/tasks/heldout-3-two-commits/task.toml b/tasks/heldout-3-two-commits/task.toml
+new file mode 100644
+index 0000000..cba99b2
+--- /dev/null
++++ b/tasks/heldout-3-two-commits/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-3-two-commits"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-4-move-commit/instruction.md b/tasks/heldout-4-move-commit/instruction.md
+new file mode 100644
+index 0000000..72d64f1
+--- /dev/null
++++ b/tasks/heldout-4-move-commit/instruction.md
+@@ -0,0 +1 @@
++The commit "Add billing export" on `feature-search` was made on the wrong branch: it belongs on `feature-billing`. Move it there, on top of the existing billing commit, and remove it from `feature-search`. Keep every other commit as it is, stay on `feature-search`, and do not publish anything.
+diff --git a/tasks/heldout-4-move-commit/task.toml b/tasks/heldout-4-move-commit/task.toml
+new file mode 100644
+index 0000000..810cc9b
+--- /dev/null
++++ b/tasks/heldout-4-move-commit/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-4-move-commit"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-5-find-commit/instruction.md b/tasks/heldout-5-find-commit/instruction.md
+new file mode 100644
+index 0000000..77b72f8
+--- /dev/null
++++ b/tasks/heldout-5-find-commit/instruction.md
+@@ -0,0 +1 @@
++Which commit on `main` first set `MAX_RETRIES = 7`? Reply with just that commit's subject line. Do not change anything in the repository.
+diff --git a/tasks/heldout-5-find-commit/task.toml b/tasks/heldout-5-find-commit/task.toml
+new file mode 100644
+index 0000000..b2bc358
+--- /dev/null
++++ b/tasks/heldout-5-find-commit/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-5-find-commit"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-6-commit-elsewhere/instruction.md b/tasks/heldout-6-commit-elsewhere/instruction.md
+new file mode 100644
+index 0000000..056e6b8
+--- /dev/null
++++ b/tasks/heldout-6-commit-elsewhere/instruction.md
+@@ -0,0 +1 @@
++I'm on `feature-ui` with unfinished work. My change to src/config.ts is an unrelated fix: commit just that change onto the existing `hotfix` branch as "Fix default port", without leaving `feature-ui`. My src/ui.ts edit must stay uncommitted here. Do not publish anything.
+diff --git a/tasks/heldout-6-commit-elsewhere/task.toml b/tasks/heldout-6-commit-elsewhere/task.toml
+new file mode 100644
+index 0000000..bd11b89
+--- /dev/null
++++ b/tasks/heldout-6-commit-elsewhere/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-6-commit-elsewhere"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
 diff --git a/tasks/pilot-1-selective-validation/solution/solve-aisc.sh b/tasks/pilot-1-selective-validation/solution/solve-aisc.sh
 new file mode 100755
 index 0000000..3e0483f

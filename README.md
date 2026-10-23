@@ -24,7 +24,7 @@ One command per history edit, output sized for a context window, every change un
   <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 0.98M tokens, 39 commands and $0.61 per suite; Git 1.43M, 63 and $0.73; GitButler 1.62M, 61 and $0.99. All three passed 38 of 39 runs." width="760">
 </picture>
 
-These are the same 13 tasks AISC was tuned on, so read them as a strong pilot rather than a final verdict; [the details](#real-agents) list every failure and caveat, and [`benchmarks/agents`](benchmarks/agents) has every prompt, setup, script and per-run command to check them.
+These are the 13 tasks AISC was tuned on. On six **held-out tasks** it had never seen, GitButler did better: 15 commands and 0.42M tokens against AISC's 24 and 0.62M, mostly because AISC 0.1.1 has no command to reword, drop or move a commit to another branch ([held-out results](#held-out-tasks)). Every prompt, setup, script and per-run command is in [`benchmarks/agents`](benchmarks/agents).
 
 ## Install
 
@@ -174,9 +174,27 @@ Means over the three runs, with the range in brackets. AISC v0.1.1 passed as man
 
 Where AISC lost:
 - **Four failed v0.1.0 runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). v0.1.1 adds `aisc land --delete` and tells agents to use `aisc switch` for this; its three runs had no such failure.
-- **Tuning.** AISC's agent block and several commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`, `land --delete`) were improved after watching AISC's runs on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that. Held-out tasks are the next step.
+- **Tuning.** AISC's agent block and several commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`, `land --delete`) were improved after watching AISC's runs on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that; the held-out tasks below test it.
 
 Everything needed to check or repeat these runs (task prompts, each tool's instructions, the run script and a script that recomputes this table) is in [`benchmarks/agents`](benchmarks/agents). Per-run metrics, including every version-control command each agent ran, are in [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) (all three tools) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json) (AISC v0.1.1, same settings).
+
+### Held-out tasks
+
+Six more tasks, written after the runs above and [committed before any agent ran them](benchmarks/agents/heldout/tasks.md), so AISC could not be tuned for them. They cover rewording an older commit's message, dropping a commit, two commits by topic, moving a commit to another branch, finding which commit set a value, and committing onto another branch. Same agent, settings and grading as above, 3 runs per tool.
+
+| 6 tasks × 3 runs, per suite | Passed | Commands | Tokens | Cost | Time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AISC v0.1.1 | 18/18 | 24 (21–26) | 0.62M (0.55–0.67M) | $0.31 | 96 s |
+| **GitButler 0.22.3** | **18/18** | **15** (13–16) | **0.42M** (0.38–0.44M) | **$0.27** | **66 s** |
+| Git 2.50 | 15/18 | 21 (14–31) | 0.51M (0.37–0.72M) | $0.28 | 85 s |
+
+GitButler wins this set. Per task:
+- **Reword (11 vs 2 commands).** AISC has no command that edits a commit message. Its agent got there by uncommitting, recommitting and moving the change.
+- **Move a commit to another branch (4 vs 3).** It took `pick`, `uncommit` and `discard`.
+- **The other four tasks** were close. AISC was ahead on two commits by topic (2 vs 3) and slightly behind on finding the commit (1.7 vs 1). Dropping a commit and committing elsewhere were level.
+- **Git** failed all three runs of committing onto another branch, because the edit stayed on disk.
+
+These are the gaps to close next: `reword`, `drop` and moving a commit to another branch in one call. Once they ship, the comparison needs new held-out tasks, because these six are now known. Per-run data is in [`agent-runs-heldout-v0.1.1.json`](benchmarks/results/agent-runs-heldout-v0.1.1.json).
 
 ### Command benchmark
 
