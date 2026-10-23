@@ -145,26 +145,99 @@ fn move_to_puts_commits_on_another_branch_in_one_call() {
 }
 
 #[test]
-fn move_to_refuses_unknown_or_same_branch_and_conflicts_change_nothing() {
+fn move_to_refuses_unknown_same_or_invalid_branches_and_conflicts_change_nothing() {
     let fixture = three();
     let before = fixture.snapshot();
-    for args in [
-        &["move", "A", "--to", "nope"][..],
-        &["move", "A", "--to", "feature"][..],
+    for (args, expected) in [
+        (&["move", "A", "--to", "nope"][..], "unknown branch"),
+        (&["move", "A", "--to", "feature"][..], "already on"),
+        (
+            &["move", "A", "--to", "feature^"][..],
+            "invalid branch name",
+        ),
+        (
+            &["move", "A", "--to", "feature@{1}"][..],
+            "invalid branch name",
+        ),
     ] {
         let run = fixture.aisc(args);
-        assert_ne!(run.code, 0, "{args:?}: {}", run.stdout);
+        assert_eq!(run.code, 1, "{args:?}: {} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains(expected), "{args:?}: {}", run.stderr);
+        assert_eq!(fixture.snapshot(), before, "{args:?}");
     }
     fixture.git(&["switch", "-q", "-c", "clash", "main"]);
     fixture.write("b.txt", "different\n");
     fixture.commit_all("clash");
     fixture.git(&["switch", "-q", "feature"]);
-    let before = {
-        let _ = before;
-        fixture.snapshot()
-    };
+    let before = fixture.snapshot();
     let run = fixture.aisc(&["move", "Fix tokne refresh", "--to", "clash"]);
     assert_ne!(run.code, 0, "{}", run.stdout);
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn move_to_refuses_a_target_checked_out_here_or_in_another_worktree() {
+    let fixture = three();
+    fixture.git(&["branch", "billing", "main"]);
+    let linked = fixture.root.parent().unwrap().join("billing-wt");
+    fixture.git(&["worktree", "add", "-q", linked.to_str().unwrap(), "billing"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["move", "A", "--to", "billing"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("another worktree"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    fixture.git(&["worktree", "remove", "--force", linked.to_str().unwrap()]);
+    // The target is this worktree's own branch: a different message, same refusal.
+    fixture.git(&["switch", "-q", "billing"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["move", "--branch", "feature", "A", "--to", "billing"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("checked out here"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn drop_and_move_to_on_another_branch_still_take_the_index_lock() {
+    // The worktree is carried only when the branch is checked out, but which branch that is
+    // can change between reads: the index lock is taken up front, every time.
+    let fixture = three();
+    fixture.git(&["branch", "billing", "main"]);
+    fixture.git(&["switch", "-q", "-c", "other", "main"]);
+    fixture.write(".git/index.lock", "");
+    let before = fixture.snapshot();
+    for args in [
+        &["drop", "--branch", "feature", "Fix tokne refresh"][..],
+        &[
+            "move",
+            "--branch",
+            "feature",
+            "Fix tokne refresh",
+            "--to",
+            "billing",
+        ][..],
+    ] {
+        let run = fixture.aisc(args);
+        assert_eq!(run.code, 1, "{args:?}: {} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains("locked"), "{args:?}: {}", run.stderr);
+        assert_eq!(fixture.snapshot(), before, "{args:?}");
+    }
+    assert!(
+        fixture.exists(".git/index.lock"),
+        "a foreign lock is never removed"
+    );
+}
+
+#[test]
+fn move_to_a_branch_inside_the_rewritten_range_is_a_typed_refusal() {
+    let fixture = three();
+    // `stack` sits at B: moving A would rewrite B (moving `stack` with it) and also put A on
+    // top of `stack`. One ref, two updates: refused before anything is written.
+    fixture.git(&["branch", "stack", "feature~1"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["move", "A", "--to", "stack"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("twice"), "{}", run.stderr);
+    assert!(!run.stderr.contains("fatal:"), "{}", run.stderr);
     assert_eq!(fixture.snapshot(), before);
 }
 

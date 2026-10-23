@@ -269,6 +269,18 @@ pub(crate) fn finish_rewrite_with(
         moved_refs.push(json!({"ref": extra.name, "old": extra.old, "new": extra.new}));
         plan.refs.push(extra);
     }
+    let mut seen = BTreeSet::new();
+    if let Some(twice) = plan
+        .refs
+        .iter()
+        .find(|moved| !seen.insert(moved.name.as_str()))
+    {
+        return Err(fail_hint(
+            Code::State,
+            format!("{} would be updated twice in one operation", twice.name),
+            "move that branch off the rewritten commits first",
+        ));
+    }
     if view.is_head
         && let Some((old_tree, new_tree)) = trees
         && old_tree != new_tree

@@ -133,8 +133,9 @@ pub(crate) fn drop(args: &cli::Drop) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
     let branch_option = args.opts.branch.as_deref();
-    let peek = view::read(&git, branch_option, 1, false)?;
-    let session = Session::open(&repo, &git, peek.is_head, false)?;
+    // The worktree is carried only when the branch is checked out, and which branch that is
+    // is read after the lock: like split and amend, take the index lock up front, every time.
+    let session = Session::open(&repo, &git, true, false)?;
     let view = view::read(&git, branch_option, LIMIT, false)?;
     let range = linear_range(&view);
     let dropped = positions(&git, &view, &range, &args.commits)?;
@@ -184,9 +185,12 @@ pub(crate) fn drop(args: &cli::Drop) -> Result<Outcome> {
 pub(crate) fn move_to(args: &cli::Move, target: &str) -> Result<Outcome> {
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    git.valid_branch_name(target)?;
     let branch_option = args.opts.branch.as_deref();
-    let peek = view::read(&git, branch_option, 1, false)?;
-    if peek.branch.as_deref() == Some(target) {
+    // Same lock rule as `drop`: the index lock is taken before the branch is read.
+    let session = Session::open(&repo, &git, true, false)?;
+    let view = view::read(&git, branch_option, LIMIT, false)?;
+    if view.branch.as_deref() == Some(target) {
         return Err(fail(
             Code::Usage,
             "--to names the branch the commits are already on",
@@ -200,6 +204,13 @@ pub(crate) fn move_to(args: &cli::Move, target: &str) -> Result<Outcome> {
             "use an existing local branch; to start a new one use aisc pick -b NEW",
         )
     })?;
+    if session.head.symbolic.as_deref() == Some(target_ref.as_str()) {
+        return Err(fail_hint(
+            Code::State,
+            format!("'{target}' is checked out here"),
+            "switch to another branch first, or use aisc pick --from BRANCH COMMIT... here and then aisc drop --branch BRANCH COMMIT...",
+        ));
+    }
     if git.checked_out()?.contains(&target_ref) {
         return Err(fail_hint(
             Code::State,
@@ -207,8 +218,6 @@ pub(crate) fn move_to(args: &cli::Move, target: &str) -> Result<Outcome> {
             "run the command from that worktree",
         ));
     }
-    let session = Session::open(&repo, &git, peek.is_head, false)?;
-    let view = view::read(&git, branch_option, LIMIT, false)?;
     let range = linear_range(&view);
     let moved = positions(&git, &view, &range, &args.commits)?;
     let first = *moved.iter().next().expect("at least one commit");
