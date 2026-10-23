@@ -12,7 +12,9 @@ Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take
 - fold into older commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]`
 - split: `aisc split COMMIT --into MSG SEL... [--into MSG SEL...]`
 - squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG COMMIT...]`
-- reorder: `aisc move COMMIT... --before|--after COMMIT`
+- reorder: `aisc move COMMIT... --before|--after COMMIT`; to another branch: `aisc move COMMIT... --to BRANCH`
+- change a message: `aisc reword COMMIT -m MSG`
+- remove commits: `aisc drop COMMIT...`
 - take out of a commit, keep on disk: `aisc uncommit COMMIT SEL...`
 - throw away uncommitted changes: `aisc discard SEL...`
 - copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]`

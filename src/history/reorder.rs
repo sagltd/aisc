@@ -182,6 +182,34 @@ pub(crate) fn finish_rewrite(
     new_tip: &str,
     rewritten: Vec<(String, String)>,
 ) -> Result<Finished> {
+    finish_rewrite_with(
+        git,
+        session,
+        view,
+        verb,
+        summary,
+        new_tip,
+        rewritten,
+        Vec::new(),
+        None,
+    )
+}
+
+/// [`finish_rewrite`] plus extra ref moves in the same transaction, and, when the rewritten
+/// branch is checked out and its tree changes, the worktree and index carried from `old_tree`
+/// to the new tip's tree (uncommitted edits are kept or merged; overlaps are refused).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn finish_rewrite_with(
+    git: &Git,
+    session: Session,
+    view: &View,
+    verb: &str,
+    summary: String,
+    new_tip: &str,
+    rewritten: Vec<(String, String)>,
+    extra: Vec<RefMove>,
+    trees: Option<(&str, &str)>,
+) -> Result<Finished> {
     let checked_out = git.checked_out()?;
     let (reference, branch) = if view.is_head {
         if session.head.oid != view.tip {
@@ -236,6 +264,30 @@ pub(crate) fn finish_rewrite(
         }
         moved_refs.push(json!({"ref": dependent.name, "old": dependent.old, "new": dependent.new}));
         plan.refs.push(dependent);
+    }
+    for extra in extra {
+        moved_refs.push(json!({"ref": extra.name, "old": extra.old, "new": extra.new}));
+        plan.refs.push(extra);
+    }
+    let mut seen = BTreeSet::new();
+    if let Some(twice) = plan
+        .refs
+        .iter()
+        .find(|moved| !seen.insert(moved.name.as_str()))
+    {
+        return Err(fail_hint(
+            Code::State,
+            format!("{} would be updated twice in one operation", twice.name),
+            "move that branch off the rewritten commits first",
+        ));
+    }
+    if view.is_head
+        && let Some((old_tree, new_tree)) = trees
+        && old_tree != new_tree
+    {
+        let carried = super::rewrite::carry(git, old_tree, new_tree, &BTreeSet::new())?;
+        plan.worktree = carried.writes;
+        plan.index = carried.index;
     }
     let applied = session.apply(&plan)?;
     Ok(Finished {

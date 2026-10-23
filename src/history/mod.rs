@@ -13,6 +13,7 @@ pub(crate) mod commit;
 #[allow(dead_code)]
 pub(crate) mod diff;
 pub(crate) mod discard;
+pub(crate) mod edit;
 pub(crate) mod land;
 pub(crate) mod log;
 #[allow(dead_code)]
@@ -137,7 +138,12 @@ pub(crate) fn run(command: &Operation) -> Option<Result<Outcome>> {
         Operation::Split(args) => split::run_split(args),
         Operation::Uncommit(args) => split::run_uncommit(args),
         Operation::Squash(args) => squash::run(args),
-        Operation::Move(args) => reorder::run(args),
+        Operation::Move(args) => match &args.to {
+            Some(target) => edit::move_to(args, target),
+            None => reorder::run(args),
+        },
+        Operation::Reword(args) => edit::reword(args),
+        Operation::Drop(args) => edit::drop(args),
         Operation::Pick(args) => pick::run(args),
         Operation::Sync(args) => sync::run(args),
         Operation::Land(args) => land::run(args),
