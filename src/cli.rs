@@ -101,8 +101,12 @@ pub(crate) enum Operation {
     Uncommit(Uncommit),
     /// Squash adjacent commits into groups
     Squash(Squash),
-    /// Move or reorder commits
+    /// Move or reorder commits, or move them to another branch (--to)
     Move(Move),
+    /// Change one commit's message
+    Reword(Reword),
+    /// Remove commits from the branch, and their changes from the worktree
+    Drop(Drop),
     /// Copy commits onto another branch
     Pick(Pick),
     /// Rebase the branch onto its base while keeping uncommitted work
@@ -293,10 +297,13 @@ pub(crate) struct Squash {
 }
 
 #[derive(Args, Debug)]
-#[command(group(clap::ArgGroup::new("placement").required(true).multiple(false).args(["before", "after", "order"])))]
+#[command(group(clap::ArgGroup::new("placement").required(true).multiple(false).args(["before", "after", "order", "to"])))]
 pub(crate) struct Move {
     #[arg(value_name = "COMMIT", required = true)]
     pub commits: Vec<String>,
+    /// Move the commits to the top of this existing branch (removing them here)
+    #[arg(long, value_name = "BRANCH")]
+    pub to: Option<String>,
     #[arg(long, value_name = "COMMIT")]
     pub before: Option<String>,
     #[arg(long, value_name = "COMMIT")]
@@ -304,6 +311,25 @@ pub(crate) struct Move {
     /// COMMITs list the full range, oldest first, in the wanted order
     #[arg(long)]
     pub order: bool,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Reword {
+    #[arg(value_name = "COMMIT")]
+    pub commit: String,
+    /// The new message
+    #[arg(short = 'm', long, value_name = "MSG")]
+    pub message: String,
+    #[command(flatten)]
+    pub opts: MutationOpts,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Drop {
+    #[arg(value_name = "COMMIT", required = true)]
+    pub commits: Vec<String>,
     #[command(flatten)]
     pub opts: MutationOpts,
 }
@@ -425,6 +451,8 @@ impl Operation {
             Self::Uncommit(_) => "uncommit",
             Self::Squash(_) => "squash",
             Self::Move(_) => "move",
+            Self::Reword(_) => "reword",
+            Self::Drop(_) => "drop",
             Self::Pick(_) => "pick",
             Self::Sync(_) => "sync",
             Self::Land(_) => "land",
@@ -468,6 +496,8 @@ impl Operation {
             Self::Split(args) => args.opts.quiet,
             Self::Uncommit(args) => args.opts.quiet,
             Self::Squash(args) => args.opts.quiet,
+            Self::Reword(args) => args.opts.quiet,
+            Self::Drop(args) => args.opts.quiet,
             Self::Move(args) => args.opts.quiet,
             Self::Pick(args) => args.opts.quiet,
             Self::Sync(args) => args.opts.quiet,
@@ -487,6 +517,8 @@ impl Operation {
             Self::Split(args) => args.opts.stack,
             Self::Uncommit(args) => args.opts.stack,
             Self::Squash(args) => args.opts.stack,
+            Self::Reword(args) => args.opts.stack,
+            Self::Drop(args) => args.opts.stack,
             Self::Move(args) => args.opts.stack,
             Self::Pick(args) => args.opts.stack,
             Self::Sync(args) => args.opts.stack,

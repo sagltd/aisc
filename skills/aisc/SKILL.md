@@ -10,7 +10,8 @@ Use `aisc` for all version-control writes. Run `aisc log` first for ids and stat
 - split: `aisc split COMMIT --into MSG SEL...` (repeatable)
 - uncommit, keep on disk: `aisc uncommit COMMIT SEL...`
 - squash: `aisc squash --into MSG COMMIT COMMIT...`
-- reorder: `aisc move COMMIT... --before|--after COMMIT`
+- reorder: `aisc move COMMIT... --before|--after COMMIT`; to another branch: `aisc move COMMIT... --to BRANCH`
+- reword: `aisc reword COMMIT -m MSG`; remove commits: `aisc drop COMMIT...`
 - rebase, keep dirty work: `aisc sync [ONTO] [--fetch] [--prefer-branch|--prefer-onto PATH]`
 - copy: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be a branch; BRANCH may be `origin/NAME`)
 - integrate: `aisc land BRANCH... --into main --switch [--delete]` (`--delete` removes the landed branches)

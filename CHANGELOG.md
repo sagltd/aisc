@@ -6,6 +6,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-23
+
+### Added
+
+- `aisc reword COMMIT -m MSG` changes one commit's message, keeping every tree.
+- `aisc drop COMMIT...` removes commits and their changes; uncommitted edits are kept or the
+  command refuses with nothing changed.
+- `aisc move COMMIT... --to BRANCH` moves commits to the top of another branch in one
+  transaction; `aisc undo` restores both branches.
+
+These close the gaps the held-out benchmark found (reword, drop, move to another branch).
+
 ## [0.1.1] - 2026-10-22
 
 ### Added
@@ -66,6 +78,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tag, so the two versions cannot see each other's locks and can both run at
   once. Upgrade all running agents together.
 
-[Unreleased]: https://github.com/sagltd/aisc/compare/v0.1.1...dev
+[Unreleased]: https://github.com/sagltd/aisc/compare/v0.1.2...dev
+[0.1.2]: https://github.com/sagltd/aisc/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/sagltd/aisc/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sagltd/aisc/releases/tag/v0.1.0

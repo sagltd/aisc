@@ -146,6 +146,9 @@ A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30
 | `aisc uncommit COMMIT SEL…` | Take changes out of a commit, keep them on disk |
 | `aisc squash --into MSG COMMIT…` | Join commits |
 | `aisc move COMMIT… --before\|--after COMMIT` | Reorder commits |
+| `aisc move COMMIT… --to BRANCH` | Move commits to another branch |
+| `aisc reword COMMIT -m MSG` | Change a commit's message |
+| `aisc drop COMMIT…` | Remove commits and their changes |
 | `aisc pick COMMIT… [-b NEW --onto BASE]` | Copy commits onto another branch |
 | `aisc sync [ONTO] [--fetch]` | Rebase onto the base, carrying your uncommitted work; pauses on conflict |
 | `aisc land BRANCH… --into main [--delete]` | Integrate finished branches, optionally deleting them |
@@ -194,7 +197,7 @@ GitButler wins this set. Per task:
 - **The other four tasks** were close. AISC was ahead on two commits by topic (2 vs 3) and slightly behind on finding the commit (1.7 vs 1). Dropping a commit and committing elsewhere were level.
 - **Git** failed all three runs of committing onto another branch, because the edit stayed on disk.
 
-These are the gaps to close next: `reword`, `drop` and moving a commit to another branch in one call. Once they ship, the comparison needs new held-out tasks, because these six are now known. Per-run data is in [`agent-runs-heldout-v0.1.1.json`](benchmarks/results/agent-runs-heldout-v0.1.1.json).
+v0.1.2 adds the missing commands (`aisc reword`, `aisc drop`, `aisc move --to`). These six tasks are now known, so the next comparison needs new held-out tasks. Per-run data is in [`agent-runs-heldout-v0.1.1.json`](benchmarks/results/agent-runs-heldout-v0.1.1.json).
 
 ### Command benchmark
 
