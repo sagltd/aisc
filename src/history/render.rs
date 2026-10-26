@@ -359,7 +359,7 @@ pub(crate) fn hunk_body(file: &FileChange, hunk: &HunkInfo, full: bool, cap: usi
     if !full && lines.len() > cap {
         let extra = lines.len() - cap;
         lines.truncate(cap);
-        lines.push(format!("… +{extra}"));
+        lines.push(format!("… +{extra} (--full)"));
     }
     lines
 }
@@ -382,7 +382,7 @@ mod tests {
         assign_ids(&mut files);
         let capped = hunk_body(&files[0], &files[0].hunks[0], false, 12);
         assert_eq!(capped.len(), 13);
-        assert_eq!(capped.last().unwrap(), "… +3");
+        assert_eq!(capped.last().unwrap(), "… +3 (--full)");
         let full = hunk_body(&files[0], &files[0].hunks[0], true, 12);
         assert_eq!(full.len(), 15 + 3);
         assert_eq!(full[0], " k1");

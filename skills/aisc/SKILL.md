@@ -17,6 +17,7 @@ Use `aisc` for all version-control writes. Run `aisc log` first for ids and stat
 - integrate: `aisc land BRANCH... --into main --switch [--delete]` (`--delete` removes the landed branches)
 - discard: `aisc discard SEL...`; switch (also to run tests on another branch; edits come along): `aisc switch [-c] BRANCH`
 - undo (again = redo): `aisc undo`
+- several reads: chain them in one shell call (`aisc log && aisc show A:PATH && aisc show B:PATH`)
 
 COMMIT: hex id or exact subject. SEL: `PATH`, `DIR/` (every changed file under it), `"PATH~text"` (hunk containing text), `PATH:A-B` (new-side lines) or a hunk id from `aisc log`.
 

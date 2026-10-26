@@ -280,7 +280,7 @@ fn untracked_lines(git: &Git, file: &FileChange, full: bool) -> Vec<String> {
         })
         .collect();
     if !full && lines.len() > CAP {
-        shown.push(format!("… +{}", lines.len() - CAP));
+        shown.push(format!("… +{} (--full)", lines.len() - CAP));
     }
     shown
 }
