@@ -758,3 +758,25 @@ fn undo_reports_an_unexpected_placeholder_failure() {
     assert!(!fixture.exists(".git/index.lock"));
     assert!(!fixture.exists(".git/aisc-operation.lock"));
 }
+
+#[test]
+fn a_directory_selects_every_changed_file_under_it() {
+    let fixture = Fixture::with_files(&[("docs/a.md", "a\n"), ("src/app.ts", "app\n")]);
+    fixture.write("docs/a.md", "a\nmore\n");
+    fixture.write("docs/b.md", "b\n");
+    fixture.write("src/app.ts", "app\nedit\n");
+    let before = fixture.snapshot();
+    let nope = fixture.aisc(&["commit", "-m", "x", "nope/"]);
+    assert_eq!(nope.code, 1, "{} {}", nope.stdout, nope.stderr);
+    assert!(nope.stderr.contains("unknown selector"), "{}", nope.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    // Tracked and untracked files under the directory, nothing outside it.
+    fixture.aisc(&["commit", "-m", "Update docs", "docs/"]).ok();
+    assert_eq!(fixture.commit_files("HEAD"), ["docs/a.md", "docs/b.md"]);
+    assert_eq!(fixture.git(&["status", "--porcelain"]), " M src/app.ts");
+    // Without the slash too.
+    fixture.write("docs/c.md", "c\n");
+    fixture.aisc(&["commit", "-m", "More docs", "docs"]).ok();
+    assert_eq!(fixture.commit_files("HEAD"), ["docs/c.md"]);
+    assert_eq!(fixture.git(&["status", "--porcelain"]), " M src/app.ts");
+}

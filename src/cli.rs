@@ -200,19 +200,15 @@ pub(crate) struct Commit {
     /// Create this branch at the new commit and switch HEAD to it
     #[arg(short = 'b', long = "new-branch", value_name = "NEW")]
     pub new_branch: Option<String>,
-    /// With -b NEW: build NEW on BASE instead, without switching (a parallel branch). HEAD stays;
-    /// the committed changes leave the worktree and index unless --keep. Runs no Git hooks (D3), unlike git switch + commit
-    #[arg(
-        long,
-        value_name = "BASE",
-        requires = "new_branch",
-        conflicts_with = "into"
-    )]
+    /// Commit onto BASE without switching: alone, BASE is an existing local branch and the commit
+    /// goes on top of it; with -b NEW, NEW is built on BASE (a parallel branch). HEAD stays; the
+    /// committed changes leave the worktree and index unless --keep. Runs no Git hooks (D3), unlike git switch + commit
+    #[arg(long, value_name = "BASE", conflicts_with = "into")]
     pub onto: Option<String>,
     /// With --onto: leave the committed changes in the worktree and index too
     #[arg(long, requires = "onto")]
     pub keep: bool,
-    /// With --onto: NEW may exist; the commit goes on top of it (BASE must then be NEW)
+    /// With -b NEW --onto NEW: NEW may exist (implied when -b names the --onto branch)
     #[arg(long, requires = "onto")]
     pub existing: bool,
     /// Commit every change, including untracked files that are not ignored

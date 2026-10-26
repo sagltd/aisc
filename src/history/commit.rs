@@ -142,6 +142,8 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
     let groups = parse_groups(args)?;
     let repo = Repo::discover()?;
     let git = Git::from_repo(&repo);
+    // `-b NAME --onto NAME` and `--onto NAME` alone commit on top of the existing NAME.
+    let extends = args.existing || args.new_branch.is_none() || args.new_branch == args.onto;
     if let Some(name) = &args.new_branch {
         git.valid_branch_name(name)?;
         if let Some(existing) = conflicting_branch(&git, name)? {
@@ -154,9 +156,9 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
         if git.ref_oid(&format!("refs/tags/{name}"))?.is_some() {
             eprintln!("warning: refname '{name}' is ambiguous (a tag of that name exists)");
         }
-        if git.ref_oid(&format!("refs/heads/{name}"))?.is_some() && !args.existing {
+        if git.ref_oid(&format!("refs/heads/{name}"))?.is_some() && !extends {
             let hint = if args.onto.is_some() {
-                format!("pick another name, or add --existing --onto {name} to commit on top of it")
+                format!("pick another name, or --onto {name} to commit on top of it")
             } else {
                 "pick another name, or use aisc switch".to_owned()
             };
@@ -164,6 +166,21 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
                 Code::State,
                 format!("branch '{name}' already exists"),
                 hint,
+            ));
+        }
+    } else if let Some(base) = &args.onto {
+        if git.valid_branch_name(base).is_err() {
+            return Err(fail_hint(
+                Code::Usage,
+                format!("--onto {base} needs -b NEW: alone, --onto names an existing local branch"),
+                format!("aisc commit -b NEW --onto {base} ... starts a branch there"),
+            ));
+        }
+        if git.ref_oid(&format!("refs/heads/{base}"))?.is_none() {
+            return Err(fail_hint(
+                Code::Selector,
+                format!("unknown branch '{base}'"),
+                "--onto alone names an existing local branch; to start one use -b NEW --onto BASE",
             ));
         }
     }
@@ -713,10 +730,7 @@ fn onto(
     started: SystemTime,
 ) -> Result<Outcome> {
     let rev = args.onto.as_deref().expect("--onto");
-    let name = args
-        .new_branch
-        .as_deref()
-        .expect("clap requires -b with --onto");
+    let name = args.new_branch.as_deref().unwrap_or(rev);
     let (head_oid, head_symbolic) = (session.head.oid.clone(), session.head.symbolic.clone());
     let base = git.resolve_commit(rev)?.ok_or_else(|| {
         fail_hint(
@@ -738,8 +752,8 @@ fn onto(
         if *tip != base {
             return Err(fail_hint(
                 Code::Usage,
-                format!("with --existing, --onto must be '{name}' itself"),
-                format!("aisc commit -b {name} --existing --onto {name} ..."),
+                format!("'{name}' exists: to commit on top of it, --onto must be '{name}' itself"),
+                format!("aisc commit --onto {name} ..."),
             ));
         }
         if git.checked_out()?.contains(&reference) {

@@ -8,6 +8,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A directory is a selector: `aisc commit -m MSG docs/` takes every changed file under it,
+  tracked or untracked (agents wrote this and got "unknown selector").
+- `aisc commit --onto BRANCH -m MSG SEL...` commits onto an existing local branch without
+  leaving this one; `-b NAME --onto NAME` means the same, so `--existing` is no longer needed
+  (agents wrote both and were told to add it).
 - `aisc amend --into COMMIT SEL...` works when COMMIT is on another local branch (named with
   `--branch`, or found when exactly one branch has it): the selected changes are folded into
   that commit from this worktree, the branch is rewritten above it, nothing is checked out, and

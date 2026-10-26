@@ -280,7 +280,7 @@ fn an_untracked_file_moves_to_the_new_branch() {
 }
 
 #[test]
-fn an_existing_branch_is_refused_unless_asked_to_extend_it() {
+fn an_existing_branch_is_refused_unless_it_is_the_base() {
     let fixture = parallel();
     fixture.git(&["branch", "docs", "main"]);
     let before = fixture.snapshot();
@@ -296,14 +296,14 @@ fn an_existing_branch_is_refused_unless_asked_to_extend_it() {
     ]);
     assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
     assert!(run.stderr.contains("already exists"), "{}", run.stderr);
-    assert!(run.stderr.contains("--existing"), "{}", run.stderr);
+    assert!(run.stderr.contains("--onto docs"), "{}", run.stderr);
     assert_eq!(before, fixture.snapshot());
+    // Naming the branch as its own base commits on top of it; --existing is implied.
     fixture
         .aisc(&[
             "commit",
             "-b",
             "docs",
-            "--existing",
             "--onto",
             "docs",
             "-m",
@@ -340,13 +340,29 @@ fn keep_leaves_the_change_in_the_worktree() {
 }
 
 #[test]
-fn onto_needs_a_new_branch() {
+fn onto_alone_commits_onto_that_existing_branch() {
     let fixture = parallel();
+    fixture.git(&["branch", "docs", "main"]);
     let before = fixture.snapshot();
-    let run = fixture.aisc(&["commit", "--onto", "main", "-m", "x", "docs/guide.md"]);
-    assert_eq!(run.code, 2, "{} {}", run.stdout, run.stderr);
-    assert!(run.stderr.contains("--new-branch"), "{}", run.stderr);
-    let unknown = fixture.aisc(&[
+    let unknown = fixture.aisc(&["commit", "--onto", "nope", "-m", "x", "docs/guide.md"]);
+    assert_eq!(unknown.code, 1, "{} {}", unknown.stdout, unknown.stderr);
+    assert!(
+        unknown.stderr.contains("unknown branch"),
+        "{}",
+        unknown.stderr
+    );
+    let not_a_branch = fixture.aisc(&["commit", "--onto", "main~0", "-m", "x", "docs/guide.md"]);
+    assert_eq!(
+        not_a_branch.code, 1,
+        "{} {}",
+        not_a_branch.stdout, not_a_branch.stderr
+    );
+    assert!(
+        not_a_branch.stderr.contains("-b NEW"),
+        "{}",
+        not_a_branch.stderr
+    );
+    let new_unknown = fixture.aisc(&[
         "commit",
         "-b",
         "x",
@@ -356,8 +372,26 @@ fn onto_needs_a_new_branch() {
         "x",
         "docs/guide.md",
     ]);
-    assert_eq!(unknown.code, 1, "{} {}", unknown.stdout, unknown.stderr);
+    assert_eq!(
+        new_unknown.code, 1,
+        "{} {}",
+        new_unknown.stdout, new_unknown.stderr
+    );
     assert_eq!(before, fixture.snapshot());
+    // The common case: commit onto an existing branch without leaving this one.
+    fixture
+        .aisc(&[
+            "commit",
+            "--onto",
+            "docs",
+            "-m",
+            "update guide",
+            "docs/guide.md",
+        ])
+        .ok();
+    assert_eq!(fixture.subjects("main..docs"), ["update guide"]);
+    assert_eq!(fixture.read("docs/guide.md"), GUIDE);
+    assert_eq!(head_branch(&fixture), "feature");
 }
 
 /// `l1`..`l30` with `edits` (1-based line, text) applied.

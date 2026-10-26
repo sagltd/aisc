@@ -300,10 +300,28 @@ fn resolve_token(
             }
         };
     }
+    // 5. a directory: every changed file under it (tracked or untracked)
+    let directory = token.trim_end_matches('/');
+    if !directory.is_empty() {
+        let prefix = format!("{directory}/");
+        let under: Vec<usize> = changes
+            .files
+            .iter()
+            .enumerate()
+            .filter(|(_, file)| file.path.starts_with(&prefix))
+            .map(|(index, _)| index)
+            .collect();
+        if !under.is_empty() {
+            for index in under {
+                selection.add(index, FileSel::Whole);
+            }
+            return Ok(());
+        }
+    }
     Err(fail_hint(
         Code::Selector,
         format!("unknown selector '{token}' (paths: {})", path_list(changes)),
-        "selectors: PATH, hunk id, PATH:START-END, PATH~text",
+        "selectors: PATH, DIR/, hunk id, PATH:START-END, PATH~text",
     ))
 }
 
