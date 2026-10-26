@@ -15,10 +15,14 @@ script below.
 | [`../results/agent-runs-v0.1.1.json`](../results/agent-runs-v0.1.1.json) | 39 runs: AISC v0.1.1, same settings |
 | [`heldout/tasks.md`](heldout/tasks.md) | Six held-out task prompts, committed before any agent ran them |
 | [`../results/agent-runs-heldout-v0.1.1.json`](../results/agent-runs-heldout-v0.1.1.json) | 54 runs on the held-out tasks: AISC v0.1.1, GitButler 0.22.3, Git 2.50 |
+| [`../results/agent-runs-heldout2-v0.1.2.json`](../results/agent-runs-heldout2-v0.1.2.json) | 54 runs on held-out set 2 (heldout-7 to heldout-12): AISC v0.1.2 (dev build before the cross-branch amend), GitButler 0.22.3, Git 2.50 |
+| [`export.py`](export.py) | Turns the harness's run directories into one of these metrics-only result files |
 
 ```sh
 python3 benchmarks/agents/summarize.py benchmarks/results/agent-runs-v0.1.0.json
 python3 benchmarks/agents/summarize.py benchmarks/results/agent-runs-v0.1.1.json
+python3 benchmarks/agents/summarize.py benchmarks/results/agent-runs-heldout2-v0.1.2.json
+python3 benchmarks/agents/export.py agent-runs benchmarks/results/NAME.json --aisc-version "..."   # after run-agents.sh
 ```
 
 ## How a run works

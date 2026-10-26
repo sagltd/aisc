@@ -32,6 +32,8 @@ Known before running: AISC 0.1.1 has no command that rewrites a commit message, 
 
 Six more tasks, written on 2026-10-27 after v0.1.2 (reword, drop, move --to) and **frozen (committed and pushed) before any agent ran them**. Fixtures, verifiers and reference solutions for Git, GitButler and AISC are in `benchmarks/vcbench/aisc-arm.patch` (`scripts/lib/scenario-heldout7.mjs` to `scenario-heldout12.mjs`); all 18 references pass their verifiers, and doing nothing fails every task.
 
+Results: [`../../results/agent-runs-heldout2-v0.1.2.json`](../../results/agent-runs-heldout2-v0.1.2.json), summarized in the README. The AISC gap below was closed after the runs (`aisc amend --into` now finds the commit's branch).
+
 Known before running: AISC 0.1.2 has no verb that amends into a commit on a branch that is not checked out (heldout-10). Its reference needs two calls (`aisc commit -b BRANCH --onto BRANCH --existing`, then `aisc squash --branch BRANCH`); GitButler's is one `but amend` after a status read; Git's uses a temporary index.
 
 ## heldout-7-amend-and-reword
