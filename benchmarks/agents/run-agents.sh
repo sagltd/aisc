@@ -13,6 +13,7 @@
 #   PINS=./benchmarks/agents/pins.json    # expected tool versions
 #   OUT=./agent-runs                      # where per-run result.json files go
 #   REPS=3  MODEL=claude-sonnet-5-5  EFFORT=medium
+#   TASKS="heldout-7-amend-and-reword ..."  # optional: explicit task ids instead of every pilot-* task
 #
 # The harness runs every arm in the same sandbox (Claude accept-edits plus an allowlist; no
 # permission bypass) and writes one result.json per run. Summarize with summarize.py.
@@ -21,7 +22,7 @@ set -eu
 REPS=${REPS:-3}; MODEL=${MODEL:-claude-sonnet-5-5}; EFFORT=${EFFORT:-medium}
 OUT=$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")
 cd "$VCBENCH"
-tasks=$(ls tasks | grep '^pilot-' | sort -t- -k2 -n)
+tasks=${TASKS:-$(ls tasks | grep '^pilot-' | sort -t- -k2 -n)}
 rep=1
 while [ "$rep" -le "$REPS" ]; do
   case $((rep % 3)) in
