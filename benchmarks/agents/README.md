@@ -20,6 +20,7 @@ script below.
 | [`../results/agent-runs-heldout-v0.1.2-after.json`](../results/agent-runs-heldout-v0.1.2-after.json) | 18 runs: AISC v0.1.2 dev on the first held-out set after reword/drop/move --to (tasks known by then) |
 | [`../results/agent-runs-heldout2-v0.1.2-after.json`](../results/agent-runs-heldout2-v0.1.2-after.json) | 18 runs: AISC v0.1.2 dev on held-out set 2 after the cross-branch amend (tasks known by then) |
 | [`../results/agent-runs-heldout3-v0.1.3-dev.json`](../results/agent-runs-heldout3-v0.1.3-dev.json) | 54 runs on held-out set 3 (heldout-13 to heldout-18): AISC dev build, GitButler 0.22.3, Git 2.50, Claude CLI 2.1.310 |
+| [`../results/agent-runs-heldout3-v0.1.3-dev-after.json`](../results/agent-runs-heldout3-v0.1.3-dev-after.json) | 18 runs: AISC dev build 87ca0e5 on held-out set 3 after `move --to NEW --onto BASE` (tasks known by then) |
 | [`export.py`](export.py) | Turns the harness's run directories into one of these metrics-only result files |
 
 ```sh
