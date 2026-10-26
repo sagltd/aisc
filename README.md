@@ -21,7 +21,7 @@ One command per history edit, output sized for a context window, every change un
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/bench/agents-dark.svg">
-  <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 1.31M tokens, 43 commands and $0.88 per suite and passed 39 of 39 runs; Git 1.88M, 69 and $1.04, 38 of 39; GitButler 1.89M, 60 and $1.28, 37 of 39." width="760">
+  <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 1.31M tokens, 43 commands and $0.88 per suite and passed 39 of 39 runs; Git 1.88M, 69 and $1.04, 38 of 39; GitButler 1.89M, 60 and $1.28, 37 of 39; Jujutsu 1.96M, 69 and $1.17, 36 of 39." width="760">
 </picture>
 
 These are the 13 tasks AISC was tuned on. On **held-out tasks** it had never seen, the picture is mixed: GitButler won the first six (AISC 0.1.1 had no reword, drop or move-to-branch command), and the second six were a tie at the suite level, with AISC ahead on five tasks and far behind on one (amending into a commit on another branch, fixed since), and AISC won the third six outright: 13 tool calls and 0.47M tokens per suite against 20 and 0.64M for GitButler and 20 and 0.58M for Git ([held-out results](#held-out-tasks)). Every prompt, setup, script and per-run command is in [`benchmarks/agents`](benchmarks/agents).
@@ -165,17 +165,18 @@ Every write prints its result, so there is no need to re-check. `-q` prints a si
 
 ### Real agents
 
-Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev) harness three times with each tool, in rotating order. Every arm got the same prompt, the same sandbox (accept-edits with an allowlist, no bypass) and its tool's own agent setup block (`aisc agent setup --print`, `but agent setup --print`, plain-Git instructions). The harness's own verifier grades each run, and a run also fails if the agent used a command the arm's policy blocks.
+Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev) harness three times with each tool, in rotating order. Every arm got the same prompt, the same sandbox (accept-edits with an allowlist, no bypass) and its tool's own agent setup block (`aisc agent setup --print`, `but agent setup --print`, plain-Git instructions, the harness's jj text plus the pinned community jj skill). The harness's own verifier grades each run, and a run also fails if the agent used a command the arm's policy blocks.
 
 | 13 tasks × 3 runs, Claude CLI 2.1.310 | Passed | Tool calls per suite | Tokens per suite | Cost per suite | Time per suite |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | **AISC dev (v0.1.3 candidate)** | **39/39** | **43** (41–44) | **1.31M** (1.29–1.34M) | **$0.88** ($0.88–0.89) | **206 s** (166–230) |
 | GitButler 0.22.3 | 37/39 | 60 (57–62) | 1.89M (1.83–1.99M) | $1.28 ($1.26–1.31) | 241 s (210–287) |
 | Git 2.50 | 38/39 | 69 (68–71) | 1.88M (1.81–1.95M) | $1.04 ($1.01–1.06) | 288 s (251–343) |
+| Jujutsu 0.42 | 36/39 | 69 (67–70) | 1.96M (1.93–1.99M) | $1.17 ($1.17–1.18) | 326 s (304–368) |
 
-Means over the three runs, with the range in brackets, all on 2026-10-27 with the same Claude CLI. AISC passed every run and used 28% fewer tool calls, 31% fewer tokens, 31% less money and 14% less time than GitButler; against Git it used 38% fewer calls and 30% fewer tokens for 15% less money. GitButler's two misses and Git's one were a blocked raw Git write (`git rm --cached`, `git fetch`) and a wrong end state (multi-amend). Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per tool call, so fewer calls is what saves tokens. A Claude CLI update between the earlier runs and these raised the fixed cost of every run by about 14k tokens, which is why the older table below is not comparable on tokens.
+Means over the three runs, with the range in brackets, all on 2026-10-27 with the same Claude CLI. AISC passed every run and used 28% fewer tool calls, 31% fewer tokens, 31% less money and 14% less time than GitButler; against Git it used 38% fewer calls and 30% fewer tokens for 15% less money; against Jujutsu, 38% fewer calls and 33% fewer tokens. GitButler's two misses and Git's one were a blocked raw Git write (`git rm --cached`, `git fetch`) and a wrong end state (multi-amend); Jujutsu's three were the dirty-branch update, where its agents lost the uncommitted README edit every time. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per tool call, so fewer calls is what saves tokens. A Claude CLI update between the earlier runs and these raised the fixed cost of every run by about 14k tokens, which is why the older table below is not comparable on tokens.
 
-Per task, AISC is ahead or level on nine of the thirteen. It trails Git on the scoped review (5.3 calls to 4), the cold checkpoint (3 to 2, where no skill is installed), integrating topics (3.3 to 2: Git's agents just merge) and most of all on the selective copy, where the agent must run tests on the new branch (10.7 calls to Git's 3). That last one is the next thing to fix.
+Per task, AISC is ahead or level on nine of the thirteen. It trails Git on the scoped review (5.3 calls to 4; Jujutsu's agents did it in 2.7), the cold checkpoint (3 to 2, where no skill is installed), integrating topics (3.3 to 2: Git's agents just merge) and most of all on the selective copy (10.7 calls to Git's 3 and Jujutsu's 8). The per-run command lists show what that last gap is made of: the AISC agents ran 3.3 version-control commands there (log, pick, switch) and spent the other seven calls looking for a test runner (`pytest`, then `unittest`, then the file itself), while the Git agents batched the copy and `python3 test_commands.py` into one shell call. The same holds for the review: 7 version-control commands in 5.3 calls against Git's 8.7 in 4. Those two are differences in how the agents batch and run tests, not in what the tools need, so they are reported rather than tuned away.
 
 <details>
 <summary>Earlier runs (Claude CLI 2.1.306, AISC v0.1.0 and v0.1.1)</summary>
@@ -191,7 +192,7 @@ The four failed v0.1.0 runs had a correct end state but used a raw Git write the
 
 </details>
 
-Everything needed to check or repeat these runs (task prompts, each tool's instructions, the run script, the export script and a script that recomputes this table) is in [`benchmarks/agents`](benchmarks/agents). Per-run metrics, including every version-control command each agent ran, are in [`agent-runs-v0.1.3-dev.json`](benchmarks/results/agent-runs-v0.1.3-dev.json) (all three tools, this table), [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json).
+Everything needed to check or repeat these runs (task prompts, each tool's instructions, the run script, the export script and a script that recomputes this table) is in [`benchmarks/agents`](benchmarks/agents). Per-run metrics, including every version-control command each agent ran, are in [`agent-runs-v0.1.3-dev.json`](benchmarks/results/agent-runs-v0.1.3-dev.json) (all four tools, this table), [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json).
 
 ### Held-out tasks
 
