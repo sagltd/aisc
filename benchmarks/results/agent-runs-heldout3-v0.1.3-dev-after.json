@@ -1,0 +1,589 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
+ "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.2 dev 87ca0e5 (release build sha256 be87342b11837cb3d83e957f508fef80318ef575246812b3783eee335b093808)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "AISC-only re-run of held-out set 3 after move --to NEW --onto BASE landed (#63); the tasks were known by then.",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
+ ],
+ "runs": [
+  {
+   "rep": 1,
+   "task": "heldout-13-validate-form",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12860,
+    "cache_read_input_tokens": 59816,
+    "output_tokens": 218
+   },
+   "cost_usd_reported_by_cli": 0.0596136,
+   "wall_ms": 8496,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Validate form input tuh tests/form.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-14-split-by-directory",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12759,
+    "cache_read_input_tokens": 59718,
+    "output_tokens": 251
+   },
+   "cost_usd_reported_by_cli": 0.05952980000000001,
+   "wall_ms": 9720,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 868e --into Add search src --into Document search docs",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12675,
+    "cache_read_input_tokens": 35603,
+    "output_tokens": 186
+   },
+   "cost_usd_reported_by_cli": 0.0561283,
+   "wall_ms": 11001,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add export Add export tests --to feature-export --onto main",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12835,
+    "cache_read_input_tokens": 35619,
+    "output_tokens": 325
+   },
+   "cost_usd_reported_by_cli": 0.0581599,
+   "wall_ms": 10841,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add cahce layer --before Add cache config",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add cahce layer -m Add cache layer",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12937,
+    "cache_read_input_tokens": 84016,
+    "output_tokens": 315
+   },
+   "cost_usd_reported_by_cli": 0.06331559999999999,
+   "wall_ms": 8291,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --all --format=%h %s --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6 --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12794,
+    "cache_read_input_tokens": 59798,
+    "output_tokens": 193
+   },
+   "cost_usd_reported_by_cli": 0.059097800000000006,
+   "wall_ms": 20483,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard tqr",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-13-validate-form",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12857,
+    "cache_read_input_tokens": 59816,
+    "output_tokens": 213
+   },
+   "cost_usd_reported_by_cli": 0.0595516,
+   "wall_ms": 20312,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Validate form input tuh tests/form.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-14-split-by-directory",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12762,
+    "cache_read_input_tokens": 59718,
+    "output_tokens": 241
+   },
+   "cost_usd_reported_by_cli": 0.0594418,
+   "wall_ms": 30673,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 868e --into Add search src/ --into Document search docs/",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12674,
+    "cache_read_input_tokens": 35602,
+    "output_tokens": 162
+   },
+   "cost_usd_reported_by_cli": 0.0558842,
+   "wall_ms": 11386,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add export Add export tests --to feature-export --onto main",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12948,
+    "cache_read_input_tokens": 35618,
+    "output_tokens": 248
+   },
+   "cost_usd_reported_by_cli": 0.0578418,
+   "wall_ms": 9846,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add cahce layer --before Add cache config",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add cahce layer -m Add cache layer",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12815,
+    "cache_read_input_tokens": 83859,
+    "output_tokens": 277
+   },
+   "cost_usd_reported_by_cli": 0.0624319,
+   "wall_ms": 17961,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --format=%H %s --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6969dd82c3a8f2d6f077999c46cce41dfa --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12794,
+    "cache_read_input_tokens": 59800,
+    "output_tokens": 188
+   },
+   "cost_usd_reported_by_cli": 0.059047999999999996,
+   "wall_ms": 11935,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard tqr",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-13-validate-form",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12890,
+    "cache_read_input_tokens": 59814,
+    "output_tokens": 263
+   },
+   "cost_usd_reported_by_cli": 0.060183400000000005,
+   "wall_ms": 9207,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> tuh tests/form.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-14-split-by-directory",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12763,
+    "cache_read_input_tokens": 59720,
+    "output_tokens": 242
+   },
+   "cost_usd_reported_by_cli": 0.059456,
+   "wall_ms": 9021,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 868e --into Add search src/ --into Document search docs/",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12677,
+    "cache_read_input_tokens": 35603,
+    "output_tokens": 212
+   },
+   "cost_usd_reported_by_cli": 0.0563963,
+   "wall_ms": 8094,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add export Add export tests --to feature-export --onto main",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12831,
+    "cache_read_input_tokens": 35618,
+    "output_tokens": 245
+   },
+   "cost_usd_reported_by_cli": 0.0573438,
+   "wall_ms": 8611,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add cahce layer --before Add cache config",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add cahce layer -m Add cache layer",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12830,
+    "cache_read_input_tokens": 83886,
+    "output_tokens": 293
+   },
+   "cost_usd_reported_by_cli": 0.0626546,
+   "wall_ms": 12411,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --format=%H %s --grep=^Add retry$",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6969dd82c3a8f2d6f077999c46cce41dfa --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12797,
+    "cache_read_input_tokens": 59802,
+    "output_tokens": 186
+   },
+   "cost_usd_reported_by_cli": 0.0590402,
+   "wall_ms": 10509,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard tqr",
+     "exit": 0
+    }
+   ]
+  }
+ ]
+}

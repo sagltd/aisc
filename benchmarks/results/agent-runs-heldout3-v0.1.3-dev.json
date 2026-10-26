@@ -1,0 +1,2661 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
+ "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.2 dev ad698da (release build sha256 d86e452091ce97c5e17a2c6ed6b9121779d1262de7bf9804d2ca101968945309)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "Held-out set 3 (heldout-13 to heldout-18) was written after the fixes measured on sets 1 and 2 and committed before any agent ran it (PR #62, dev 3493298). AISC had no one-call way to move commits to a new branch when these runs were made (added right after, #63).",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
+ ],
+ "runs": [
+  {
+   "rep": 1,
+   "task": "heldout-13-validate-form",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12850,
+    "cache_read_input_tokens": 59798,
+    "output_tokens": 220
+   },
+   "cost_usd_reported_by_cli": 0.0595918,
+   "wall_ms": 12295,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Validate form input tuh tests/form.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-13-validate-form",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13373,
+    "cache_read_input_tokens": 60199,
+    "output_tokens": 318
+   },
+   "cost_usd_reported_by_cli": 0.0627039,
+   "wall_ms": 7391,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b feature-forms -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> so:c kn:f",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-13-validate-form",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12196,
+    "cache_read_input_tokens": 80814,
+    "output_tokens": 655
+   },
+   "cost_usd_reported_by_cli": 0.0634314,
+   "wall_ms": 32206,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "apply --cached --recount",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add tests/form.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-14-split-by-directory",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12756,
+    "cache_read_input_tokens": 59700,
+    "output_tokens": 279
+   },
+   "cost_usd_reported_by_cli": 0.059796,
+   "wall_ms": 10466,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split Add search --into Add search src/ --into Document search docs/",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-14-split-by-directory",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 14874,
+    "cache_read_input_tokens": 110628,
+    "output_tokens": 609
+   },
+   "cost_usd_reported_by_cli": 0.07666880000000001,
+   "wall_ms": 16202,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move lly:s --above lly",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "reword yso -m Document search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-14-split-by-directory",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 11815,
+    "cache_read_input_tokens": 57243,
+    "output_tokens": 457
+   },
+   "cost_usd_reported_by_cli": 0.0575663,
+   "wall_ms": 18667,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "show --stat --format=%H %s HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --mixed HEAD~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Document search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12973,
+    "cache_read_input_tokens": 59779,
+    "output_tokens": 369
+   },
+   "cost_usd_reported_by_cli": 0.0615719,
+   "wall_ms": 14196,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add export Add export tests --to feature-export",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "pick Add export Add export tests -b feature-export --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "drop Add export Add export tests",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 14512,
+    "cache_read_input_tokens": 160421,
+    "output_tokens": 755
+   },
+   "cost_usd_reported_by_cli": 0.08166810000000001,
+   "wall_ms": 22232,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "branch new feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move uww,ozs -b feature-export --status-after",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "move ozs -b feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move uww -b feature-export --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 12524,
+    "cache_read_input_tokens": 151362,
+    "output_tokens": 947
+   },
+   "cost_usd_reported_by_cli": 0.07473020000000001,
+   "wall_ms": 43046,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all -8",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch feature-export 433876e",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto main 80775d7 feature-export",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto main 80775d7 feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q feature-search",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 80775d7",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12821,
+    "cache_read_input_tokens": 35609,
+    "output_tokens": 319
+   },
+   "cost_usd_reported_by_cli": 0.05804290000000001,
+   "wall_ms": 11897,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add cahce layer --before Add cache config",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add cahce layer -m Add cache layer",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 13788,
+    "cache_read_input_tokens": 109580,
+    "output_tokens": 412
+   },
+   "cost_usd_reported_by_cli": 0.07025,
+   "wall_ms": 19946,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "reword msu -m Add cache layer",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move msu umr --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move msu --below umr",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 12323,
+    "cache_read_input_tokens": 103936,
+    "output_tokens": 1007
+   },
+   "cost_usd_reported_by_cli": 0.0697756,
+   "wall_ms": 20239,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -b tmp-reorder ec1dc43",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick e2cb859 9ed8120 fab05c5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat feature-cache tmp-reorder",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --soft HEAD~3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard ec1dc43",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick e2cb859",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --amend -m Add cache layer\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 9ed8120 fab05c5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat feature-cache tmp-reorder HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --quiet feature-cache HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -B feature-cache",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -D tmp-reorder -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -5",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12828,
+    "cache_read_input_tokens": 83863,
+    "output_tokens": 322
+   },
+   "cost_usd_reported_by_cli": 0.0629343,
+   "wall_ms": 10911,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --format=%h %s --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6 --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 12851,
+    "cache_read_input_tokens": 107761,
+    "output_tokens": 416
+   },
+   "cost_usd_reported_by_cli": 0.0663601,
+   "wall_ms": 24393,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --format=%H %s --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6969dd82c3a8f2d6f077999c46cce41dfa --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 11495,
+    "cache_read_input_tokens": 80014,
+    "output_tokens": 254
+   },
+   "cost_usd_reported_by_cli": 0.0565374,
+   "wall_ms": 7614,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --oneline --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6 --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12786,
+    "cache_read_input_tokens": 59782,
+    "output_tokens": 182
+   },
+   "cost_usd_reported_by_cli": 0.058954200000000005,
+   "wall_ms": 8557,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard tqr",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13219,
+    "cache_read_input_tokens": 84154,
+    "output_tokens": 257
+   },
+   "cost_usd_reported_by_cli": 0.0638774,
+   "wall_ms": 11618,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard b",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "discard xy:b",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12071,
+    "cache_read_input_tokens": 57308,
+    "output_tokens": 375
+   },
+   "cost_usd_reported_by_cli": 0.057776799999999996,
+   "wall_ms": 14362,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff src/app.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-13-validate-form",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12850,
+    "cache_read_input_tokens": 59798,
+    "output_tokens": 223
+   },
+   "cost_usd_reported_by_cli": 0.0596218,
+   "wall_ms": 9804,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Validate form input tuh tests/form.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-13-validate-form",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13636,
+    "cache_read_input_tokens": 85303,
+    "output_tokens": 374
+   },
+   "cost_usd_reported_by_cli": 0.0668303,
+   "wall_ms": 33583,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit feature-forms -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> so:c kn",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "commit -b feature-forms -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> so:c kn",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-13-validate-form",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 13566,
+    "cache_read_input_tokens": 178412,
+    "output_tokens": 1565
+   },
+   "cost_usd_reported_by_cli": 0.08778720000000001,
+   "wall_ms": 28657,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "apply --cached --recount -",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add tests/form.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat --format=%s HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-14-split-by-directory",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12752,
+    "cache_read_input_tokens": 59698,
+    "output_tokens": 244
+   },
+   "cost_usd_reported_by_cli": 0.059429800000000005,
+   "wall_ms": 16963,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 868e --into Add search src/ --into Document search docs/",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-14-split-by-directory",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 14434,
+    "cache_read_input_tokens": 110067,
+    "output_tokens": 835
+   },
+   "cost_usd_reported_by_cli": 0.0771127,
+   "wall_ms": 23424,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "uncommit lly:s --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit -b feature-search -m Document search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> su --status-after",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-14-split-by-directory",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 11829,
+    "cache_read_input_tokens": 57244,
+    "output_tokens": 491
+   },
+   "cost_usd_reported_by_cli": 0.05796239999999999,
+   "wall_ms": 11626,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "show --stat --format=%H%n%B HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --soft HEAD~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Document search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13037,
+    "cache_read_input_tokens": 59802,
+    "output_tokens": 382
+   },
+   "cost_usd_reported_by_cli": 0.06196020000000001,
+   "wall_ms": 14234,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from feature-search Add export Add export tests -b feature-export --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "drop Add export tests Add export",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14369,
+    "cache_read_input_tokens": 85475,
+    "output_tokens": 463
+   },
+   "cost_usd_reported_by_cli": 0.0706695,
+   "wall_ms": 15207,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "branch --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move -b feature-export uww ozs --status-after",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12036,
+    "cache_read_input_tokens": 80461,
+    "output_tokens": 690
+   },
+   "cost_usd_reported_by_cli": 0.0631061,
+   "wall_ms": 19410,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch feature-export 433876e",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto main 80775d7 feature-export",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 80775d7",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto main 80775d7 feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q feature-search",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13114,
+    "cache_read_input_tokens": 59991,
+    "output_tokens": 377
+   },
+   "cost_usd_reported_by_cli": 0.062237100000000004,
+   "wall_ms": 21014,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add cahce layer --before Add cache config",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add cahce layer -m Add cache layer",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13405,
+    "cache_read_input_tokens": 84295,
+    "output_tokens": 356
+   },
+   "cost_usd_reported_by_cli": 0.0656255,
+   "wall_ms": 13311,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "reword msu -m Add cache layer",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move msu --below umr",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12326,
+    "cache_read_input_tokens": 80728,
+    "output_tokens": 762
+   },
+   "cost_usd_reported_by_cli": 0.0650128,
+   "wall_ms": 19697,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -b tmp-reorder ec1dc43",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick e2cb859",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --amend -m Add cache layer\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 9ed8120 fab05c5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q -B feature-cache",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -D tmp-reorder",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12822,
+    "cache_read_input_tokens": 83863,
+    "output_tokens": 294
+   },
+   "cost_usd_reported_by_cli": 0.0626303,
+   "wall_ms": 15709,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --format=%H %s --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6969dd82c3a8f2d6f077999c46cce41dfa --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12675,
+    "cache_read_input_tokens": 83427,
+    "output_tokens": 289
+   },
+   "cost_usd_reported_by_cli": 0.0619487,
+   "wall_ms": 7401,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --grep=Add retry --format=%H %s",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6969dd82c3a8f2d6f077999c46cce41dfa --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 11505,
+    "cache_read_input_tokens": 80034,
+    "output_tokens": 264
+   },
+   "cost_usd_reported_by_cli": 0.05667939999999999,
+   "wall_ms": 19141,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --oneline --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6 --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12788,
+    "cache_read_input_tokens": 59784,
+    "output_tokens": 202
+   },
+   "cost_usd_reported_by_cli": 0.059162400000000004,
+   "wall_ms": 18654,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard tqr",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12823,
+    "cache_read_input_tokens": 59649,
+    "output_tokens": 234
+   },
+   "cost_usd_reported_by_cli": 0.0596089,
+   "wall_ms": 14991,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff src/app.ts",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard xy:b",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 11766,
+    "cache_read_input_tokens": 57304,
+    "output_tokens": 295
+   },
+   "cost_usd_reported_by_cli": 0.0557564,
+   "wall_ms": 9576,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff src/app.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --cached --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/app.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-13-validate-form",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12849,
+    "cache_read_input_tokens": 59800,
+    "output_tokens": 227
+   },
+   "cost_usd_reported_by_cli": 0.05965800000000001,
+   "wall_ms": 17230,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Validate form input tuh tests/form.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-13-validate-form",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13567,
+    "cache_read_input_tokens": 85271,
+    "output_tokens": 271
+   },
+   "cost_usd_reported_by_cli": 0.0655211,
+   "wall_ms": 21129,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit feature-forms -m Validate form input so:c kn",
+     "exit": 1
+    },
+    {
+     "tool": "but",
+     "args": "commit -b feature-forms -m Validate form input so:c kn",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-13-validate-form",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12225,
+    "cache_read_input_tokens": 80815,
+    "output_tokens": 725
+   },
+   "cost_usd_reported_by_cli": 0.0642475,
+   "wall_ms": 13295,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/form.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "apply --cached --recount -",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add tests/form.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Validate form input\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-14-split-by-directory",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12755,
+    "cache_read_input_tokens": 59702,
+    "output_tokens": 270
+   },
+   "cost_usd_reported_by_cli": 0.059702200000000004,
+   "wall_ms": 13375,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 868e --into Add search src/ --into Document search docs/",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-14-split-by-directory",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 14215,
+    "cache_read_input_tokens": 110141,
+    "output_tokens": 450
+   },
+   "cost_usd_reported_by_cli": 0.0723941,
+   "wall_ms": 12954,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "commit --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move lly:s --above lly --status-after",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "reword rnp -m Document search",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-14-split-by-directory",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 11832,
+    "cache_read_input_tokens": 57242,
+    "output_tokens": 597
+   },
+   "cost_usd_reported_by_cli": 0.059034199999999995,
+   "wall_ms": 17608,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "show --stat --format=%H%n%B HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --soft HEAD~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add src",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Add search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "add docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q -m Document search\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --stat --oneline -3",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff 868e7d3 HEAD --stat",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13343,
+    "cache_read_input_tokens": 84332,
+    "output_tokens": 386
+   },
+   "cost_usd_reported_by_cli": 0.06568120000000001,
+   "wall_ms": 16604,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move Add export Add export tests --to feature-export",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log feature-export",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "pick 5c42 4338 -b feature-export --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "drop 4338 5c42",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log feature-export",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 21483,
+    "cache_read_input_tokens": 67660,
+    "output_tokens": 499
+   },
+   "cost_usd_reported_by_cli": 0.09770000000000001,
+   "wall_ms": 12591,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "branch new feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move ozs -b feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move uww -b feature-export --status-after",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-15-move-to-new-branch",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12036,
+    "cache_read_input_tokens": 80466,
+    "output_tokens": 645
+   },
+   "cost_usd_reported_by_cli": 0.0626566,
+   "wall_ms": 14980,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch feature-export feature-search",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto main 80775d7 feature-export",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 80775d7",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rebase --onto main 80775d7 feature-export",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "checkout -q feature-search",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --all --graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12818,
+    "cache_read_input_tokens": 35609,
+    "output_tokens": 355
+   },
+   "cost_usd_reported_by_cli": 0.05839090000000001,
+   "wall_ms": 15378,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add cahce layer --before Add cache config",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add cahce layer -m Add cache layer",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 13588,
+    "cache_read_input_tokens": 109504,
+    "output_tokens": 368
+   },
+   "cost_usd_reported_by_cli": 0.06900239999999999,
+   "wall_ms": 19777,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "status -fv",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "reword msu -m Add cache layer",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move msu umr --help",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "move msu --below umr",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-16-reorder-and-reword",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 12393,
+    "cache_read_input_tokens": 104299,
+    "output_tokens": 1036
+   },
+   "cost_usd_reported_by_cli": 0.0703819,
+   "wall_ms": 20219,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --oneline main..feature-cache",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "reset -q --hard 9ed8120~1",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick e2cb859",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "commit -q --amend -m Add cache layer -m Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "cherry-pick 9ed8120 fab05c5",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash pop -q",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline main..HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat fab05c5 HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 13240,
+    "cache_read_input_tokens": 132784,
+    "output_tokens": 413
+   },
+   "cost_usd_reported_by_cli": 0.07039240000000001,
+   "wall_ms": 13538,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains Add retry",
+     "exit": 129
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log fix-retry",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log fix-retry-docs",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12796,
+    "cache_read_input_tokens": 83584,
+    "output_tokens": 257
+   },
+   "cost_usd_reported_by_cli": 0.06212840000000001,
+   "wall_ms": 10959,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --oneline --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-17-branches-with-commit",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 11505,
+    "cache_read_input_tokens": 80034,
+    "output_tokens": 264
+   },
+   "cost_usd_reported_by_cli": 0.05667939999999999,
+   "wall_ms": 13824,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --all --oneline --grep=Add retry",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --contains 2cf57d6 --format=%(refname:short)",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12788,
+    "cache_read_input_tokens": 59784,
+    "output_tokens": 210
+   },
+   "cost_usd_reported_by_cli": 0.05924240000000001,
+   "wall_ms": 14689,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard tqr",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "but+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12843,
+    "cache_read_input_tokens": 59733,
+    "output_tokens": 207
+   },
+   "cost_usd_reported_by_cli": 0.0594273,
+   "wall_ms": 7250,
+   "vc_commands": [
+    {
+     "tool": "but",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "but",
+     "args": "discard xy:b",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-18-discard-one-hunk",
+   "arm": "git",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 11989,
+    "cache_read_input_tokens": 57308,
+    "output_tokens": 408
+   },
+   "cost_usd_reported_by_cli": 0.05777879999999999,
+   "wall_ms": 7801,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "diff src/app.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff src/app.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  }
+ ]
+}
