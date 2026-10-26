@@ -56,7 +56,7 @@ Ten scripted version-control tasks, all four tools in the same run, every end st
 | Output the agent reads | **1.8 KB** | 5.9 KB | 3.8 KB | 3.7 KB |
 | Transcript tokens (estimate) | **606** | 1,639 | 1,261 | 1,307 |
 | Wall time, all ten tasks | **1,182 ms** | 2,106 ms | 1,370 ms | 1,798 ms |
-| Agent guidance loaded per session | **558 tokens** | 5,890 tokens | — | 2,758 tokens |
+| Agent guidance loaded per session | **664 tokens** | 5,890 tokens | — | 2,758 tokens |
 
 Default output, no quiet flags. Tokens here are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
 
@@ -138,7 +138,7 @@ A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30
 | Command | What it does |
 | --- | --- |
 | `aisc log` | Branch view plus every uncommitted hunk with an id |
-| `aisc show REV` | The hunks of a commit, a range, or the worktree |
+| `aisc show REV` | The hunks of a commit, a range, or the worktree; `REV:PATH` prints a whole file at that commit |
 | `aisc commit -m MSG SEL…` | Commit only the selected changes (`--all` for everything) |
 | `aisc commit -b NEW --onto BASE -m MSG SEL…` | Put the selected changes on a new branch off BASE, without leaving your branch |
 | `aisc amend --into COMMIT SEL…` | Fold changes into older commits (repeat `--into`) |
@@ -230,7 +230,7 @@ The skill an agent loads every session costs context too ([`benchmarks/README.md
 
 | Guidance | Loaded every session | On demand |
 | --- | ---: | ---: |
-| **AISC** skill | **558 tokens** | 681 |
+| **AISC** skill | **664 tokens** | 681 |
 | GitButler 0.22.3 (setup + skill) | 5,890 tokens | 14,487 |
 
 ### vcbench reference solutions
@@ -272,7 +272,7 @@ flowchart LR
 
 ## Agent skill
 
-[`skills/aisc/SKILL.md`](skills/aisc/SKILL.md) is a 558-token decision table: one command per task, the selectors, and the rules an agent needs (exit codes, refusals, undo). Parallel-agent lifecycle, pull requests and sandbox notes live in [`references/lifecycle.md`](skills/aisc/references/lifecycle.md), which agents load only when they need it.
+[`skills/aisc/SKILL.md`](skills/aisc/SKILL.md) is a 664-token decision table: one command per task, the selectors, and the rules an agent needs (exit codes, refusals, undo). Parallel-agent lifecycle, pull requests and sandbox notes live in [`references/lifecycle.md`](skills/aisc/references/lifecycle.md), which agents load only when they need it.
 
 <details><summary>Sandboxed agents (Codex, Claude)</summary>
 

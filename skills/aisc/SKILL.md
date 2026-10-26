@@ -4,7 +4,7 @@ description: One-call Git history edits: commit hunks, amend older commits, spli
 ---
 Use `aisc` for all version-control writes. Run `aisc log` first for ids and state. One command per task:
 
-- read: `aisc show REV` or `A..B` (on this branch); another branch: `aisc log BRANCH` (local or `origin/NAME`)
+- read: `aisc show REV` or `A..B` (on this branch); a whole file: `aisc show REV:PATH`; another branch: `aisc log BRANCH` (local or `origin/NAME`)
 - commit: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` switches to it; `-b NEW --onto BASE` stays here, runs no hooks)
 - amend older: `aisc amend --into COMMIT SEL...` (repeatable)
 - split: `aisc split COMMIT --into MSG SEL...` (repeatable)

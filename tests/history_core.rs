@@ -527,3 +527,47 @@ fn one_plan_can_replace_a_file_with_a_directory_and_back() {
     assert_eq!(fixture.git(&["symbolic-ref", "HEAD"]), "refs/heads/topic");
     assert!(fixture.git(&["status", "--porcelain"]).is_empty());
 }
+
+#[test]
+fn show_a_file_at_a_commit_prints_its_content() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n"), ("bin.dat", "x\0y")]);
+    fixture.write("f.txt", "one\ntwo\n");
+    fixture.commit_all("add two");
+    // Uncommitted edits never leak into a committed file's content.
+    fixture.write("f.txt", "one\ntwo\nthree\n");
+    let run = fixture.aisc(&["show", "add two:f.txt"]);
+    run.ok();
+    assert_eq!(run.stdout, "one\ntwo\n");
+    let older = fixture.aisc(&["show", "HEAD~1:f.txt"]);
+    older.ok();
+    assert_eq!(older.stdout, "one\n");
+    let json = fixture.aisc(&["show", "add two:f.txt", "--json"]).json();
+    assert_eq!(json["items"][0]["path"], "f.txt");
+    assert_eq!(json["items"][0]["content"], "one\ntwo\n");
+    assert_eq!(json["items"][0]["id"].as_str().map(str::len), Some(4));
+    // Several files: a header names each one. Binary content is summarized, not printed.
+    let two = fixture.aisc(&["show", "add two:f.txt", "HEAD:bin.dat"]);
+    two.ok();
+    assert!(two.stdout.starts_with("== "), "{}", two.stdout);
+    assert!(
+        two.stdout.contains(":f.txt\none\ntwo\n== "),
+        "{}",
+        two.stdout
+    );
+    assert!(
+        two.stdout.contains(":bin.dat\n(binary, 3 bytes)"),
+        "{}",
+        two.stdout
+    );
+    let missing = fixture.aisc(&["show", "add two:nope.txt"]);
+    assert_eq!(missing.code, 1, "{} {}", missing.stdout, missing.stderr);
+    assert!(
+        missing.stderr.contains("no file 'nope.txt'"),
+        "{}",
+        missing.stderr
+    );
+    // A line range after the colon is still a selector on the uncommitted changes.
+    let range = fixture.aisc(&["show", "f.txt:3-3"]);
+    range.ok();
+    assert!(range.stdout.contains("+three"), "{}", range.stdout);
+}

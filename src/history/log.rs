@@ -4,7 +4,7 @@ use super::model::{ChangeSet, FileChange, Kind};
 use super::plumbing::Git;
 use super::selector::{self, Selection};
 use super::view::{self, CommitInfo, View};
-use super::{Code, Outcome, fail, render};
+use super::{Code, Outcome, fail, fail_hint, render};
 use crate::cli;
 use crate::git::Repo;
 use crate::output::escape_line;
@@ -108,6 +108,73 @@ fn subject(
     }
 }
 
+/// `REV:PATH` tokens name a file at a commit. `PATH:A-B` (a line range) stays a selector, so
+/// `f.txt:3-5` is never read as a file; the first token decides the form.
+fn file_specs(args: &[String]) -> Option<Vec<(&str, &str)>> {
+    let mut specs = vec![file_spec(args.first()?)?];
+    for arg in &args[1..] {
+        specs.push(file_spec(arg)?);
+    }
+    Some(specs)
+}
+
+fn file_spec(arg: &str) -> Option<(&str, &str)> {
+    let (rev, path) = arg.split_once(':')?;
+    (!rev.is_empty() && !path.is_empty() && !is_line_range(path)).then_some((rev, path))
+}
+
+fn is_line_range(text: &str) -> bool {
+    let digits = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    match text.split_once('-') {
+        Some((from, to)) => digits(from) && digits(to),
+        None => digits(text),
+    }
+}
+
+/// The whole content of each `REV:PATH`, as an agent reviewing a commit needs it.
+fn show_files(git: &Git, view: &View, specs: &[(&str, &str)]) -> Result<Outcome> {
+    let mut text = String::new();
+    let mut items = Vec::new();
+    for (rev, path) in specs {
+        let oid = view.resolve(git, rev)?;
+        let short = view
+            .commits
+            .iter()
+            .find(|commit| commit.oid == oid)
+            .map_or_else(|| oid[..4].to_owned(), |commit| commit.short.clone());
+        let bytes = git.blob_at(&oid, path).map_err(|_| {
+            fail_hint(
+                Code::Selector,
+                format!("no file '{}' in {short}", escape_line(path)),
+                "run aisc show COMMIT for the files it changes",
+            )
+        })?;
+        if specs.len() > 1 {
+            let _ = writeln!(text, "== {short}:{}", escape_line(path));
+        }
+        if bytes.contains(&0) {
+            let _ = writeln!(text, "(binary, {} bytes)", bytes.len());
+            items.push(
+                json!({"id": short, "oid": oid, "path": path, "binary": true, "size": bytes.len()}),
+            );
+            continue;
+        }
+        let content = String::from_utf8_lossy(&bytes);
+        for line in content.split_inclusive('\n') {
+            let _ = writeln!(
+                text,
+                "{}",
+                escape_line(line.strip_suffix('\n').unwrap_or(line))
+            );
+        }
+        items.push(json!({"id": short, "oid": oid, "path": path, "content": content}));
+    }
+    Ok(Outcome::with_text(
+        json!({"items": items}),
+        text.trim_end_matches('\n').to_owned(),
+    ))
+}
+
 fn shown_hunks<'a>(
     file_index: usize,
     file: &'a FileChange,
@@ -208,6 +275,9 @@ pub(crate) fn show(args: &cli::Show) -> Result<Outcome> {
     let git = Git::from_repo(&repo);
     super::rewrite::recover_before_read(&git);
     let view = view::read_any(&git, args.branch.as_deref(), 1_000, true)?;
+    if let Some(specs) = file_specs(&args.args) {
+        return show_files(&git, &view, &specs);
+    }
     let (target, skip) = subject(&git, &view, view.changes.as_ref(), &args.args)?;
     let tokens = &args.args[skip..];
     let mut text = String::new();
