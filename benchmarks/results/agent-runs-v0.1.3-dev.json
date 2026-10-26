@@ -5,14 +5,16 @@
  "versions": {
   "aisc": "0.1.2 dev ad698da (v0.1.3 candidate; release build sha256 d86e452091ce97c5e17a2c6ed6b9121779d1262de7bf9804d2ca101968945309)",
   "but": "0.22.3",
-  "git": "2.50.1 (Apple Git-155)"
+  "git": "2.50.1 (Apple Git-155)",
+  "jj": "0.42.0 (onevcat/skills@onevcat-jj at 4955f54, fetched by the harness and checked against its recorded SHA-256)"
  },
  "repetitions": 3,
  "notes": [
   "All three arms ran on 2026-10-27 with Claude CLI 2.1.310 and claude-sonnet-5-5 at medium effort, sandboxed (acceptEdits + allowlist), 3 repetitions, rotating arm order; GitButler and Git ran in one batch and AISC in a following batch with the dev build that adds show COMMIT:PATH, cross-branch amend, directory selectors, commit --onto BRANCH and the fetch note in its agent block.",
   "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
   "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included.",
-  "tmp"
+  "tmp",
+  "The jj+skill arm ran in a later batch on the same day with the same CLI and settings; its agents get the harness's own jj policy text plus the pinned onevcat-jj skill, as upstream."
  ],
  "runs": [
   {
@@ -172,6 +174,58 @@
     {
      "tool": "git",
      "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-1-selective-validation",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 15759,
+    "cache_read_input_tokens": 189207,
+    "output_tokens": 1795
+   },
+   "cost_usd_reported_by_cli": 0.0999387,
+   "wall_ms": 33404,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager split -m Add lead input validation README.md src/handler.ts tests/handler.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "bookmark create lead-input-validation -r @-",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
      "exit": 0
     }
    ]
@@ -352,6 +406,78 @@
     {
      "tool": "git",
      "args": "log --oneline -9",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-2-multi-amend",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 14,
+   "turns": 15,
+   "tokens": {
+    "input_tokens": 20,
+    "cache_creation_input_tokens": 22844,
+    "cache_read_input_tokens": 280557,
+    "output_tokens": 5359
+   },
+   "cost_usd_reported_by_cli": 0.1730617,
+   "wall_ms": 57035,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ | @ --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into txnxvslz -m refactor validation helpers README.md src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into swwqpupy -m add lead scoring src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into nowssmoo -m document response behavior docs/response.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into nowssmoo -m document response behavior README.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ --stat -T description.first_line()++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list amend-series",
      "exit": 0
     }
    ]
@@ -599,6 +725,128 @@
   },
   {
    "rep": 1,
+   "task": "pilot-3-split-commit",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 18935,
+    "cache_read_input_tokens": 171354,
+    "output_tokens": 3096
+   },
+   "cost_usd_reported_by_cli": 0.1238634,
+   "wall_ms": 33043,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 8",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r 3ee5f6d --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r 3ee5f6d --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r f78d664 --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new c14be51 -m refactor validation helpers",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from 3ee5f6d src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new -m tune lead scoring",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from 3ee5f6d src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new -m document lead workflow",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from 3ee5f6d README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s f78d664 -d @",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from 3ee5f6d src/config.ts notes/investigation.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log --limit 8 -s",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager abandon ruutrxnw",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --from f78d664 --to @ --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r rxmzkwtw --git",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
    "task": "pilot-4-reorder-commits",
    "arm": "aisc+skill",
    "passed": true,
@@ -719,6 +967,78 @@
     {
      "tool": "git",
      "args": "log --oneline",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-4-reorder-commits",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 13458,
+    "cache_read_input_tokens": 107524,
+    "output_tokens": 974
+   },
+   "cost_usd_reported_by_cli": 0.0743444,
+   "wall_ms": 21519,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main::reorder-series -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s mrnmzvmsuult -d ozomxtxlpssq",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main::reorder-series -T description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s rnqoukmmmnwx -d wlnpsmkzqnnv",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main:: -T description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -r lxvmpozpptsz -d txmlrvnqotsq",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main:: -T description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline reorder-series",
      "exit": 0
     }
    ]
@@ -895,6 +1215,63 @@
     {
      "tool": "git",
      "args": "diff 3156a6e HEAD --stat",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-5-squash-commits",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13007,
+    "cache_read_input_tokens": 82729,
+    "output_tokens": 775
+   },
+   "cost_usd_reported_by_cli": 0.06806689999999999,
+   "wall_ms": 12441,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ --no-graph -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ description.first_line() ++ \" [\" ++ bookmarks ++ \"]\\n",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ -T change_id.short() ++ \" \" ++ description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from omslwrqmpxwo --into ssypqqktmonq -m add parser pipeline",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from rytlstrnostn --into vupwysozrlxt -m add retry support",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from oltlltkplpys --into vupwysozrlxt -m add retry support",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ -T change_id.short() ++ \" \" ++ description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
      "exit": 0
     }
    ]
@@ -1102,6 +1479,125 @@
   },
   {
    "rep": 1,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "jj+skill",
+   "passed": false,
+   "correctness_passed": false,
+   "failed_checks": [
+    "dirty_readme_uncommitted"
+   ],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 17034,
+    "cache_read_input_tokens": 216740,
+    "output_tokens": 1911
+   },
+   "cost_usd_reported_by_cli": 0.108956,
+   "wall_ms": 30131,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 12",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s wtzqnuwt -d main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new wtzqnuwt",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new notify-retry",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager edit ypvzntst",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager abandon pwnozwkm",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4 notify-retry",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
    "task": "pilot-7-scoped-review",
    "arm": "aisc+skill",
    "passed": true,
@@ -1252,6 +1748,58 @@
     {
      "tool": "git",
      "args": "show HEAD:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-7-scoped-review",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13369,
+    "cache_read_input_tokens": 59224,
+    "output_tokens": 549
+   },
+   "cost_usd_reported_by_cli": 0.0649004,
+   "wall_ms": 9714,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -n 8",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show data-update:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite --stat",
      "exit": 0
     }
    ]
@@ -1419,6 +1967,83 @@
   },
   {
    "rep": 1,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 13348,
+    "cache_read_input_tokens": 107500,
+    "output_tokens": 688
+   },
+   "cost_usd_reported_by_cli": 0.071042,
+   "wall_ms": 16519,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "git init --colocate",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -n 4",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "describe -m Add app checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "bookmark create app-checkpoint -r @",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new -q",
+     "exit": 2
+    },
+    {
+     "tool": "jj",
+     "args": "new",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat app-checkpoint",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
    "task": "pilot-9-cleanup-noise",
    "arm": "aisc+skill",
    "passed": true,
@@ -1549,6 +2174,48 @@
     {
      "tool": "git",
      "args": "diff src/retry.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12963,
+    "cache_read_input_tokens": 59311,
+    "output_tokens": 361
+   },
+   "cost_usd_reported_by_cli": 0.061405100000000004,
+   "wall_ms": 9290,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
      "exit": 0
     }
    ]
@@ -1690,6 +2357,78 @@
     {
      "tool": "git",
      "args": "show --stat --format=%h %an %s%n%b HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-10-recover-amend",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13023,
+    "cache_read_input_tokens": 59148,
+    "output_tokens": 540
+   },
+   "cost_usd_reported_by_cli": 0.06341880000000001,
+   "wall_ms": 10604,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r review-fix --summary",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from review-fix --into @ notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r review-fix --summary",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
      "exit": 0
     }
    ]
@@ -1902,6 +2641,158 @@
   },
   {
    "rep": 1,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 16917,
+    "cache_read_input_tokens": 139301,
+    "output_tokens": 1866
+   },
+   "cost_usd_reported_by_cli": 0.10028210000000001,
+   "wall_ms": 31367,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 20",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager git fetch",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 20",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s owmxmsnk -d main@origin",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set main -r main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark track feature-service@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set feature-service -r description(\"Add local retry setting\")",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase --ignore-immutable -s owmxmsnk -d main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase --ignore-immutable -s ntmnmxoy -d lxyotkxq",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s vmzkpqyo -d main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set feature-service -r ntmnmxoy",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --format=%h %an %s --graph feature-service",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
    "task": "pilot-12-integrate-topics",
    "arm": "aisc+skill",
    "passed": true,
@@ -2098,6 +2989,78 @@
   },
   {
    "rep": 1,
+   "task": "pilot-12-integrate-topics",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13168,
+    "cache_read_input_tokens": 59232,
+    "output_tokens": 681
+   },
+   "cost_usd_reported_by_cli": 0.0654172,
+   "wall_ms": 11838,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ author.name() ++ \" \" ++ bookmarks ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s tmznwxtl -d greeting",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set main -r docs",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new main -m ",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T commit_id.short() ++ \" \" ++ author.name() ++ \" \" ++ bookmarks ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline main",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
    "task": "pilot-13-selective-copy",
    "arm": "aisc+skill",
    "passed": true,
@@ -2283,6 +3246,78 @@
    ]
   },
   {
+   "rep": 1,
+   "task": "pilot-13-selective-copy",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 10,
+   "turns": 11,
+   "tokens": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 14965,
+    "cache_read_input_tokens": 211632,
+    "output_tokens": 1729
+   },
+   "cost_usd_reported_by_cli": 0.0983492,
+   "wall_ms": 27590,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main::revive-worktree-command | main | revive-worktree-command -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r main..revive-worktree-command --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r revive-worktree-command --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r a17e27c6d57d --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager duplicate revive-worktree-command -d main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark create revive-worktree-no-graph -r vzuplkqp",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r vzuplkqp --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main | revive-worktree-command | revive-worktree-no-graph | ui-note -T commit_id.short() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    }
+   ]
+  },
+  {
    "rep": 2,
    "task": "pilot-1-selective-validation",
    "arm": "aisc+skill",
@@ -2424,6 +3459,58 @@
     {
      "tool": "git",
      "args": "branch --show-current",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-1-selective-validation",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 15477,
+    "cache_read_input_tokens": 136195,
+    "output_tokens": 1573
+   },
+   "cost_usd_reported_by_cli": 0.09128149999999999,
+   "wall_ms": 31713,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager split -m Add lead input validation README.md src/handler.ts tests/handler.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark create lead-input-validation -r @-",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat -r @-",
      "exit": 0
     }
    ]
@@ -2691,6 +3778,93 @@
   },
   {
    "rep": 2,
+   "task": "pilot-2-multi-amend",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 14,
+   "turns": 15,
+   "tokens": {
+    "input_tokens": 22,
+    "cache_creation_input_tokens": 24228,
+    "cache_read_input_tokens": 304971,
+    "output_tokens": 4893
+   },
+   "cost_usd_reported_by_cli": 0.1763831,
+   "wall_ms": 62490,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r ancestors(@,7)",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into qpmtllyn README.md src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r ancestors(@,7) --no-graph -T change_id.short()++\" \"++commit_id.short()++\" \"++description.first_line()++\" \"++conflict++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from 7771052f src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into wslmywkp src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into ounvwvtx docs/response.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from 7771052f src/lead.ts README.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r ancestors(@,7) --no-graph -T change_id.short()++\" \"++description.first_line()++\" \"++conflict++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --into ounvwvtx README.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r ancestors(@,6) --stat --no-graph -T description.first_line()++\"\\n\"",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
    "task": "pilot-3-split-commit",
    "arm": "aisc+skill",
    "passed": true,
@@ -2907,6 +4081,163 @@
   },
   {
    "rep": 2,
+   "task": "pilot-3-split-commit",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 19742,
+    "cache_read_input_tokens": 176440,
+    "output_tokens": 2175
+   },
+   "cost_usd_reported_by_cli": 0.11839000000000001,
+   "wall_ms": 26975,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 8",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r 362b54c --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new 2b601aa -m refactor validation helpers",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "restore --from 362b54c src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new -m tune lead scoring",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "restore --from 362b54c src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new -m document lead workflow",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "restore --from 362b54c README.md docs",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat -r description(\"tune lead scoring\")",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --stat -T description.first_line()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "rebase -s xsovlxtp -d qkrpnnpn",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "abandon ozyvxtmz",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "bookmark set split-workflow -r xsovlxtp",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new xsovlxtp",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "restore --from 362b54c src/config.ts notes",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T description.first_line()++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git -r split-workflow --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff 362b54c split-workflow --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff 362b54c --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -6 split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse split-workflow",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r split-workflow -T commit_id --no-graph",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
    "task": "pilot-4-reorder-commits",
    "arm": "aisc+skill",
    "passed": true,
@@ -3032,6 +4363,53 @@
     {
      "tool": "git",
      "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-4-reorder-commits",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12804,
+    "cache_read_input_tokens": 58814,
+    "output_tokens": 562
+   },
+   "cost_usd_reported_by_cli": 0.0627294,
+   "wall_ms": 11742,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r ancestors(@,8) --no-graph -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ description.first_line() ++ \" | \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -r rsxsnslsuuyx::mzkttlntosuo -A typsyoqwyzum",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r ancestors(@,8) --no-graph -T description.first_line() ++ \" | \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
      "exit": 0
     }
    ]
@@ -3183,6 +4561,73 @@
     {
      "tool": "git",
      "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-5-squash-commits",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13125,
+    "cache_read_input_tokens": 58948,
+    "output_tokens": 534
+   },
+   "cost_usd_reported_by_cli": 0.06374679999999999,
+   "wall_ms": 9289,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ | ::@ & ~::main --limit 20",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from nkoztuov::nuxxwmqk --into nkoztuov -u",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from opmrlzkk --into ksowmwut -u",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager describe ksowmwut -m add parser pipeline",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager describe nkoztuov -m add retry support",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set squash-series -r nkoztuov",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
      "exit": 0
     }
    ]
@@ -3500,6 +4945,120 @@
   },
   {
    "rep": 2,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "jj+skill",
+   "passed": false,
+   "correctness_passed": false,
+   "failed_checks": [
+    "dirty_readme_uncommitted"
+   ],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 16900,
+    "cache_read_input_tokens": 217239,
+    "output_tokens": 1779
+   },
+   "cost_usd_reported_by_cli": 0.1071499,
+   "wall_ms": 28450,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 12",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s uqnwkmrn -d main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new uqnwkmrn -m wip",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash -m Add sms channel",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 8",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new nrqusvps -m wip2",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash -m Tune retry budget",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 8",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager edit xxspykol",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager abandon trrltmyy",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4 notify-retry",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
    "task": "pilot-7-scoped-review",
    "arm": "aisc+skill",
    "passed": true,
@@ -3640,6 +5199,53 @@
     {
      "tool": "git",
      "args": "diff 668d23d 95dd618",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-7-scoped-review",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13376,
+    "cache_read_input_tokens": 83359,
+    "output_tokens": 769
+   },
+   "cost_usd_reported_by_cli": 0.0695459,
+   "wall_ms": 12214,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "branch -a -vv",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --graph --all",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d23d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd618:data/questions-by-id.json",
      "exit": 0
     }
    ]
@@ -3802,6 +5408,108 @@
   },
   {
    "rep": 2,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 14258,
+    "cache_read_input_tokens": 158141,
+    "output_tokens": 1407
+   },
+   "cost_usd_reported_by_cli": 0.0869441,
+   "wall_ms": 16971,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "git init --colocate",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager describe -m Add app checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "bookmark create app-checkpoint -r @",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "config user.email",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "config set --repo user.name Bench Author",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "config set --repo user.email bench@example.com",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager metaedit --update-author -r app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log -1 --format=%an <%ae> app-checkpoint",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
    "task": "pilot-9-cleanup-noise",
    "arm": "aisc+skill",
    "passed": true,
@@ -3932,6 +5640,53 @@
     {
      "tool": "git",
      "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12885,
+    "cache_read_input_tokens": 59226,
+    "output_tokens": 370
+   },
+   "cost_usd_reported_by_cli": 0.061174599999999996,
+   "wall_ms": 10735,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
      "exit": 0
     }
    ]
@@ -4105,6 +5860,68 @@
     {
      "tool": "git",
      "args": "show --stat --format=%h %an %ad %B HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-10-recover-amend",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13111,
+    "cache_read_input_tokens": 59027,
+    "output_tokens": 795
+   },
+   "cost_usd_reported_by_cli": 0.0663087,
+   "wall_ms": 17033,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T change_id.short()++\" \"++commit_id.short()++\" \"++bookmarks++\" \"++description.first_line()++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from review-fix --into @ -u notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T commit_id.short()++\" \"++bookmarks++\" \"++author.name()++\" \"++description.first_line()++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r review-fix --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
      "exit": 0
     }
    ]
@@ -4414,6 +6231,118 @@
   },
   {
    "rep": 2,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 15091,
+    "cache_read_input_tokens": 85500,
+    "output_tokens": 1234
+   },
+   "cost_usd_reported_by_cli": 0.08127,
+   "wall_ms": 20328,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager git fetch",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -n 20",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s owmxmsnk -d main@origin",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s ntmnmxoy -d lxyotkxq",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s vmzkpqyo -d main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set feature-service -r ntmnmxoy",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set main -r main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -n 12",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase --ignore-immutable -s owmxmsnk -d main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -n 12",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
    "task": "pilot-12-integrate-topics",
    "arm": "aisc+skill",
    "passed": true,
@@ -4614,6 +6543,138 @@
     {
      "tool": "git",
      "args": "branch",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-12-integrate-topics",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 14499,
+    "cache_read_input_tokens": 159894,
+    "output_tokens": 1231
+   },
+   "cost_usd_reported_by_cli": 0.08632340000000001,
+   "wall_ms": 36238,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 20",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -b docs -d greeting",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set main -r docs",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --format=%h %an %s main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager edit main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse main HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "rev-parse HEAD",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new main",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T change_id.short()++\" \"++description.first_line()++\"\\n\"",
      "exit": 0
     }
    ]
@@ -4825,6 +6886,73 @@
    ]
   },
   {
+   "rep": 2,
+   "task": "pilot-13-selective-copy",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 9,
+   "turns": 10,
+   "tokens": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 14801,
+    "cache_read_input_tokens": 210603,
+    "output_tokens": 1622
+   },
+   "cost_usd_reported_by_cli": 0.09652029999999999,
+   "wall_ms": 20217,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r main..revive-worktree-command --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r a17e27c6d57d",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager duplicate 816c4bde7738 -d main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark create revive-worktree-no-graph -r turzknmv",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T commit_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager file show -r revive-worktree-no-graph commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager file show -r revive-worktree-no-graph test_commands.py",
+     "exit": 0
+    }
+   ]
+  },
+  {
    "rep": 3,
    "task": "pilot-1-selective-validation",
    "arm": "aisc+skill",
@@ -4956,6 +7084,58 @@
     {
      "tool": "git",
      "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-1-selective-validation",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 7,
+   "turns": 8,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 15538,
+    "cache_read_input_tokens": 136512,
+    "output_tokens": 1629
+   },
+   "cost_usd_reported_by_cli": 0.0921172,
+   "wall_ms": 20634,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager split -m Add lead input validation README.md src/handler.ts tests/handler.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark create lead-input-validation -r @-",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat -r @-",
      "exit": 0
     }
    ]
@@ -5172,6 +7352,73 @@
     {
      "tool": "git",
      "args": "show --stat --format=%s HEAD~2 HEAD~3 HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-2-multi-amend",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 20180,
+    "cache_read_input_tokens": 240033,
+    "output_tokens": 4797
+   },
+   "cost_usd_reported_by_cli": 0.1527293,
+   "wall_ms": 57740,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from @ --into ustpskzk --tool <tmp> -m refactor validation helpers",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ --no-graph -T change_id.short()++\" \"++description.first_line()++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from @ --into xyyytwmo --tool <tmp> -m add lead scoring",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from @ --into qnmpnupl --tool <tmp> -m document response behavior",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ --no-graph -T change_id.short()++\" \"++description.first_line()++\" \"++conflict++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
      "exit": 0
     }
    ]
@@ -5414,6 +7661,98 @@
   },
   {
    "rep": 3,
+   "task": "pilot-3-split-commit",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 18,
+   "turns": 19,
+   "tokens": {
+    "input_tokens": 26,
+    "cache_creation_input_tokens": 24403,
+    "cache_read_input_tokens": 371406,
+    "output_tokens": 5384
+   },
+   "cost_usd_reported_by_cli": 0.1886446,
+   "wall_ms": 73126,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 8",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager show -r 228a497 --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r 228a497 --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "edit 228a497",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager split -m refactor validation helpers src/lead.ts tests/lead.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager split -m tune lead scoring src/lead.ts tests/lead.test.ts",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager split -m document lead workflow README.md docs/lead-workflow.md",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 9",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -r @ -A split-workflow",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager describe -m ",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 9",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
    "task": "pilot-4-reorder-commits",
    "arm": "aisc+skill",
    "passed": true,
@@ -5549,6 +7888,48 @@
     {
      "tool": "git",
      "args": "status --short",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-4-reorder-commits",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12709,
+    "cache_read_input_tokens": 58730,
+    "output_tokens": 676
+   },
+   "cost_usd_reported_by_cli": 0.063481,
+   "wall_ms": 15622,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --no-graph -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -r oplytxvswymo -r srrrvqsrmyyn -A yxpkzwuluqrr",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --no-graph -T description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
      "exit": 0
     }
    ]
@@ -5740,6 +8121,58 @@
     {
      "tool": "git",
      "args": "log --format=%h %s",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-5-squash-commits",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13019,
+    "cache_read_input_tokens": 58878,
+    "output_tokens": 538
+   },
+   "cost_usd_reported_by_cli": 0.0633558,
+   "wall_ms": 15997,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ | @ --no-graph -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from rpqnnmxlytrv --into uywuwsztvtnm -m add parser pipeline",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from xzutzwktnvrr | xumrnvnoylvz --into swvzkluktsqp -m add retry support",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main..@ -T description.first_line() ++ \" \" ++ bookmarks ++ \"\\n\" --no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
      "exit": 0
     }
    ]
@@ -5987,6 +8420,130 @@
   },
   {
    "rep": 3,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "jj+skill",
+   "passed": false,
+   "correctness_passed": false,
+   "failed_checks": [
+    "dirty_readme_uncommitted"
+   ],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 10,
+   "turns": 11,
+   "tokens": {
+    "input_tokens": 22,
+    "cache_creation_input_tokens": 17655,
+    "cache_read_input_tokens": 274041,
+    "output_tokens": 2046
+   },
+   "cost_usd_reported_by_cli": 0.1185281,
+   "wall_ms": 48582,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -n 12",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s zzqtuwlk -d main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new zzqtuwlk -m wip",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash -m Add sms channel",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new xpursppp -m wip2",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff -r xpursppp --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash -u",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager edit wousxoyp",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline -4 notify-retry",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
    "task": "pilot-7-scoped-review",
    "arm": "aisc+skill",
    "passed": true,
@@ -6173,6 +8730,53 @@
   },
   {
    "rep": 3,
+   "task": "pilot-7-scoped-review",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13591,
+    "cache_read_input_tokens": 83674,
+    "output_tokens": 855
+   },
+   "cost_usd_reported_by_cli": 0.0712974,
+   "wall_ms": 15547,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 8",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show data-update:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
    "task": "pilot-8-cold-checkpoint",
    "arm": "aisc+skill",
    "passed": true,
@@ -6334,6 +8938,68 @@
   },
   {
    "rep": 3,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13132,
+    "cache_read_input_tokens": 58696,
+    "output_tokens": 579
+   },
+   "cost_usd_reported_by_cli": 0.0641996,
+   "wall_ms": 10969,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "git init --colocate",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager describe -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "bookmark create app-checkpoint -r @",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "new",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -n4",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat app-checkpoint",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
    "task": "pilot-9-cleanup-noise",
    "arm": "aisc+skill",
    "passed": true,
@@ -6470,6 +9136,58 @@
   },
   {
    "rep": 3,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13427,
+    "cache_read_input_tokens": 83771,
+    "output_tokens": 466
+   },
+   "cost_usd_reported_by_cli": 0.06676109999999999,
+   "wall_ms": 23941,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 6",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
    "task": "pilot-10-recover-amend",
    "arm": "aisc+skill",
    "passed": true,
@@ -6595,6 +9313,68 @@
     {
      "tool": "git",
      "args": "show --stat --format=%h %an %ad %s HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-10-recover-amend",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13223,
+    "cache_read_input_tokens": 59147,
+    "output_tokens": 556
+   },
+   "cost_usd_reported_by_cli": 0.0643787,
+   "wall_ms": 10310,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -n 10",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager squash --from review-fix --into @ notes/private.md --use-destination-message",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -n 5",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager show review-fix --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
      "exit": 0
     }
    ]
@@ -6811,6 +9591,113 @@
     {
      "tool": "git",
      "args": "log --oneline other-topic -2",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14709,
+    "cache_read_input_tokens": 84991,
+    "output_tokens": 1457
+   },
+   "cost_usd_reported_by_cli": 0.0819211,
+   "wall_ms": 31913,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager git fetch",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T change_id.short() ++ \" \" ++ commit_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ author.name() ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s ntmnmxoymnpy -d feature-service@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s owmxmsnkkyqk -d main@origin",
+     "exit": 1
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set feature-service -r ntmnmxoymnpy",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T commit_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ author.name() ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase --ignore-immutable -s owmxmsnkkyqk -d main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -s vmzkpqyorqnl -d main@origin",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() -T commit_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ author.name() ++ \" \" ++ description.first_line() ++ \"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager st",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff README.md",
      "exit": 0
     }
    ]
@@ -7098,6 +9985,78 @@
   },
   {
    "rep": 3,
+   "task": "pilot-12-integrate-topics",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13211,
+    "cache_read_input_tokens": 59160,
+    "output_tokens": 663
+   },
+   "cost_usd_reported_by_cli": 0.065402,
+   "wall_ms": 16009,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all() --limit 20",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark list -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager rebase -b docs -d greeting",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark set main -r docs",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r all()",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --format=%h %an %s main",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
    "task": "pilot-13-selective-copy",
    "arm": "aisc+skill",
    "passed": true,
@@ -7293,6 +10252,108 @@
     {
      "tool": "git",
      "args": "log --oneline -3 revive-worktree-no-graph",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-13-selective-copy",
+   "arm": "jj+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 15296,
+    "cache_read_input_tokens": 134700,
+    "output_tokens": 1541
+   },
+   "cost_usd_reported_by_cli": 0.090088,
+   "wall_ms": 27540,
+   "vc_commands": [
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r main | revive-worktree-command | ::revive-worktree-command & ~::main -T change_id.short()++\" \"++commit_id.short()++\" \"++bookmarks++\" \"++description.first_line()++\"\\n\" --stat",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager new main -m Revive worktree command",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from revive-worktree-command --restore-descendants",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager diff --git -r revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from main",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager restore --from revive-worktree-command commands.py test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager op log --limit 8 -T id.short()++\" \"++description++\"\\n\"",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager file list -r all()",
+     "exit": 1
+    },
+    {
+     "tool": "git",
+     "args": "log --all --oneline -- scratch-note.txt",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager bookmark create revive-worktree-no-graph -r lqtlvqxs",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager edit qlrqqkmq",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager status",
+     "exit": 0
+    },
+    {
+     "tool": "jj",
+     "args": "--no-pager log -r revive-worktree-no-graph --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
      "exit": 0
     }
    ]

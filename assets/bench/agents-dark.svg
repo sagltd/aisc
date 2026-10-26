@@ -1,37 +1,46 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="404" viewBox="0 0 760 404" role="img" aria-label="Real agents on 13 vcbench tasks: AISC 1.31M tokens, 43 commands, $0.88; Git 1.88M, 69, $1.04; GitButler 1.89M, 60, $1.28">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="497" viewBox="0 0 760 497" role="img" aria-label="Real agents on 13 vcbench tasks: AISC 1.31M tokens, 43 commands, $0.88; Git 1.88M tokens, 69 commands, $1.04; GitButler 1.89M tokens, 60 commands, $1.28; Jujutsu 1.96M tokens, 69 commands, $1.17">
 <style>text{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;fill:#E6EAF0} .s{fill:#98A3B3;font-size:12px} .h{font-size:15px;font-weight:600} .l{font-size:13px} .v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums} .a{font-weight:700}</style>
 <text x="24" y="34" class="h">What an agent spends on 13 real version-control tasks</text>
 <text x="24" y="54" class="s">Claude Sonnet 5.5, GitButler’s vcbench harness, 3 runs per tool, same sandbox. Shorter is better.</text>
 <text x="24" y="82" class="l" style="font-weight:600">Tokens per suite</text>
 <text x="120" y="105" text-anchor="end" class="l a">AISC</text>
-<rect x="132" y="92" width="360.4" height="18" rx="3" fill="#FF6A33"/>
-<text x="500.4" y="105" class="v">1.31M</text>
+<rect x="132" y="92" width="347.6" height="18" rx="3" fill="#FF6A33"/>
+<text x="487.6" y="105" class="v">1.31M</text>
 <text x="120" y="129" text-anchor="end" class="l">Git</text>
-<rect x="132" y="116" width="517.2" height="18" rx="3" fill="#3A4452"/>
-<text x="657.2" y="129" class="v">1.88M</text>
+<rect x="132" y="116" width="498.8" height="18" rx="3" fill="#3A4452"/>
+<text x="638.8" y="129" class="v">1.88M</text>
 <text x="120" y="153" text-anchor="end" class="l">GitButler</text>
-<rect x="132" y="140" width="520.0" height="18" rx="3" fill="#3A4452"/>
-<text x="660.0" y="153" class="v">1.89M</text>
-<text x="24" y="180" class="l" style="font-weight:600">Commands per suite</text>
-<text x="120" y="203" text-anchor="end" class="l a">AISC</text>
-<rect x="132" y="190" width="324.1" height="18" rx="3" fill="#FF6A33"/>
-<text x="464.1" y="203" class="v">43</text>
-<text x="120" y="227" text-anchor="end" class="l">GitButler</text>
-<rect x="132" y="214" width="452.2" height="18" rx="3" fill="#3A4452"/>
-<text x="592.2" y="227" class="v">60</text>
-<text x="120" y="251" text-anchor="end" class="l">Git</text>
-<rect x="132" y="238" width="520.0" height="18" rx="3" fill="#3A4452"/>
-<text x="660.0" y="251" class="v">69</text>
-<text x="24" y="278" class="l" style="font-weight:600">Cost per suite</text>
-<text x="120" y="301" text-anchor="end" class="l a">AISC</text>
-<rect x="132" y="288" width="357.5" height="18" rx="3" fill="#FF6A33"/>
-<text x="497.5" y="301" class="v">$0.88</text>
-<text x="120" y="325" text-anchor="end" class="l">Git</text>
-<rect x="132" y="312" width="422.5" height="18" rx="3" fill="#3A4452"/>
-<text x="562.5" y="325" class="v">$1.04</text>
-<text x="120" y="349" text-anchor="end" class="l">GitButler</text>
-<rect x="132" y="336" width="520.0" height="18" rx="3" fill="#3A4452"/>
-<text x="660.0" y="349" class="v">$1.28</text>
-<line x1="24" y1="370" x2="736" y2="370" stroke="#2A323D"/>
-<text x="24" y="388" class="s">AISC (dev build, v0.1.3 candidate) passed 39/39 runs; GitButler 0.22.3 37/39, Git 2.50 38/39. Data: benchmarks/results/agent-runs-v0.1.3-dev.json</text>
+<rect x="132" y="140" width="501.4" height="18" rx="3" fill="#3A4452"/>
+<text x="641.4" y="153" class="v">1.89M</text>
+<text x="120" y="177" text-anchor="end" class="l">Jujutsu</text>
+<rect x="132" y="164" width="520.0" height="18" rx="3" fill="#3A4452"/>
+<text x="660.0" y="177" class="v">1.96M</text>
+<text x="24" y="209" class="l" style="font-weight:600">Commands per suite</text>
+<text x="120" y="232" text-anchor="end" class="l a">AISC</text>
+<rect x="132" y="219" width="324.1" height="18" rx="3" fill="#FF6A33"/>
+<text x="464.1" y="232" class="v">43</text>
+<text x="120" y="256" text-anchor="end" class="l">GitButler</text>
+<rect x="132" y="243" width="452.2" height="18" rx="3" fill="#3A4452"/>
+<text x="592.2" y="256" class="v">60</text>
+<text x="120" y="280" text-anchor="end" class="l">Git</text>
+<rect x="132" y="267" width="520.0" height="18" rx="3" fill="#3A4452"/>
+<text x="660.0" y="280" class="v">69</text>
+<text x="120" y="304" text-anchor="end" class="l">Jujutsu</text>
+<rect x="132" y="291" width="520.0" height="18" rx="3" fill="#3A4452"/>
+<text x="660.0" y="304" class="v">69</text>
+<text x="24" y="336" class="l" style="font-weight:600">Cost per suite</text>
+<text x="120" y="359" text-anchor="end" class="l a">AISC</text>
+<rect x="132" y="346" width="357.5" height="18" rx="3" fill="#FF6A33"/>
+<text x="497.5" y="359" class="v">$0.88</text>
+<text x="120" y="383" text-anchor="end" class="l">Git</text>
+<rect x="132" y="370" width="422.5" height="18" rx="3" fill="#3A4452"/>
+<text x="562.5" y="383" class="v">$1.04</text>
+<text x="120" y="407" text-anchor="end" class="l">Jujutsu</text>
+<rect x="132" y="394" width="475.3" height="18" rx="3" fill="#3A4452"/>
+<text x="615.3" y="407" class="v">$1.17</text>
+<text x="120" y="431" text-anchor="end" class="l">GitButler</text>
+<rect x="132" y="418" width="520.0" height="18" rx="3" fill="#3A4452"/>
+<text x="660.0" y="431" class="v">$1.28</text>
+<line x1="24" y1="463" x2="736" y2="463" stroke="#2A323D"/>
+<text x="24" y="481" class="s">AISC (dev build, v0.1.3 candidate) passed 39/39 runs; Git 38/39, GitButler 37/39, Jujutsu 36/39. Data: benchmarks/results/agent-runs-v0.1.3-dev.json</text>
 </svg>

@@ -11,7 +11,7 @@ script below.
 | [`run-agents.sh`](run-agents.sh) | Runs every task with every tool, N repetitions, rotating tool order |
 | [`summarize.py`](summarize.py) | Recomputes the README table, and lists every failed run and why |
 | [`pins.json`](pins.json) | Exact tool versions the harness checks before each run |
-| [`../results/agent-runs-v0.1.3-dev.json`](../results/agent-runs-v0.1.3-dev.json) | 117 runs: AISC dev build ad698da (v0.1.3 candidate), GitButler 0.22.3 and Git 2.50, 3 repetitions each, Claude CLI 2.1.310 (the README's headline table) |
+| [`../results/agent-runs-v0.1.3-dev.json`](../results/agent-runs-v0.1.3-dev.json) | 156 runs: AISC dev build ad698da (v0.1.3 candidate), GitButler 0.22.3, Git 2.50 and Jujutsu 0.42 with the pinned onevcat-jj skill, 3 repetitions each, Claude CLI 2.1.310 (the README's headline table) |
 | [`../results/agent-runs-v0.1.0.json`](../results/agent-runs-v0.1.0.json) | 117 runs: AISC v0.1.0, GitButler 0.22.3 and Git 2.50, 3 repetitions each |
 | [`../results/agent-runs-v0.1.1.json`](../results/agent-runs-v0.1.1.json) | 39 runs: AISC v0.1.1, same settings |
 | [`heldout/tasks.md`](heldout/tasks.md) | The held-out task prompts (three sets of six), each committed before any agent ran them |
@@ -34,7 +34,7 @@ python3 benchmarks/agents/export.py agent-runs benchmarks/results/NAME.json --ai
 
 - **Harness.** [GitButler's version-control-bench](https://github.com/gitbutlerapp/version-control-bench) at commit `4886fd5`, plus [`../vcbench/aisc-arm.patch`](../vcbench/aisc-arm.patch), which adds the AISC arm (graded like the Git arm) and the sandboxed agent mode used for every arm. Task texts, fixtures and grading checks are unchanged.
 - **Agent.** Claude CLI with `claude-sonnet-5-5` at medium effort, in accept-edits mode with the same command allowlist for every tool. Approvals are never bypassed. The v0.1.0/v0.1.1 and first held-out files used CLI 2.1.306; the v0.1.3-dev, held-out set 2 and re-run files used 2.1.310, which costs about 14k more tokens per run, so token counts are comparable only within one CLI version.
-- **Instructions.** Each tool's agent gets that tool's own setup block, in the same `AGENTS.md` frame: `aisc agent setup --print`, `but agent setup --print`, or the harness's plain-Git text. The AISC and GitButler skills are installed the same way.
+- **Instructions.** Each tool's agent gets that tool's own setup block, in the same `AGENTS.md` frame: `aisc agent setup --print`, `but agent setup --print`, the harness's plain-Git text, or the harness's jj text with the community `onevcat/skills@onevcat-jj` skill pinned to commit 4955f54 (fetched by the harness and checked against its recorded hash). The AISC and GitButler skills are installed the same way.
 - **Grading.** The harness's verifier checks the Git-visible end state: commits, trees, refs, and the files left uncommitted. Its command policy also fails a run whenever the agent uses a command that tool's arm forbids, such as a raw `git` write in the AISC or GitButler arm.
 - **Measures.** Tokens and cost are exactly what the Claude CLI reported for the session: input, cache creation, cache reads and output. Cost is the CLI's own estimate, not an invoice.
 
