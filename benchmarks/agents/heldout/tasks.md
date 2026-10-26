@@ -59,3 +59,34 @@ Known before running: AISC 0.1.2 has no verb that amends into a commit on a bran
 ## heldout-12-two-branches
 
 > I'm on `feature-ui` with three uncommitted changes. Keep my src/ui.ts edit uncommitted. Commit my src/parser.ts change here on `feature-ui` as "Fix parser crash". Commit my new file docs/ui.md on a new branch `docs-ui` based on `main` as "Document UI". Stay on `feature-ui` and do not publish anything.
+
+# Held-out set 3
+
+Six more tasks, written on 2026-10-27 after the fixes measured on sets 1 and 2 (directory selectors, `commit --onto BRANCH`, the cross-branch `amend`, `show COMMIT:PATH`) and **frozen (committed and pushed) before any agent ran them**. Fixtures, verifiers and reference solutions for Git, GitButler and AISC are in `benchmarks/vcbench/aisc-arm.patch` (`scripts/lib/scenario-heldout13.mjs` to `scenario-heldout18.mjs`); all 18 references pass their verifiers, and doing nothing fails every task.
+
+Known before running: AISC has no verb that lists the branches containing a commit (heldout-17; read-only `git branch --contains` is allowed in every arm), and no one-call way to move commits to a *new* branch (heldout-15: its reference is `pick -b NEW --onto main` then `drop`, two calls).
+
+## heldout-13-validate-form
+
+> On `feature-forms`, I changed src/form.ts in two places: an input validation (it throws "empty form") and a debug console.log in send(). Commit only the validation change together with my new tests/form.test.ts as "Validate form input". Leave the console.log change and my README.md edit uncommitted. Stay on `feature-forms` and do not publish anything.
+
+## heldout-14-split-by-directory
+
+> On `feature-search`, the commit "Add search" mixes code and docs. Split it into two commits: first "Add search" with everything under src/, then "Document search" with everything under docs/, in that order, with the same final content. Keep my README.md edit uncommitted, stay on `feature-search`, and do not publish anything.
+
+## heldout-15-move-to-new-branch
+
+> The commits "Add export" and "Add export tests" on `feature-search` are a separate piece of work. Move them, in that order, to a new branch `feature-export` based directly on `main`, and remove them from `feature-search`, which keeps "Add search". Stay on `feature-search`, keep my README.md edit uncommitted, and do not publish anything.
+
+## heldout-16-reorder-and-reword
+
+> On `feature-cache`, the commit "Add cahce layer" has a typo in its message (it should read "Add cache layer") and it should come first, before "Add cache config". Fix the message and the order; keep every commit's content and "Add cache tests" on top. Leave my README.md edit uncommitted, stay on `feature-cache`, and do not publish anything.
+
+## heldout-17-branches-with-commit
+
+> Which local branches contain the commit "Add retry"? Reply with just the branch names, one per line. Do not change anything in the repository.
+
+## heldout-18-discard-one-hunk
+
+> In src/app.ts I made two uncommitted changes: the service name is now "service-v2" (keep that) and I added a console.log line (throw that away). Discard only the console.log change. Keep my uncommitted edit to src/other.ts as it is, do not commit anything, and do not publish anything.
+

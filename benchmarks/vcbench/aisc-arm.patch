@@ -299,10 +299,10 @@ index 0000000..d40d43d
 +}
 diff --git a/scripts/lib/heldout-common.mjs b/scripts/lib/heldout-common.mjs
 new file mode 100644
-index 0000000..d070754
+index 0000000..8caf93b
 --- /dev/null
 +++ b/scripts/lib/heldout-common.mjs
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,47 @@
 +// Shared fixture and verification helpers for the held-out tasks (heldout-1 .. heldout-6).
 +// Written and frozen before any agent ran them; see benchmarks/agents/heldout in the AISC repo.
 +import { gitLike } from './arms.mjs';
@@ -335,6 +335,20 @@ index 0000000..d070754
 +  if (gitLike(ctx.arm)) return paths.every(p => g('diff', '--cached', '--name-only', '--', p) === '' && g('status', '--porcelain', '--', p) !== '');
 +  const b = butChanges(ctx);
 +  return !!b && paths.every(p => b.uncommitted.includes(p) || b.assigned.includes(p));
++}
++// GitButler's id for the uncommitted hunk of PATH whose body contains NEEDLE, read from `but diff`
++// the way an agent reads it.
++export function butHunk(ctx, path, needle) {
++  const out = commands(ctx).b('diff');
++  const blocks = []; let current = null;
++  for (const line of out.split('\n')) {
++    const header = line.match(/^\s*(\S+:\S+)\s+(.*?)\s*\u2502\s*$/);
++    if (header) { current = { id: header[1], path: header[2], body: [] }; blocks.push(current); }
++    else if (current) current.body.push(line);
++  }
++  const hit = blocks.find(b => b.path === path && b.body.some(l => l.includes(needle)));
++  if (!hit) throw new Error(`no but hunk for ${JSON.stringify(needle)} in ${path}: ${out.slice(0, 400)}`);
++  return hit.id;
 +}
 diff --git a/scripts/lib/performance.mjs b/scripts/lib/performance.mjs
 index 2b525ea..e2b3d24 100644
@@ -672,6 +686,346 @@ index 0000000..22effbe
 +  }
 +}
 +export default { id: ID, researchRank: 112, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout13.mjs b/scripts/lib/scenario-heldout13.mjs
+new file mode 100644
+index 0000000..8a35c5e
+--- /dev/null
++++ b/scripts/lib/scenario-heldout13.mjs
+@@ -0,0 +1,49 @@
++// Held-out 13: commit one of two hunks in a file plus a new test; the other hunk stays.
++import { writeFileSync } from 'node:fs';
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending, butHunk } from './heldout-common.mjs';
++export const ID = 'heldout-13-validate-form';
++const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++const FORM = 'export function submit(form: Form) {\n  const data = read(form);\n  return send(data);\n}\n\nexport function reset(form: Form) {\n  form.value = "";\n}\n\nexport function focus(form: Form) {\n  form.el.focus();\n}\n\nexport function send(data: string) {\n  return fetch("/submit", { body: data });\n}\n';
++const VALIDATED = FORM.replace('  const data = read(form);\n', '  const data = read(form);\n  if (!data) {\n    throw new Error("empty form");\n  }\n');
++const BOTH = VALIDATED.replace('  return fetch("/submit", { body: data });\n', '  console.log("submit", data);\n  return fetch("/submit", { body: data });\n');
++const TEST = { 'tests/form.test.ts': 'import { submit } from "../src/form";\nlet threw = false;\ntry { submit({ value: "", el: null } as any); } catch { threw = true; }\nif (!threw) throw new Error("empty form accepted");\n' };
++function prepare(ctx) {
++  initialize(ctx, { ...BASE, 'src/form.ts': FORM }); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-forms'); write(ctx.repoDir, { 'src/form-helpers.ts': 'export function read(form: Form) {\n  return form.value;\n}\n' }); save(ctx, 'Add form helpers');
++  const metadata = { refs: refs(ctx), wantTree: { ...exactTree(ctx, 'feature-forms'), ...enc({ 'src/form.ts': VALIDATED, ...TEST }) } };
++  adopt(ctx, 'feature-forms');
++  write(ctx.repoDir, { 'src/form.ts': BOTH, ...TEST, 'README.md': 'Service example.\nForm notes (draft).\n' });
++  metadata.expectedDisk = disk(ctx.repoDir);
++  return metadata;
++}
++function verify(ctx) {
++  const m = ctx.metadata;
++  return result({
++    validation_and_test_committed: same(subjects(ctx, 'feature-forms'), ['Validate form input', 'Add form helpers']) && same(exactTree(ctx, 'feature-forms'), m.wantTree),
++    authors_kept: authorsKept(ctx, 'feature-forms'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['feature-forms']),
++    files_on_disk_unchanged: same(disk(ctx.repoDir), m.expectedDisk),
++    logging_and_readme_uncommitted: pending(ctx, ['src/form.ts', 'README.md']),
++    same_branch: active(ctx, 'feature-forms'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a, execute } = commands(ctx);
++  if (ctx.arm === 'git') {
++    // The validated version goes into the index without touching the work tree; the test is added.
++    const tmp = `${ctx.repoDir}/.git/validated.ts`; writeFileSync(tmp, VALIDATED);
++    const blob = g('hash-object', '-w', tmp);
++    g('update-index', '--cacheinfo', `100644,${blob},src/form.ts`);
++    g('add', 'tests/form.test.ts');
++    g('commit', '-q', '-m', 'Validate form input');
++    execute('rm', ['-f', tmp]);
++  } else if (ctx.arm === 'aisc+skill') {
++    a('commit', '-m', 'Validate form input', 'src/form.ts~empty form', 'tests/form.test.ts');
++  } else {
++    const hunk = butHunk(ctx, 'src/form.ts', 'empty form');
++    const file = JSON.parse(b('status', '--json')).uncommittedChanges.find(c => c.filePath === 'tests/form.test.ts').cliId;
++    b('commit', '-m', 'Validate form input', hunk, file);
++  }
++}
++export default { id: ID, researchRank: 113, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout14.mjs b/scripts/lib/scenario-heldout14.mjs
+new file mode 100644
+index 0000000..604a109
+--- /dev/null
++++ b/scripts/lib/scenario-heldout14.mjs
+@@ -0,0 +1,55 @@
++// Held-out 14: split a commit by directory, code first, docs second.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending } from './heldout-common.mjs';
++export const ID = 'heldout-14-split-by-directory';
++const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++const SRC = { 'src/search.ts': 'export function search(items: string[], q: string) {\n  return items.filter(i => i.includes(q));\n}\n', 'src/index.ts': 'export { search } from "./search";\n' };
++const DOCS = { 'docs/search.md': '# Search\n\nGET /search?q= filters items by substring.\n' };
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-search'); write(ctx.repoDir, { ...SRC, ...DOCS }); save(ctx, 'Add search');
++  const metadata = { refs: refs(ctx), finalTree: exactTree(ctx, 'feature-search'), wantFirst: { ...exactTree(ctx, 'main'), ...enc(SRC) } };
++  adopt(ctx, 'feature-search');
++  write(ctx.repoDir, { 'README.md': 'Service example.\nSearch notes (draft).\n' });
++  metadata.expectedDisk = disk(ctx.repoDir);
++  return metadata;
++}
++function verify(ctx) {
++  const { execute } = commands(ctx), m = ctx.metadata;
++  const two = subjects(ctx, 'feature-search').length === 2;
++  const first = two ? execute('git', ['rev-parse', 'feature-search~1'], false).stdout.trim() : '';
++  return result({
++    two_commits_in_order: same(subjects(ctx, 'feature-search'), ['Document search', 'Add search']),
++    code_commit_first: two && same(exactTree(ctx, first), m.wantFirst),
++    final_content_unchanged: same(exactTree(ctx, 'feature-search'), m.finalTree),
++    authors_kept: authorsKept(ctx, 'feature-search'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['feature-search']),
++    files_on_disk_unchanged: same(disk(ctx.repoDir), m.expectedDisk),
++    readme_edit_uncommitted: pending(ctx, ['README.md']),
++    same_branch: active(ctx, 'feature-search'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a, execute } = commands(ctx);
++  if (ctx.arm === 'git') {
++    const tmp = `${ctx.repoDir}/.git/split-index`;
++    const env = { ...(ctx.env ?? process.env), GIT_INDEX_FILE: tmp, GIT_AUTHOR_NAME: 'Bench Author', GIT_AUTHOR_EMAIL: 'bench@example.com', GIT_COMMITTER_NAME: 'Bench Author', GIT_COMMITTER_EMAIL: 'bench@example.com' };
++    const t = commands({ ...ctx, env });
++    t.g('read-tree', 'main');
++    for (const p of Object.keys(SRC)) t.g('update-index', '--add', '--cacheinfo', `100644,${g('rev-parse', `feature-search:${p}`)},${p}`);
++    const first = t.g('commit-tree', t.g('write-tree'), '-p', 'main', '-m', 'Add search');
++    const second = t.g('commit-tree', g('rev-parse', 'feature-search^{tree}'), '-p', first, '-m', 'Document search');
++    g('update-ref', 'refs/heads/feature-search', second);
++    execute('rm', ['-f', tmp]);
++  } else if (ctx.arm === 'aisc+skill') {
++    a('split', 'Add search', '--into', 'Add search', 'src/', '--into', 'Document search', 'docs/');
++  } else {
++    const s = JSON.parse(b('status', '-f', '--json'));
++    const commit = s.stacks.flatMap(x => x.branches).find(x => x.name === 'feature-search').commits.find(c => (c.message ?? '').startsWith('Add search'));
++    const docsFile = (commit.files ?? commit.changes ?? []).find(f => (f.filePath ?? f.path) === 'docs/search.md');
++    b('uncommit', docsFile.cliId);
++    const uncommitted = JSON.parse(b('status', '--json')).uncommittedChanges.find(c => c.filePath === 'docs/search.md').cliId;
++    b('commit', '-m', 'Document search', uncommitted);
++  }
++}
++export default { id: ID, researchRank: 114, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout15.mjs b/scripts/lib/scenario-heldout15.mjs
+new file mode 100644
+index 0000000..393ba8a
+--- /dev/null
++++ b/scripts/lib/scenario-heldout15.mjs
+@@ -0,0 +1,64 @@
++// Held-out 15: move two commits to a new branch based on main, keeping their order.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending, gitLike } from './heldout-common.mjs';
++export const ID = 'heldout-15-move-to-new-branch';
++const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++const SEARCH = { 'src/search.ts': 'export function search(items: string[], q: string) {\n  return items.filter(i => i.includes(q));\n}\n' };
++const EXPORT = { 'src/export.ts': 'export function toCsv(rows: string[][]) {\n  return rows.map(r => r.join(",")).join("\\n");\n}\n' };
++const TESTS = { 'tests/export.test.ts': 'import { toCsv } from "../src/export";\nif (toCsv([["a", "b"]]) !== "a,b") throw new Error("csv");\n' };
++const README = { 'README.md': 'Service example.\nExport notes (draft).\n' };
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-search');
++  write(ctx.repoDir, SEARCH); save(ctx, 'Add search');
++  const keep = g('rev-parse', 'feature-search');
++  write(ctx.repoDir, EXPORT); save(ctx, 'Add export');
++  write(ctx.repoDir, TESTS); save(ctx, 'Add export tests');
++  const main = exactTree(ctx, 'main');
++  const metadata = { refs: refs(ctx), keep, mainRef: g('rev-parse', 'main'), wantExport: { ...main, ...enc(EXPORT) }, wantTests: { ...main, ...enc(EXPORT), ...enc(TESTS) } };
++  adopt(ctx, 'feature-search');
++  const committed = disk(ctx.repoDir);
++  write(ctx.repoDir, README);
++  // Git-like: the moved files leave this work tree. But: both branches stay applied, so they stay.
++  const gone = { ...committed, ...enc(README) }; delete gone['src/export.ts']; delete gone['tests/export.test.ts'];
++  metadata.expectedDisk = gitLike(ctx.arm) ? gone : disk(ctx.repoDir);
++  return metadata;
++}
++function verify(ctx) {
++  const { g, execute } = commands(ctx), m = ctx.metadata;
++  const exists = !!refs(ctx)['feature-export'];
++  const ok = exists && same(subjects(ctx, 'feature-export'), ['Add export tests', 'Add export']);
++  return result({
++    new_branch_has_both_commits_in_order: ok,
++    new_branch_based_on_main: ok && execute('git', ['rev-parse', 'feature-export~2'], false).stdout.trim() === m.mainRef,
++    new_branch_content: ok && same(exactTree(ctx, 'feature-export~1'), m.wantExport) && same(exactTree(ctx, 'feature-export'), m.wantTests),
++    search_branch_keeps_only_search: g('rev-parse', 'feature-search') === m.keep,
++    authors_kept: exists && authorsKept(ctx, 'feature-export'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['feature-search', 'feature-export']),
++    files_on_disk_match: same(disk(ctx.repoDir), m.expectedDisk),
++    readme_edit_uncommitted: pending(ctx, ['README.md']),
++    same_branch: active(ctx, 'feature-search', ['feature-export']),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a } = commands(ctx);
++  if (ctx.arm === 'git') {
++    const [second, third] = [g('rev-parse', 'feature-search~1'), g('rev-parse', 'feature-search')];
++    g('switch', '-q', '-c', 'feature-export', 'main'); g('cherry-pick', second, third);
++    g('switch', '-q', 'feature-search'); g('reset', '-q', '--hard', ctx.metadata.keep);
++    write(ctx.repoDir, README);
++  } else if (ctx.arm === 'aisc+skill') {
++    a('pick', '-b', 'feature-export', '--onto', 'main', 'Add export', 'Add export tests');
++    a('drop', 'Add export', 'Add export tests');
++  } else {
++    b('branch', 'new', 'feature-export');
++    // One commit per move, oldest first, so the new branch keeps the order.
++    const id = subject => {
++      const s = JSON.parse(b('status', '-fv', '--json'));
++      return s.stacks.flatMap(x => x.branches).find(x => x.name === 'feature-search').commits.find(c => (c.message ?? '').split('\n')[0].trim() === subject).cliId;
++    };
++    b('move', id('Add export'), '--branch', 'feature-export');
++    b('move', id('Add export tests'), '--branch', 'feature-export');
++  }
++}
++export default { id: ID, researchRank: 115, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout16.mjs b/scripts/lib/scenario-heldout16.mjs
+new file mode 100644
+index 0000000..46f8958
+--- /dev/null
++++ b/scripts/lib/scenario-heldout16.mjs
+@@ -0,0 +1,62 @@
++// Held-out 16: move a commit to the bottom of the branch and fix its message.
++import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending } from './heldout-common.mjs';
++export const ID = 'heldout-16-reorder-and-reword';
++const enc = files => Object.fromEntries(Object.entries(files).map(([p, t]) => [p, { mode: '100644', bytes: Buffer.from(t).toString('base64') }]));
++const CONFIG = { 'src/cache-config.ts': 'export const ttl = 60;\n' };
++const LAYER = { 'src/cache.ts': 'export const cache = new Map<string, string>();\n' };
++const TESTS = { 'tests/cache.test.ts': 'import { cache } from "../src/cache";\nif (cache.size !== 0) throw new Error("cache");\n' };
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-cache');
++  write(ctx.repoDir, CONFIG); save(ctx, 'Add cache config');
++  write(ctx.repoDir, LAYER); save(ctx, 'Add cahce layer');
++  write(ctx.repoDir, TESTS); save(ctx, 'Add cache tests');
++  const main = exactTree(ctx, 'main');
++  const metadata = { refs: refs(ctx), finalTree: exactTree(ctx, 'feature-cache'), wantFirst: { ...main, ...enc(LAYER) }, wantSecond: { ...main, ...enc(LAYER), ...enc(CONFIG) } };
++  adopt(ctx, 'feature-cache');
++  write(ctx.repoDir, { 'README.md': 'Service example.\nCache notes (draft).\n' });
++  metadata.expectedDisk = disk(ctx.repoDir);
++  return metadata;
++}
++function verify(ctx) {
++  const m = ctx.metadata;
++  const order = same(subjects(ctx, 'feature-cache'), ['Add cache tests', 'Add cache config', 'Add cache layer']);
++  return result({
++    order_and_message: order,
++    contents_kept: order && same(exactTree(ctx, 'feature-cache~2'), m.wantFirst) && same(exactTree(ctx, 'feature-cache~1'), m.wantSecond) && same(exactTree(ctx, 'feature-cache'), m.finalTree),
++    authors_kept: authorsKept(ctx, 'feature-cache'),
++    other_refs_unchanged: othersUnchanged(ctx, m.refs, ['feature-cache']),
++    files_on_disk_unchanged: same(disk(ctx.repoDir), m.expectedDisk),
++    readme_edit_uncommitted: pending(ctx, ['README.md']),
++    same_branch: active(ctx, 'feature-cache'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g, b, a, execute } = commands(ctx);
++  if (ctx.arm === 'git') {
++    const tmp = `${ctx.repoDir}/.git/reorder-index`;
++    const env = { ...(ctx.env ?? process.env), GIT_INDEX_FILE: tmp, GIT_AUTHOR_NAME: 'Bench Author', GIT_AUTHOR_EMAIL: 'bench@example.com', GIT_COMMITTER_NAME: 'Bench Author', GIT_COMMITTER_EMAIL: 'bench@example.com' };
++    const t = commands({ ...ctx, env });
++    t.g('read-tree', 'main');
++    t.g('update-index', '--add', '--cacheinfo', `100644,${g('rev-parse', 'feature-cache:src/cache.ts')},src/cache.ts`);
++    const first = t.g('commit-tree', t.g('write-tree'), '-p', 'main', '-m', 'Add cache layer');
++    t.g('update-index', '--add', '--cacheinfo', `100644,${g('rev-parse', 'feature-cache:src/cache-config.ts')},src/cache-config.ts`);
++    const second = t.g('commit-tree', t.g('write-tree'), '-p', first, '-m', 'Add cache config');
++    const third = t.g('commit-tree', g('rev-parse', 'feature-cache^{tree}'), '-p', second, '-m', 'Add cache tests');
++    g('update-ref', 'refs/heads/feature-cache', third);
++    execute('rm', ['-f', tmp]);
++  } else if (ctx.arm === 'aisc+skill') {
++    a('move', 'Add cahce layer', '--before', 'Add cache config');
++    a('reword', 'Add cahce layer', '-m', 'Add cache layer');
++  } else {
++    const ids = () => {
++      const s = JSON.parse(b('status', '-fv', '--json'));
++      const commits = s.stacks.flatMap(x => x.branches).find(x => x.name === 'feature-cache').commits;
++      return subject => commits.find(c => (c.message ?? '').startsWith(subject)).cliId;
++    };
++    let id = ids(); b('move', id('Add cahce layer'), '--below', id('Add cache config'));
++    id = ids(); b('reword', id('Add cahce layer'), '-m', 'Add cache layer');
++  }
++}
++export default { id: ID, researchRank: 116, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout17.mjs b/scripts/lib/scenario-heldout17.mjs
+new file mode 100644
+index 0000000..cb32fd3
+--- /dev/null
++++ b/scripts/lib/scenario-heldout17.mjs
+@@ -0,0 +1,37 @@
++// Held-out 17: which local branches contain a commit, without changing anything.
++import { commands, write, initialize, save, adopt, refs, disk, same, result, residue, BASE } from './heldout-common.mjs';
++export const ID = 'heldout-17-branches-with-commit';
++const ANSWER = ['fix-retry', 'fix-retry-docs'];
++const OTHERS = ['feature-ui', 'main'];
++function prepare(ctx) {
++  initialize(ctx, BASE); const { g } = commands(ctx);
++  g('switch', '-c', 'fix-retry');
++  write(ctx.repoDir, { 'src/retry.ts': 'export const retries = 3;\n' }); save(ctx, 'Add retry');
++  write(ctx.repoDir, { 'src/retry.ts': 'export const retries = 5;\n' }); save(ctx, 'Tune retry');
++  g('switch', '-c', 'fix-retry-docs');
++  write(ctx.repoDir, { 'docs/retry.md': 'Retries default to 5.\n' }); save(ctx, 'Document retry');
++  g('switch', '-q', 'main'); g('switch', '-c', 'feature-ui');
++  write(ctx.repoDir, { 'src/ui.ts': 'export const theme = "dark";\n' }); save(ctx, 'Add theme toggle');
++  adopt(ctx, 'feature-ui');
++  return { refs: refs(ctx), files: disk(ctx.repoDir), index: g('ls-files', '--stage') };
++}
++// Every named branch is a line of the reply (bullets and quotes allowed) and no other branch is.
++const answered = response => {
++  const lines = String(response ?? '').split('\n').map(l => l.trim().replace(/^[-*`"'\s]+|[`"'.,\s]+$/g, '')).filter(Boolean);
++  return ANSWER.every(a => lines.includes(a)) && OTHERS.every(o => !lines.includes(o));
++};
++function verify(ctx) {
++  const { g } = commands(ctx), m = ctx.metadata;
++  return result({
++    response_correct: answered(ctx.response),
++    refs_unchanged: same(refs(ctx), m.refs),
++    files_unchanged: same(disk(ctx.repoDir), m.files),
++    index_unchanged: ctx.arm === 'but+skill' || g('ls-files', '--stage') === m.index,
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { g } = commands(ctx);
++  return g('branch', '--format=%(refname:short)', '--contains', ':/Add retry').split('\n').filter(n => !n.startsWith('gitbutler/')).join('\n');
++}
++export default { id: ID, researchRank: 117, prepare, verify, solve };
+diff --git a/scripts/lib/scenario-heldout18.mjs b/scripts/lib/scenario-heldout18.mjs
+new file mode 100644
+index 0000000..fcff8b9
+--- /dev/null
++++ b/scripts/lib/scenario-heldout18.mjs
+@@ -0,0 +1,37 @@
++// Held-out 18: discard one uncommitted hunk of a file, keep the other hunk and another file's edit.
++import { writeFileSync } from 'node:fs';
++import { commands, write, initialize, save, adopt, refs, disk, same, result, active, residue, BASE, pending, gitLike, butHunk } from './heldout-common.mjs';
++export const ID = 'heldout-18-discard-one-hunk';
++const APP = 'export const name = "service";\nexport const version = 1;\nexport const region = "eu";\nexport const debug = false;\nexport const retries = 3;\nexport const timeout = 5000;\nexport const host = "localhost";\nexport const port = 8080;\nexport function start() {\n  return name;\n}\n';
++const KEPT = APP.replace('"service"', '"service-v2"');
++const BOTH = KEPT + 'console.log("boot", name);\n';
++const OTHER = { 'src/other.ts': 'export const other = 2;\n' };
++function prepare(ctx) {
++  initialize(ctx, { ...BASE, 'src/app.ts': APP, 'src/other.ts': 'export const other = 1;\n' }); const { g } = commands(ctx);
++  g('switch', '-c', 'feature-app'); write(ctx.repoDir, { 'src/app-helpers.ts': 'export const helper = true;\n' }); save(ctx, 'Add app helpers');
++  const metadata = { refs: refs(ctx), index: g('ls-files', '--stage') };
++  adopt(ctx, 'feature-app');
++  write(ctx.repoDir, { 'src/app.ts': BOTH, ...OTHER });
++  const want = disk(ctx.repoDir);
++  want['src/app.ts'] = { mode: '100644', bytes: Buffer.from(KEPT).toString('base64') };
++  metadata.expectedDisk = want;
++  return metadata;
++}
++function verify(ctx) {
++  const { g } = commands(ctx), m = ctx.metadata;
++  return result({
++    only_the_debug_hunk_discarded: same(disk(ctx.repoDir), m.expectedDisk),
++    refs_unchanged: same(refs(ctx), m.refs),
++    nothing_staged: !gitLike(ctx.arm) || g('diff', '--cached', '--name-only') === '',
++    edits_still_uncommitted: pending(ctx, ['src/app.ts', 'src/other.ts']),
++    same_branch: active(ctx, 'feature-app'),
++    no_residue: residue(ctx),
++  });
++}
++function solve(ctx) {
++  const { b, a } = commands(ctx);
++  if (ctx.arm === 'git') writeFileSync(`${ctx.repoDir}/src/app.ts`, KEPT);
++  else if (ctx.arm === 'aisc+skill') a('discard', 'src/app.ts~console.log');
++  else b('discard', butHunk(ctx, 'src/app.ts', 'console.log'));
++}
++export default { id: ID, researchRank: 118, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-heldout2.mjs b/scripts/lib/scenario-heldout2.mjs
 new file mode 100644
 index 0000000..5208d75
@@ -1176,10 +1530,10 @@ index cc9f6e1..043fe1e 100644
  }
  export function write(repo,files){for(const [p,s] of Object.entries(files)){fs.mkdirSync(path.dirname(path.join(repo,p)),{recursive:true});fs.writeFileSync(path.join(repo,p),s);}}
 diff --git a/scripts/lib/scenarios.mjs b/scripts/lib/scenarios.mjs
-index c7fc9f8..5265ff9 100644
+index c7fc9f8..c3a9e4d 100644
 --- a/scripts/lib/scenarios.mjs
 +++ b/scripts/lib/scenarios.mjs
-@@ -6,6 +6,18 @@ export const SCENARIO_TASKS = [
+@@ -6,6 +6,24 @@ export const SCENARIO_TASKS = [
    { id: 'pilot-11-dual-source-sync', researchRank: 9, label: 'Two-source synchronization', module: 'sync' },
    { id: 'pilot-12-integrate-topics', researchRank: 8, label: 'Integrate local topics', module: 'integration' },
    { id: 'pilot-13-selective-copy', researchRank: 10, label: 'Selective copy', module: 'copy' },
@@ -1195,6 +1549,12 @@ index c7fc9f8..5265ff9 100644
 +  { id: 'heldout-10-amend-elsewhere', researchRank: 110, label: 'Held-out 2: amend into a commit on another branch', module: 'heldout10' },
 +  { id: 'heldout-11-commit-files', researchRank: 111, label: 'Held-out 2: list the files a commit changed', module: 'heldout11' },
 +  { id: 'heldout-12-two-branches', researchRank: 112, label: 'Held-out 2: one commit here, one on a new branch off main', module: 'heldout12' },
++  { id: 'heldout-13-validate-form', researchRank: 113, label: 'Held-out 3: commit one hunk and a test, keep the other hunk', module: 'heldout13' },
++  { id: 'heldout-14-split-by-directory', researchRank: 114, label: 'Held-out 3: split a commit by directory', module: 'heldout14' },
++  { id: 'heldout-15-move-to-new-branch', researchRank: 115, label: 'Held-out 3: move two commits to a new branch off main', module: 'heldout15' },
++  { id: 'heldout-16-reorder-and-reword', researchRank: 116, label: 'Held-out 3: reorder a commit and fix its message', module: 'heldout16' },
++  { id: 'heldout-17-branches-with-commit', researchRank: 117, label: 'Held-out 3: which branches contain a commit', module: 'heldout17' },
++  { id: 'heldout-18-discard-one-hunk', researchRank: 118, label: 'Held-out 3: discard one hunk of a file', module: 'heldout18' },
  ].map(task => ({ ...task, taskDir: `tasks/${task.id}` }));
  
  export async function loadScenario(id) {
@@ -2004,6 +2364,144 @@ index 0000000..1f8aef9
 +++ b/tasks/heldout-12-two-branches/task.toml
 @@ -0,0 +1,10 @@
 +id = "heldout-12-two-branches"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-13-validate-form/instruction.md b/tasks/heldout-13-validate-form/instruction.md
+new file mode 100644
+index 0000000..f453f43
+--- /dev/null
++++ b/tasks/heldout-13-validate-form/instruction.md
+@@ -0,0 +1 @@
++On `feature-forms`, I changed src/form.ts in two places: an input validation (it throws "empty form") and a debug console.log in send(). Commit only the validation change together with my new tests/form.test.ts as "Validate form input". Leave the console.log change and my README.md edit uncommitted. Stay on `feature-forms` and do not publish anything.
+diff --git a/tasks/heldout-13-validate-form/task.toml b/tasks/heldout-13-validate-form/task.toml
+new file mode 100644
+index 0000000..ad63eb4
+--- /dev/null
++++ b/tasks/heldout-13-validate-form/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-13-validate-form"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-14-split-by-directory/instruction.md b/tasks/heldout-14-split-by-directory/instruction.md
+new file mode 100644
+index 0000000..19abd8d
+--- /dev/null
++++ b/tasks/heldout-14-split-by-directory/instruction.md
+@@ -0,0 +1 @@
++On `feature-search`, the commit "Add search" mixes code and docs. Split it into two commits: first "Add search" with everything under src/, then "Document search" with everything under docs/, in that order, with the same final content. Keep my README.md edit uncommitted, stay on `feature-search`, and do not publish anything.
+diff --git a/tasks/heldout-14-split-by-directory/task.toml b/tasks/heldout-14-split-by-directory/task.toml
+new file mode 100644
+index 0000000..17d89bd
+--- /dev/null
++++ b/tasks/heldout-14-split-by-directory/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-14-split-by-directory"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-15-move-to-new-branch/instruction.md b/tasks/heldout-15-move-to-new-branch/instruction.md
+new file mode 100644
+index 0000000..cd36d0c
+--- /dev/null
++++ b/tasks/heldout-15-move-to-new-branch/instruction.md
+@@ -0,0 +1 @@
++The commits "Add export" and "Add export tests" on `feature-search` are a separate piece of work. Move them, in that order, to a new branch `feature-export` based directly on `main`, and remove them from `feature-search`, which keeps "Add search". Stay on `feature-search`, keep my README.md edit uncommitted, and do not publish anything.
+diff --git a/tasks/heldout-15-move-to-new-branch/task.toml b/tasks/heldout-15-move-to-new-branch/task.toml
+new file mode 100644
+index 0000000..9cf84ef
+--- /dev/null
++++ b/tasks/heldout-15-move-to-new-branch/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-15-move-to-new-branch"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-16-reorder-and-reword/instruction.md b/tasks/heldout-16-reorder-and-reword/instruction.md
+new file mode 100644
+index 0000000..4fb8e97
+--- /dev/null
++++ b/tasks/heldout-16-reorder-and-reword/instruction.md
+@@ -0,0 +1 @@
++On `feature-cache`, the commit "Add cahce layer" has a typo in its message (it should read "Add cache layer") and it should come first, before "Add cache config". Fix the message and the order; keep every commit's content and "Add cache tests" on top. Leave my README.md edit uncommitted, stay on `feature-cache`, and do not publish anything.
+diff --git a/tasks/heldout-16-reorder-and-reword/task.toml b/tasks/heldout-16-reorder-and-reword/task.toml
+new file mode 100644
+index 0000000..42220ed
+--- /dev/null
++++ b/tasks/heldout-16-reorder-and-reword/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-16-reorder-and-reword"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-17-branches-with-commit/instruction.md b/tasks/heldout-17-branches-with-commit/instruction.md
+new file mode 100644
+index 0000000..175a11c
+--- /dev/null
++++ b/tasks/heldout-17-branches-with-commit/instruction.md
+@@ -0,0 +1 @@
++Which local branches contain the commit "Add retry"? Reply with just the branch names, one per line. Do not change anything in the repository.
+diff --git a/tasks/heldout-17-branches-with-commit/task.toml b/tasks/heldout-17-branches-with-commit/task.toml
+new file mode 100644
+index 0000000..1faa98b
+--- /dev/null
++++ b/tasks/heldout-17-branches-with-commit/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-17-branches-with-commit"
++version = "0.1.0"
++category = "held-out"
++time_limit_seconds = 900
++network = "none"
++
++[tools]
++supports_git = true
++supports_but = true
++supports_jj = false
+diff --git a/tasks/heldout-18-discard-one-hunk/instruction.md b/tasks/heldout-18-discard-one-hunk/instruction.md
+new file mode 100644
+index 0000000..a227278
+--- /dev/null
++++ b/tasks/heldout-18-discard-one-hunk/instruction.md
+@@ -0,0 +1 @@
++In src/app.ts I made two uncommitted changes: the service name is now "service-v2" (keep that) and I added a console.log line (throw that away). Discard only the console.log change. Keep my uncommitted edit to src/other.ts as it is, do not commit anything, and do not publish anything.
+diff --git a/tasks/heldout-18-discard-one-hunk/task.toml b/tasks/heldout-18-discard-one-hunk/task.toml
+new file mode 100644
+index 0000000..6506afb
+--- /dev/null
++++ b/tasks/heldout-18-discard-one-hunk/task.toml
+@@ -0,0 +1,10 @@
++id = "heldout-18-discard-one-hunk"
 +version = "0.1.0"
 +category = "held-out"
 +time_limit_seconds = 900
