@@ -22,6 +22,7 @@ Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take
 - integrate branches: `aisc land BRANCH... --into main [--switch] [--delete]`
 - work on another branch: `aisc switch BRANCH` (edits come along); never `git worktree`/`checkout`
 - undo the last operation: `aisc undo`
+- chain reads in one shell call (`aisc log && aisc show A:PATH`); a write may follow them
 
 SEL is a hunk id, a path or directory, `PATH:A-B` (new-side lines) or `\"PATH~text\"` (the hunk containing text). COMMIT is an id or exact subject.
 

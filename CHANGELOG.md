@@ -8,6 +8,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The agent block and skill say that reads can be chained in one shell call; capped hunk
+  listings end in `… +N (--full)` so the one-call way to see everything is in the output.
 - `aisc branches [COMMIT]` lists local branches, or the ones whose history contains COMMIT (an
   id, an exact subject on any local branch, or a revision). Agents used raw `git branch` for this.
 - `aisc move COMMIT... --to NEW --onto BASE` moves commits to a new branch started at BASE in
