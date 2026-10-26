@@ -1097,6 +1097,33 @@ fn amend_into_a_commit_on_another_branch_in_one_call() {
 }
 
 #[test]
+fn a_target_branch_moved_between_read_and_apply_is_refused_elsewhere() {
+    let (fixture, _) = elsewhere();
+    // The first Git process of the operation; the branch moves under it, like another agent.
+    let hook = "$REAL_GIT update-ref refs/heads/feature-config feature-config~1";
+    let env = fixture.fake_git("hash-object", hook);
+    let moved = fixture.git(&["rev-parse", "feature-config~1"]);
+    let run = fixture.aisc_env(
+        &["amend", "--into", "Add config loader", "config.ts"],
+        &support::env_refs(&env),
+    );
+    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert!(
+        fixture.git(&["for-each-ref", "refs/aisc"]).is_empty(),
+        "no operation was recorded"
+    );
+    assert_eq!(fixture.git(&["rev-parse", "feature-config"]), moved);
+    assert_eq!(
+        fixture.read("config.ts"),
+        PORTS.replace("port = 8080", "port = 3000")
+    );
+    assert_eq!(
+        fixture.git(&["status", "--porcelain"]),
+        " M config.ts\n M ui.ts"
+    );
+}
+
+#[test]
 fn amend_elsewhere_refusals_change_nothing() {
     let (fixture, _) = elsewhere();
     // The subject exists on two branches: name one.

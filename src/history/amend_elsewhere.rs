@@ -88,6 +88,12 @@ pub(crate) fn run(
         (&head_oid, head_symbolic.as_deref()),
         &src.oid,
         &label,
+        &format!(
+            "commit it on {} first, or switch to {branch} and amend there",
+            head_symbolic
+                .as_deref()
+                .map_or("HEAD", |name| name.trim_start_matches("refs/heads/"))
+        ),
     )?;
     if placed.tree == src.tree {
         return Err(fail(

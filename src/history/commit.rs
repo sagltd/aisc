@@ -496,6 +496,7 @@ pub(crate) fn tree_with_selection(
     (head_oid, head_symbolic): (&str, Option<&str>),
     base: &str,
     rev: &str,
+    hint: &str,
 ) -> Result<Placed> {
     // The selection as each file's entry on BASE.
     let head_tree = git.commit_tree_of(head_oid)?;
@@ -573,10 +574,7 @@ pub(crate) fn tree_with_selection(
             fail_hint(
                 Code::Conflict,
                 format!("{}: {why}; nothing was changed", file.path),
-                format!(
-                    "commit it on {} first, or base the branch on another commit",
-                    head_symbolic.map_or("HEAD", |name| name.trim_start_matches("refs/heads/"))
-                ),
+                hint,
             )
         };
         let on_head = at_head.get(&file.path);
@@ -698,6 +696,10 @@ pub(crate) fn tree_with_selection(
     })
 }
 
+fn branch_name(symbolic: Option<&str>) -> &str {
+    symbolic.map_or("HEAD", |name| name.trim_start_matches("refs/heads/"))
+}
+
 /// `commit -b NEW --onto BASE`: NEW becomes BASE plus one commit holding the selection, built
 /// with plumbing only; HEAD never moves. Unless `--keep`, the selection then leaves the worktree
 /// and index in the same operation (as if committed on NEW and switched back), so `aisc undo`
@@ -755,6 +757,10 @@ fn onto(
         (&head_oid, head_symbolic.as_deref()),
         &base,
         rev,
+        &format!(
+            "commit it on {} first, or base the branch on another commit",
+            branch_name(head_symbolic.as_deref())
+        ),
     )?;
     let (base_tree, tree, hashed) = (placed.base_tree, placed.tree, placed.hashed);
     if tree == base_tree {
