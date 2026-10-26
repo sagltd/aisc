@@ -5,7 +5,7 @@ pub const SETUP_BLOCK: &str = "\
 <!-- aisc-agent-setup:start -->
 ## Version control
 
-Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take two calls: `aisc log`, then one command below. If the task already names the commits (exact subject) and the changes (path or text), skip `aisc log`. This syntax is complete: do not run `--help`, open the skill, or use `git status`/`diff`/`log`.
+Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take two calls: `aisc log`, then one command below. If the task names the commits (exact subject) and the changes (path or text), skip `aisc log`. This syntax is complete: no `--help`, no skill, no `git status`/`diff`/`log`.
 
 - look: `aisc log [BRANCH]` (commits, every uncommitted hunk with an id; BRANCH may be `origin/NAME`); `aisc show COMMIT`; `aisc show COMMIT:PATH` (whole file)
 - commit some changes: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` new branch; `--onto BRANCH` or `-b NEW --onto BASE`: commit there without leaving this branch)
@@ -16,9 +16,9 @@ Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take
 - change a message: `aisc reword COMMIT -m MSG`
 - remove commits: `aisc drop COMMIT...`
 - take out of a commit, keep on disk: `aisc uncommit COMMIT SEL...`
-- throw away uncommitted changes: `aisc discard SEL...`
+- discard uncommitted changes: `aisc discard SEL...`
 - copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]`
-- update onto moved base and upstream, keeping uncommitted work: `aisc sync [ONTO] [--fetch]`; on CONFLICTS edit the marked files, then `aisc sync --continue`
+- update onto moved base and upstream, keeping uncommitted work: `aisc sync [ONTO] [--fetch]` (replaces `git fetch`/`pull`); on CONFLICTS edit the marked files, then `aisc sync --continue`
 - integrate branches: `aisc land BRANCH... --into main [--switch] [--delete]` (`--delete` removes them)
 - work or run tests on another branch: `aisc switch BRANCH` (edits come along); never `git worktree`/`checkout`
 - undo the last operation: `aisc undo`
