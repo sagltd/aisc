@@ -571,3 +571,48 @@ fn show_a_file_at_a_commit_prints_its_content() {
     range.ok();
     assert!(range.stdout.contains("+three"), "{}", range.stdout);
 }
+
+#[test]
+fn branches_lists_local_branches_and_those_containing_a_commit() {
+    let fixture = Fixture::with_files(&[("f.txt", "one\n")]);
+    fixture.git(&["switch", "-q", "-c", "fix-retry"]);
+    fixture.write("retry.txt", "3\n");
+    fixture.commit_all("Add retry");
+    fixture.git(&["switch", "-q", "-c", "fix-retry-docs"]);
+    fixture.write("docs.txt", "retry docs\n");
+    fixture.commit_all("Document retry");
+    fixture.git(&["switch", "-q", "-c", "feature-ui", "main"]);
+    fixture.write("ui.txt", "ui\n");
+    fixture.commit_all("Add theme toggle");
+    let all = fixture.aisc(&["branches"]);
+    all.ok();
+    assert_eq!(
+        all.stdout.lines().collect::<Vec<_>>(),
+        ["feature-ui", "fix-retry", "fix-retry-docs", "main"]
+    );
+    // A subject on another branch: the branches whose history holds that commit.
+    let holding = fixture.aisc(&["branches", "Add retry"]);
+    holding.ok();
+    assert_eq!(
+        holding.stdout.lines().collect::<Vec<_>>(),
+        ["fix-retry", "fix-retry-docs"]
+    );
+    let oid = fixture.git(&["rev-parse", "fix-retry"]);
+    let by_id = fixture.aisc(&["branches", &oid[..7]]);
+    by_id.ok();
+    assert_eq!(by_id.stdout, holding.stdout);
+    let json = fixture.aisc(&["branches", "Add retry", "--json"]).json();
+    assert_eq!(json["branches"].as_array().map(Vec::len), Some(2));
+    assert_eq!(json["branches"][0]["name"], "fix-retry");
+    assert_eq!(json["commit"]["subject"], "Add retry");
+    let base = fixture.aisc(&["branches", "main"]);
+    base.ok();
+    assert_eq!(base.stdout.lines().count(), 4, "{}", base.stdout);
+    let unknown = fixture.aisc(&["branches", "nope"]);
+    assert_eq!(unknown.code, 1, "{} {}", unknown.stdout, unknown.stderr);
+    assert!(
+        unknown.stderr.contains("unknown commit"),
+        "{}",
+        unknown.stderr
+    );
+}

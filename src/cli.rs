@@ -89,6 +89,8 @@ pub(crate) enum Operation {
     Log(Log),
     /// Show hunks of a commit, a range A..B, or the uncommitted changes
     Show(Show),
+    /// List local branches, or those whose history contains COMMIT
+    Branches(Branches),
     /// Commit selected hunks/files/content as one or several new commits
     Commit(Commit),
     /// Move uncommitted hunks into existing commits
@@ -179,6 +181,13 @@ pub(crate) struct Log {
     /// Only commit ids and subjects, and the uncommitted paths
     #[arg(short = 'q', long)]
     pub quiet: bool,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct Branches {
+    /// A commit id, exact subject (on any local branch) or revision; only branches containing it are listed
+    #[arg(value_name = "COMMIT")]
+    pub commit: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -443,6 +452,7 @@ impl Operation {
             Self::Gitlab { .. } => "gitlab",
             Self::Log(_) => "log",
             Self::Show(_) => "show",
+            Self::Branches(_) => "branches",
             Self::Commit(_) => "commit",
             Self::Amend(_) => "amend",
             Self::Discard(_) => "discard",

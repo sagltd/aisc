@@ -108,6 +108,74 @@ fn subject(
     }
 }
 
+/// `aisc branches [COMMIT]`: local branches, or the ones whose history contains COMMIT. COMMIT
+/// is resolved on the checked-out branch first, then as a Git revision, then as an exact subject
+/// on any other local branch.
+pub(crate) fn branches(args: &cli::Branches) -> Result<Outcome> {
+    let repo = Repo::discover()?;
+    let git = Git::from_repo(&repo);
+    super::rewrite::recover_before_read(&git);
+    let view = view::read_any(&git, None, 1_000, false)?;
+    let mut commit = None;
+    if let Some(spec) = &args.commit {
+        let oid = match view.resolve_opt(&git, spec)? {
+            Some(oid) => oid,
+            None => {
+                let holders = super::amend_elsewhere::branches_holding(&git, &view, spec)?;
+                let Some(first) = holders.first() else {
+                    return Err(fail_hint(
+                        Code::Selector,
+                        format!("unknown commit '{spec}'"),
+                        "use a commit id, an exact subject on a local branch, or a revision",
+                    ));
+                };
+                view::read(&git, Some(first), 1_000, false)?.resolve(&git, spec)?
+            }
+        };
+        let message = git.read_commit_meta(&oid)?.message;
+        let subject = String::from_utf8_lossy(&message)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_owned();
+        commit = Some((oid, subject));
+    }
+    let mut argv = vec!["branch", "--format=%(refname:short)"];
+    if let Some((oid, _)) = &commit {
+        argv.extend(["--contains", oid.as_str()]);
+    }
+    let listing = String::from_utf8_lossy(&git.run(&argv)?).into_owned();
+    let checked_out = view.branch.clone();
+    let mut names: Vec<String> = listing
+        .lines()
+        .map(str::trim)
+        .filter(|name| !name.is_empty() && !name.starts_with("(HEAD detached"))
+        .map(str::to_owned)
+        .collect();
+    names.sort();
+    let text = if names.is_empty() {
+        match &commit {
+            Some((oid, _)) => format!("no local branch contains {}", &oid[..oid.len().min(7)]),
+            None => "no local branches".to_owned(),
+        }
+    } else {
+        names
+            .iter()
+            .map(|name| escape_line(name))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let branches: Vec<Value> = names
+        .iter()
+        .map(|name| json!({"name": name, "checked_out": checked_out.as_deref() == Some(name.as_str())}))
+        .collect();
+    let commit = commit.map(|(oid, subject)| json!({"oid": oid, "subject": subject}));
+    Ok(Outcome::with_text(
+        json!({"branches": branches, "commit": commit}),
+        text,
+    ))
+}
+
 /// `REV:PATH` tokens name a file at a commit. `PATH:A-B` (a line range) stays a selector, so
 /// `f.txt:3-5` is never read as a file; the first token decides the form.
 fn file_specs(args: &[String]) -> Option<Vec<(&str, &str)>> {
