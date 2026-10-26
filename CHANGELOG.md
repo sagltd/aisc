@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `aisc amend --into COMMIT SEL...` works when COMMIT is on another local branch (named with
+  `--branch`, or found when exactly one branch has it): the selected changes are folded into
+  that commit from this worktree, the branch is rewritten above it, nothing is checked out, and
+  `aisc undo` restores both. One `--into` per call there.
 - `aisc show COMMIT:PATH` prints a whole file as it is at that commit (several `COMMIT:PATH`
   arguments get a header each; binary files are summarized). Review tasks needed `git show`
   for this before.

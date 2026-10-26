@@ -494,10 +494,10 @@ index 0000000..93c2dc8
 +export default { id: ID, researchRank: 101, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-heldout10.mjs b/scripts/lib/scenario-heldout10.mjs
 new file mode 100644
-index 0000000..7d88f25
+index 0000000..0259dd7
 --- /dev/null
 +++ b/scripts/lib/scenario-heldout10.mjs
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,62 @@
 +// Held-out 10: an uncommitted fix belongs in a commit on another branch that is not checked out.
 +import { writeFileSync } from 'node:fs';
 +import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending, gitLike } from './heldout-common.mjs';
@@ -551,8 +551,7 @@ index 0000000..7d88f25
 +    g('checkout', '--', 'src/config.ts');
 +    execute('rm', ['-f', tmp, fixed]);
 +  } else if (ctx.arm === 'aisc+skill') {
-+    a('commit', '-b', 'feature-config', '--onto', 'feature-config', '--existing', '-m', 'Fix default port', 'src/config.ts');
-+    a('squash', '--branch', 'feature-config', '--into', 'Add config loader', 'Add config loader', 'Fix default port');
++    a('amend', '--into', 'Add config loader', 'src/config.ts');
 +  } else {
 +    const s = JSON.parse(b('status', '-fv', '--json'));
 +    const commit = s.stacks.flatMap(x => x.branches).find(x => x.name === 'feature-config').commits.find(c => (c.message ?? '').startsWith('Add config loader'));

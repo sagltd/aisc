@@ -20,6 +20,31 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 // Helpers shared with split.rs
 // ---------------------------------------------------------------------------------------------
 
+fn is_checked_out(branch: &str, head: &HeadState) -> bool {
+    head.symbolic
+        .as_deref()
+        .and_then(|name| name.strip_prefix("refs/heads/"))
+        == Some(branch)
+}
+
+/// `--into COMMIT` on another local branch: one group, folded in from this worktree.
+fn elsewhere(
+    args: &cli::Amend,
+    groups: &[Group],
+    branch: &str,
+    git: &Git,
+    session: Session,
+) -> Result<Outcome> {
+    let [group] = groups else {
+        return Err(fail_hint(
+            Code::Usage,
+            format!("amending another branch ({branch}) takes one --into"),
+            "run aisc amend --branch BRANCH --into COMMIT SEL... once per commit",
+        ));
+    };
+    super::amend_elsewhere::run(args, branch, &group.spec, &group.tokens, git, session)
+}
+
 /// `--branch` must name the checked-out branch: these verbs act on the worktree's branch.
 pub(super) fn require_checked_out(opts: &cli::MutationOpts, head: &HeadState) -> Result<()> {
     if let Some(branch) = &opts.branch {
@@ -1300,7 +1325,12 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     let git = Git::from_repo(&repo);
     let session = Session::open(&repo, &git, true, false)?;
     let head_oid = session.head.oid.clone();
-    require_checked_out(&args.opts, &session.head)?;
+    if let Some(branch) = &args.opts.branch
+        && !is_checked_out(branch, &session.head)
+    {
+        // Another local branch: the selection is folded into one of its commits from here.
+        return elsewhere(args, &groups, branch, &git, session);
+    }
     let view = view::read(&git, None, 1_000, true)?;
     if view.tip != head_oid {
         return Err(stale("HEAD changed while aisc was reading"));
@@ -1319,8 +1349,35 @@ pub(crate) fn run(args: &cli::Amend) -> Result<Outcome> {
     let mut positions = Vec::new();
     let mut selections = Vec::new();
     for group in &groups {
-        let oid = view.resolve(&git, &group.spec)?;
-        positions.push(position(&view, &oid)?);
+        let resolved = view.resolve_opt(&git, &group.spec)?;
+        let Some(at) = resolved
+            .as_deref()
+            .and_then(|oid| position(&view, oid).ok())
+        else {
+            // Not on this branch: on exactly one other local branch it is amended there.
+            let holders = super::amend_elsewhere::branches_holding(&git, &view, &group.spec)?;
+            return match holders.as_slice() {
+                [branch] => elsewhere(args, &groups, branch, &git, session),
+                [] => Err(match resolved {
+                    Some(oid) => out_of_range(&view, &oid),
+                    None => fail_hint(
+                        Code::Selector,
+                        format!("unknown commit '{}'", group.spec),
+                        "run aisc log for ids and subjects",
+                    ),
+                }),
+                many => Err(fail_hint(
+                    Code::Selector,
+                    format!(
+                        "'{}' is on several branches: {}",
+                        group.spec,
+                        many.join(", ")
+                    ),
+                    "add --branch BRANCH",
+                )),
+            };
+        };
+        positions.push(at);
         selections.push(selector::resolve(&git.root, changes, &group.tokens)?);
     }
     selector::check_disjoint(changes, &selections)?;

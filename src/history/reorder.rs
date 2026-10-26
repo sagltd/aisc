@@ -210,6 +210,36 @@ pub(crate) fn finish_rewrite_with(
     extra: Vec<RefMove>,
     trees: Option<(&str, &str)>,
 ) -> Result<Finished> {
+    let prepared = prepare_rewrite(
+        git, &session, view, verb, summary, new_tip, rewritten, extra, trees,
+    )?;
+    let applied = session.apply(&prepared.plan)?;
+    Ok(Finished {
+        applied,
+        moved_refs: prepared.moved_refs,
+        branch: prepared.branch,
+    })
+}
+
+/// A rewrite's plan before it is applied: a caller may add worktree and index changes.
+pub(crate) struct Prepared {
+    pub plan: Plan,
+    pub moved_refs: Vec<Value>,
+    pub branch: String,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_rewrite(
+    git: &Git,
+    session: &Session,
+    view: &View,
+    verb: &str,
+    summary: String,
+    new_tip: &str,
+    rewritten: Vec<(String, String)>,
+    extra: Vec<RefMove>,
+    trees: Option<(&str, &str)>,
+) -> Result<Prepared> {
     let checked_out = git.checked_out()?;
     let (reference, branch) = if view.is_head {
         if session.head.oid != view.tip {
@@ -289,9 +319,8 @@ pub(crate) fn finish_rewrite_with(
         plan.worktree = carried.writes;
         plan.index = carried.index;
     }
-    let applied = session.apply(&plan)?;
-    Ok(Finished {
-        applied,
+    Ok(Prepared {
+        plan,
         moved_refs,
         branch,
     })
