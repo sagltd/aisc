@@ -85,7 +85,7 @@ pub(crate) fn run(
         git,
         &changes,
         &selection,
-        (&head_oid, head_symbolic.as_deref()),
+        &head_oid,
         &src.oid,
         &label,
         &format!(

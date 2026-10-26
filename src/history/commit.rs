@@ -493,7 +493,7 @@ pub(crate) fn tree_with_selection(
     git: &Git,
     changes: &ChangeSet,
     selection: &Selection,
-    (head_oid, head_symbolic): (&str, Option<&str>),
+    head_oid: &str,
     base: &str,
     rev: &str,
     hint: &str,
@@ -754,7 +754,7 @@ fn onto(
         git,
         changes,
         selection,
-        (&head_oid, head_symbolic.as_deref()),
+        &head_oid,
         &base,
         rev,
         &format!(
