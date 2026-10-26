@@ -8,6 +8,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `aisc branches [COMMIT]` lists local branches, or the ones whose history contains COMMIT (an
+  id, an exact subject on any local branch, or a revision). Agents used raw `git branch` for this.
 - `aisc move COMMIT... --to NEW --onto BASE` moves commits to a new branch started at BASE in
   one call; `aisc undo` deletes the branch and brings the commits back. (Held-out set 3: agents
   tried `move --to NEW` first and needed `pick` plus `drop`.)

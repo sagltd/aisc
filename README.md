@@ -139,6 +139,7 @@ A selector picks changes: a hunk id from `aisc log` (`jji`), a path, `PATH:12-30
 | --- | --- |
 | `aisc log` | Branch view plus every uncommitted hunk with an id |
 | `aisc show REV` | The hunks of a commit, a range, or the worktree; `REV:PATH` prints a whole file at that commit |
+| `aisc branches [COMMIT]` | Local branches, or those whose history contains COMMIT |
 | `aisc commit -m MSG SEL…` | Commit only the selected changes (`--all` for everything) |
 | `aisc commit -b NEW --onto BASE -m MSG SEL…` | Put the selected changes on a new branch off BASE, without leaving your branch |
 | `aisc amend --into COMMIT SEL…` | Fold changes into older commits (repeat `--into`) |

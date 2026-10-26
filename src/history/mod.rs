@@ -133,6 +133,7 @@ pub(crate) fn run(command: &Operation) -> Option<Result<Outcome>> {
     Some(match command {
         Operation::Log(args) => log::run(args),
         Operation::Show(args) => log::show(args),
+        Operation::Branches(args) => log::branches(args),
         Operation::Commit(args) => commit::run(args),
         Operation::Amend(args) => amend::run(args),
         Operation::Discard(args) => discard::run(args),

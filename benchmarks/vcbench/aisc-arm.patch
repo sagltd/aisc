@@ -941,10 +941,10 @@ index 0000000..46f8958
 +export default { id: ID, researchRank: 116, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-heldout17.mjs b/scripts/lib/scenario-heldout17.mjs
 new file mode 100644
-index 0000000..cb32fd3
+index 0000000..2ee4dd5
 --- /dev/null
 +++ b/scripts/lib/scenario-heldout17.mjs
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,38 @@
 +// Held-out 17: which local branches contain a commit, without changing anything.
 +import { commands, write, initialize, save, adopt, refs, disk, same, result, residue, BASE } from './heldout-common.mjs';
 +export const ID = 'heldout-17-branches-with-commit';
@@ -978,7 +978,8 @@ index 0000000..cb32fd3
 +  });
 +}
 +function solve(ctx) {
-+  const { g } = commands(ctx);
++  const { g, a } = commands(ctx);
++  if (ctx.arm === 'aisc+skill') return a('branches', 'Add retry');
 +  return g('branch', '--format=%(refname:short)', '--contains', ':/Add retry').split('\n').filter(n => !n.startsWith('gitbutler/')).join('\n');
 +}
 +export default { id: ID, researchRank: 117, prepare, verify, solve };
