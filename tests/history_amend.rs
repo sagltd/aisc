@@ -1015,3 +1015,224 @@ fn a_file_changed_between_read_and_amend_is_a_stale_error() {
     assert_eq!(fixture.git(&["rev-parse", "HEAD"]), head);
     assert!(fixture.git(&["for-each-ref", "refs/aisc"]).is_empty());
 }
+
+// ---------------------------------------------------------------------------------------------
+// Amending a commit on another local branch from this worktree.
+
+const PORTS: &str = "export const port = 8080;\nexport const host = \"localhost\";\nexport const MAX_RETRIES = 3;\nexport const timeoutMs = 5000;\nexport const verbose = false;\nexport const region = \"eu\";\n";
+
+/// main: config.ts; feature-config: "Add config loader" (changes the host line, appends a loader),
+/// then "Add config docs"; feature-ui (checked out): "Add theme toggle". Dirty here: the port fix
+/// in config.ts and a ui.ts edit. Returns the fixture and the loader file with the port fix.
+fn elsewhere() -> (Fixture, String) {
+    let loader = PORTS.replace("\"localhost\"", "\"0.0.0.0\"")
+        + "\nexport function load(path: string) {\n  return path;\n}\n";
+    let fixture = Fixture::with_files(&[("config.ts", PORTS), ("README.md", "readme\n")]);
+    fixture.git(&["switch", "-q", "-c", "feature-config"]);
+    fixture.write("config.ts", &loader);
+    fixture.commit_all("Add config loader");
+    fixture.write("docs.md", "loader docs\n");
+    fixture.commit_all("Add config docs");
+    fixture.git(&["switch", "-q", "-c", "feature-ui", "main"]);
+    fixture.write("ui.ts", "export const theme = \"dark\";\n");
+    fixture.commit_all("Add theme toggle");
+    fixture.write("config.ts", &PORTS.replace("port = 8080", "port = 3000"));
+    fixture.write(
+        "ui.ts",
+        "export const theme = \"dark\";\nexport const compact = true;\n",
+    );
+    (fixture, loader.replace("port = 8080", "port = 3000"))
+}
+
+#[test]
+fn amend_into_a_commit_on_another_branch_in_one_call() {
+    let (fixture, fixed_loader) = elsewhere();
+    let tip_before = fixture.git(&["rev-parse", "feature-config"]);
+    let author = fixture.git(&["log", "-1", "--format=%an <%ae> %ad", "feature-config~1"]);
+    // No --branch: the commit is found on the one other branch that has it.
+    let run = fixture.aisc(&["amend", "--into", "Add config loader", "config.ts"]);
+    run.ok();
+    assert!(run.stdout.contains("feature-config"), "{}", run.stdout);
+    assert_eq!(
+        fixture.subjects("main..feature-config"),
+        ["Add config docs", "Add config loader"]
+    );
+    assert_eq!(
+        fixture
+            .tree_blob("feature-config~1", "config.ts")
+            .as_deref(),
+        Some(fixed_loader.as_str())
+    );
+    assert_eq!(
+        fixture.tree_blob("feature-config", "config.ts").as_deref(),
+        Some(fixed_loader.as_str())
+    );
+    assert_eq!(
+        fixture.tree_blob("feature-config", "docs.md").as_deref(),
+        Some("loader docs\n")
+    );
+    assert_eq!(
+        fixture.git(&["log", "-1", "--format=%an <%ae> %ad", "feature-config~1"]),
+        author
+    );
+    // This worktree: the fix left, the ui edit stayed, HEAD did not move.
+    assert_eq!(fixture.read("config.ts"), PORTS);
+    assert_eq!(
+        fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "feature-ui"
+    );
+    assert_eq!(fixture.git(&["status", "--porcelain"]), " M ui.ts");
+    assert_eq!(fixture.subjects("main..feature-ui"), ["Add theme toggle"]);
+    // Undo restores the branch and brings the fix back here.
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.git(&["rev-parse", "feature-config"]), tip_before);
+    assert_eq!(
+        fixture.read("config.ts"),
+        PORTS.replace("port = 8080", "port = 3000")
+    );
+    assert_eq!(
+        fixture.git(&["status", "--porcelain"]),
+        " M config.ts\n M ui.ts"
+    );
+}
+
+#[test]
+fn a_target_branch_moved_between_read_and_apply_is_refused_elsewhere() {
+    let (fixture, _) = elsewhere();
+    // The first Git process of the operation; the branch moves under it, like another agent.
+    let hook = "$REAL_GIT update-ref refs/heads/feature-config feature-config~1";
+    let env = fixture.fake_git("hash-object", hook);
+    let moved = fixture.git(&["rev-parse", "feature-config~1"]);
+    let run = fixture.aisc_env(
+        &["amend", "--into", "Add config loader", "config.ts"],
+        &support::env_refs(&env),
+    );
+    assert_ne!(run.code, 0, "{} {}", run.stdout, run.stderr);
+    assert!(
+        fixture.git(&["for-each-ref", "refs/aisc"]).is_empty(),
+        "no operation was recorded"
+    );
+    assert_eq!(fixture.git(&["rev-parse", "feature-config"]), moved);
+    assert_eq!(
+        fixture.read("config.ts"),
+        PORTS.replace("port = 8080", "port = 3000")
+    );
+    assert_eq!(
+        fixture.git(&["status", "--porcelain"]),
+        " M config.ts\n M ui.ts"
+    );
+}
+
+#[test]
+fn amend_elsewhere_refusals_change_nothing() {
+    let (fixture, _) = elsewhere();
+    // The subject exists on two branches: name one.
+    fixture.git(&["branch", "config-copy", "feature-config"]);
+    let heads = |fixture: &Fixture| {
+        fixture.git(&["for-each-ref", "refs/heads"])
+            + "\n"
+            + &fixture.git(&["status", "--porcelain"])
+    };
+    let heads_before = heads(&fixture);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["amend", "--into", "Add config loader", "config.ts"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(
+        run.stderr.contains("config-copy") && run.stderr.contains("feature-config"),
+        "{}",
+        run.stderr
+    );
+    assert!(run.stderr.contains("--branch"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    let run = fixture.aisc(&[
+        "amend",
+        "--branch",
+        "feature-config",
+        "--into",
+        "Add config loader",
+        "config.ts",
+    ]);
+    run.ok();
+    assert_eq!(
+        fixture.subjects("main..config-copy"),
+        ["Add config docs", "Add config loader"]
+    );
+    // A branch at a rewritten commit follows it, as with every rewrite verb.
+    assert_eq!(
+        fixture.git(&["rev-parse", "config-copy"]),
+        fixture.git(&["rev-parse", "feature-config"])
+    );
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(heads(&fixture), heads_before);
+    fixture.git(&["branch", "-D", "config-copy"]);
+    // A hunk on lines the target commit changed cannot be placed: refused, nothing written.
+    fixture.write(
+        "config.ts",
+        &PORTS
+            .replace("port = 8080", "port = 3000")
+            .replace("\"localhost\"", "\"127.0.0.1\""),
+    );
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&[
+        "amend",
+        "--branch",
+        "feature-config",
+        "--into",
+        "Add config loader",
+        "config.ts~127.0.0.1",
+    ]);
+    assert_ne!(run.code, 0, "{}", run.stdout);
+    assert!(run.stderr.contains("nothing was changed"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    // The target branch is checked out in another worktree.
+    fixture.write("config.ts", &PORTS.replace("port = 8080", "port = 3000"));
+    let linked = fixture.root.parent().unwrap().join("config-wt");
+    fixture.git(&[
+        "worktree",
+        "add",
+        "-q",
+        linked.to_str().unwrap(),
+        "feature-config",
+    ]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&[
+        "amend",
+        "--branch",
+        "feature-config",
+        "--into",
+        "Add config loader",
+        "config.ts~3000",
+    ]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("another worktree"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    fixture.git(&["worktree", "remove", "--force", linked.to_str().unwrap()]);
+    // Several --into groups: one branch per call.
+    let run = fixture.aisc(&[
+        "amend",
+        "--branch",
+        "feature-config",
+        "--into",
+        "Add config loader",
+        "config.ts~3000",
+        "--into",
+        "Add config docs",
+        "ui.ts",
+    ]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("one --into"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    // A foreign index lock: refused before anything is read.
+    fixture.write(".git/index.lock", "");
+    let run = fixture.aisc(&[
+        "amend",
+        "--branch",
+        "feature-config",
+        "--into",
+        "Add config loader",
+        "config.ts~3000",
+    ]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("locked"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+}

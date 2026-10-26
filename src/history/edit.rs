@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 /// new tip and tree, and every (old, new) commit pair that changed. With `onto_branch`, a commit
 /// whose replay changes nothing there is refused: that branch already contains its change, and
 /// moving it would only add an empty duplicate.
-fn replay_order(
+pub(crate) fn replay_order(
     git: &Git,
     sources: &[Src],
     order: &[usize],

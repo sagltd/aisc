@@ -480,59 +480,27 @@ fn first_line(message: &str) -> &str {
     message.lines().next().unwrap_or("")
 }
 
-/// `commit -b NEW --onto BASE`: NEW becomes BASE plus one commit holding the selection, built
-/// with plumbing only; HEAD never moves. Unless `--keep`, the selection then leaves the worktree
-/// and index in the same operation (as if committed on NEW and switched back), so `aisc undo`
-/// deletes NEW and puts the changes back.
-fn onto(
-    args: &cli::Commit,
-    message: &str,
-    (git, session): (&Git, Session),
+/// `base`'s tree with `selection` (this worktree's changes against `head`) applied to it, each
+/// block placed where the diff from BASE to HEAD puts it on BASE's version, plus the verified
+/// worktree blob ids a removal needs. Refuses, writing nothing, when a change cannot be placed.
+pub(crate) struct Placed {
+    pub base_tree: String,
+    pub tree: String,
+    pub hashed: BTreeMap<String, String>,
+}
+
+pub(crate) fn tree_with_selection(
+    git: &Git,
     changes: &ChangeSet,
     selection: &Selection,
-    started: SystemTime,
-) -> Result<Outcome> {
-    let rev = args.onto.as_deref().expect("--onto");
-    let name = args
-        .new_branch
-        .as_deref()
-        .expect("clap requires -b with --onto");
-    let (head_oid, head_symbolic) = (session.head.oid.clone(), session.head.symbolic.clone());
-    let base = git.resolve_commit(rev)?.ok_or_else(|| {
-        fail_hint(
-            Code::Selector,
-            format!("unknown revision '{rev}'"),
-            "--onto names the branch or commit the new branch starts from",
-        )
-    })?;
-    let reference = format!("refs/heads/{name}");
-    let existing = git.ref_oid(&reference)?;
-    if let Some(tip) = &existing {
-        if head_symbolic.as_deref() == Some(reference.as_str()) {
-            return Err(fail_hint(
-                Code::Usage,
-                format!("'{name}' is the checked-out branch"),
-                "commit without --onto",
-            ));
-        }
-        if *tip != base {
-            return Err(fail_hint(
-                Code::Usage,
-                format!("with --existing, --onto must be '{name}' itself"),
-                format!("aisc commit -b {name} --existing --onto {name} ..."),
-            ));
-        }
-        if git.checked_out()?.contains(&reference) {
-            return Err(fail(
-                Code::State,
-                format!("branch '{name}' is checked out in another worktree"),
-            ));
-        }
-    }
-
+    head_oid: &str,
+    base: &str,
+    rev: &str,
+    hint: &str,
+) -> Result<Placed> {
     // The selection as each file's entry on BASE.
-    let head_tree = git.commit_tree_of(&head_oid)?;
-    let base_tree = git.commit_tree_of(&base)?;
+    let head_tree = git.commit_tree_of(head_oid)?;
+    let base_tree = git.commit_tree_of(base)?;
     let paths: Vec<String> = selection
         .files
         .keys()
@@ -606,12 +574,7 @@ fn onto(
             fail_hint(
                 Code::Conflict,
                 format!("{}: {why}; nothing was changed", file.path),
-                format!(
-                    "commit it on {} first, or base the branch on another commit",
-                    head_symbolic
-                        .as_deref()
-                        .map_or("HEAD", |name| name.trim_start_matches("refs/heads/"))
-                ),
+                hint,
             )
         };
         let on_head = at_head.get(&file.path);
@@ -726,6 +689,80 @@ fn onto(
         });
     }
     let tree = git.tree_with(&base_tree, &edits)?;
+    Ok(Placed {
+        base_tree,
+        tree,
+        hashed,
+    })
+}
+
+fn branch_name(symbolic: Option<&str>) -> &str {
+    symbolic.map_or("HEAD", |name| name.trim_start_matches("refs/heads/"))
+}
+
+/// `commit -b NEW --onto BASE`: NEW becomes BASE plus one commit holding the selection, built
+/// with plumbing only; HEAD never moves. Unless `--keep`, the selection then leaves the worktree
+/// and index in the same operation (as if committed on NEW and switched back), so `aisc undo`
+/// deletes NEW and puts the changes back.
+fn onto(
+    args: &cli::Commit,
+    message: &str,
+    (git, session): (&Git, Session),
+    changes: &ChangeSet,
+    selection: &Selection,
+    started: SystemTime,
+) -> Result<Outcome> {
+    let rev = args.onto.as_deref().expect("--onto");
+    let name = args
+        .new_branch
+        .as_deref()
+        .expect("clap requires -b with --onto");
+    let (head_oid, head_symbolic) = (session.head.oid.clone(), session.head.symbolic.clone());
+    let base = git.resolve_commit(rev)?.ok_or_else(|| {
+        fail_hint(
+            Code::Selector,
+            format!("unknown revision '{rev}'"),
+            "--onto names the branch or commit the new branch starts from",
+        )
+    })?;
+    let reference = format!("refs/heads/{name}");
+    let existing = git.ref_oid(&reference)?;
+    if let Some(tip) = &existing {
+        if head_symbolic.as_deref() == Some(reference.as_str()) {
+            return Err(fail_hint(
+                Code::Usage,
+                format!("'{name}' is the checked-out branch"),
+                "commit without --onto",
+            ));
+        }
+        if *tip != base {
+            return Err(fail_hint(
+                Code::Usage,
+                format!("with --existing, --onto must be '{name}' itself"),
+                format!("aisc commit -b {name} --existing --onto {name} ..."),
+            ));
+        }
+        if git.checked_out()?.contains(&reference) {
+            return Err(fail(
+                Code::State,
+                format!("branch '{name}' is checked out in another worktree"),
+            ));
+        }
+    }
+
+    let placed = tree_with_selection(
+        git,
+        changes,
+        selection,
+        &head_oid,
+        &base,
+        rev,
+        &format!(
+            "commit it on {} first, or base the branch on another commit",
+            branch_name(head_symbolic.as_deref())
+        ),
+    )?;
+    let (base_tree, tree, hashed) = (placed.base_tree, placed.tree, placed.hashed);
     if tree == base_tree {
         return Err(fail(
             Code::Selector,

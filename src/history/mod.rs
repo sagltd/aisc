@@ -7,6 +7,7 @@ use std::fmt;
 
 // Engine modules expose helpers that later slices (amend, split, squash, sync, ...) consume.
 pub(crate) mod amend;
+pub(crate) mod amend_elsewhere;
 #[allow(dead_code)]
 pub(crate) mod apply;
 pub(crate) mod commit;

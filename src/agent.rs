@@ -7,9 +7,9 @@ pub const SETUP_BLOCK: &str = "\
 
 Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take two calls: `aisc log`, then one command below. If the task already names the commits (exact subject) and the changes (path or text), skip `aisc log`. This syntax is complete: do not run `--help`, open the skill, or use `git status`/`diff`/`log`.
 
-- look: `aisc log [BRANCH]` (commits, every uncommitted hunk with an id; BRANCH may be `origin/NAME`); `aisc show COMMIT`; a whole file at a commit: `aisc show COMMIT:PATH`
+- look: `aisc log [BRANCH]` (commits, every uncommitted hunk with an id; BRANCH may be `origin/NAME`); `aisc show COMMIT`; `aisc show COMMIT:PATH` (whole file)
 - commit some changes: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` new branch; `-b NEW --onto BASE` without leaving this branch)
-- fold into older commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]`
+- fold into older commits: `aisc amend --into COMMIT SEL... [--into COMMIT SEL...]` (COMMIT may be on another local branch)
 - split: `aisc split COMMIT --into MSG SEL... [--into MSG SEL...]`
 - squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG COMMIT...]`
 - reorder: `aisc move COMMIT... --before|--after COMMIT`; to another branch: `aisc move COMMIT... --to BRANCH`
