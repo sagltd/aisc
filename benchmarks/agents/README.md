@@ -11,7 +11,8 @@ script below.
 | [`run-agents.sh`](run-agents.sh) | Runs every task with every tool, N repetitions, rotating tool order |
 | [`summarize.py`](summarize.py) | Recomputes the README table, and lists every failed run and why |
 | [`pins.json`](pins.json) | Exact tool versions the harness checks before each run |
-| [`../results/agent-runs-v0.1.3-dev.json`](../results/agent-runs-v0.1.3-dev.json) | 156 runs: AISC dev build ad698da (v0.1.3 candidate), GitButler 0.22.3, Git 2.50 and Jujutsu 0.42 with the pinned onevcat-jj skill, 3 repetitions each, Claude CLI 2.1.310 (the README's headline table) |
+| [`../results/agent-runs-v0.1.3-dev.json`](../results/agent-runs-v0.1.3-dev.json) | 156 runs: AISC dev build 59018ba (v0.1.3 candidate), GitButler 0.22.3, Git 2.50 and Jujutsu 0.42 with the pinned onevcat-jj skill, 3 repetitions each, Claude CLI 2.1.310 (the README's headline table) |
+| [`../results/agent-runs-v0.1.3-dev-aisc-before-batching.json`](../results/agent-runs-v0.1.3-dev-aisc-before-batching.json) | 39 runs: the AISC arm on the same tasks before its agent block said reads can be chained (build ad698da) |
 | [`../results/agent-runs-v0.1.0.json`](../results/agent-runs-v0.1.0.json) | 117 runs: AISC v0.1.0, GitButler 0.22.3 and Git 2.50, 3 repetitions each |
 | [`../results/agent-runs-v0.1.1.json`](../results/agent-runs-v0.1.1.json) | 39 runs: AISC v0.1.1, same settings |
 | [`heldout/tasks.md`](heldout/tasks.md) | The held-out task prompts (three sets of six), each committed before any agent ran them |

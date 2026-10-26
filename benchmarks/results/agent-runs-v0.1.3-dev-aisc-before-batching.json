@@ -1,0 +1,1579 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
+ "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.2 dev ad698da (v0.1.3 candidate; release build sha256 d86e452091ce97c5e17a2c6ed6b9121779d1262de7bf9804d2ca101968945309)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)",
+  "jj": "0.42.0 (onevcat/skills@onevcat-jj at 4955f54, fetched by the harness and checked against its recorded SHA-256)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "AISC arm before the agent block said reads can be chained in one shell call (#68): the dev build ad698da, kept for comparison with the re-measured AISC rows in agent-runs-v0.1.3-dev.json.",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included.",
+  "tmp",
+  "The jj+skill arm ran in a later batch on the same day with the same CLI and settings; its agents get the harness's own jj policy text plus the pinned onevcat-jj skill, as upstream."
+ ],
+ "runs": [
+  {
+   "rep": 1,
+   "task": "pilot-1-selective-validation",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12822,
+    "cache_read_input_tokens": 59543,
+    "output_tokens": 333
+   },
+   "cost_usd_reported_by_cli": 0.06058430000000001,
+   "wall_ms": 15632,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -b input-validation -m Add lead input validation qog guq ksv",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-2-multi-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13389,
+    "cache_read_input_tokens": 60326,
+    "output_tokens": 395
+   },
+   "cost_usd_reported_by_cli": 0.0635506,
+   "wall_ms": 15899,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-3-split-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14352,
+    "cache_read_input_tokens": 85291,
+    "output_tokens": 550
+   },
+   "cost_usd_reported_by_cli": 0.0714531,
+   "wall_ms": 31261,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 8448",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 8448 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-4-reorder-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12952,
+    "cache_read_input_tokens": 59801,
+    "output_tokens": 294
+   },
+   "cost_usd_reported_by_cli": 0.060740100000000005,
+   "wall_ms": 12310,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-5-squash-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12979,
+    "cache_read_input_tokens": 59886,
+    "output_tokens": 309
+   },
+   "cost_usd_reported_by_cli": 0.06100660000000001,
+   "wall_ms": 17085,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline d25b 29b6 --into add retry support b602 e327 c6f3",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14367,
+    "cache_read_input_tokens": 84881,
+    "output_tokens": 691
+   },
+   "cost_usd_reported_by_cli": 0.0728821,
+   "wall_ms": 22850,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 15117,
+    "cache_read_input_tokens": 161802,
+    "output_tokens": 1494
+   },
+   "cost_usd_reported_by_cli": 0.09161620000000001,
+   "wall_ms": 24364,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13470,
+    "cache_read_input_tokens": 59304,
+    "output_tokens": 444
+   },
+   "cost_usd_reported_by_cli": 0.0642624,
+   "wall_ms": 14468,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -b app-checkpoint --all -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13024,
+    "cache_read_input_tokens": 60094,
+    "output_tokens": 319
+   },
+   "cost_usd_reported_by_cli": 0.06130740000000001,
+   "wall_ms": 14046,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard vrk kon qli",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-10-recover-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12938,
+    "cache_read_input_tokens": 59943,
+    "output_tokens": 294
+   },
+   "cost_usd_reported_by_cli": 0.060698300000000004,
+   "wall_ms": 10155,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit a055 notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13190,
+    "cache_read_input_tokens": 60445,
+    "output_tokens": 382
+   },
+   "cost_usd_reported_by_cli": 0.0626365,
+   "wall_ms": 9376,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13147,
+    "cache_read_input_tokens": 60013,
+    "output_tokens": 366
+   },
+   "cost_usd_reported_by_cli": 0.0622613,
+   "wall_ms": 9554,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch --delete",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 11,
+   "turns": 12,
+   "tokens": {
+    "input_tokens": 22,
+    "cache_creation_input_tokens": 14148,
+    "cache_read_input_tokens": 260777,
+    "output_tokens": 1001
+   },
+   "cost_usd_reported_by_cli": 0.09272369999999999,
+   "wall_ms": 26352,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-1-selective-validation",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12816,
+    "cache_read_input_tokens": 59548,
+    "output_tokens": 376
+   },
+   "cost_usd_reported_by_cli": 0.0609908,
+   "wall_ms": 10675,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -b input-validation -m Add lead input validation qog guq ksv",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-2-multi-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13381,
+    "cache_read_input_tokens": 60321,
+    "output_tokens": 418
+   },
+   "cost_usd_reported_by_cli": 0.0637481,
+   "wall_ms": 11372,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-3-split-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14518,
+    "cache_read_input_tokens": 85316,
+    "output_tokens": 600
+   },
+   "cost_usd_reported_by_cli": 0.0726196,
+   "wall_ms": 11071,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 14a6",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 14a6 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-4-reorder-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12937,
+    "cache_read_input_tokens": 59799,
+    "output_tokens": 274
+   },
+   "cost_usd_reported_by_cli": 0.0604799,
+   "wall_ms": 10220,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move 338e 7c51 --after 7866",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-5-squash-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12984,
+    "cache_read_input_tokens": 59890,
+    "output_tokens": 304
+   },
+   "cost_usd_reported_by_cli": 0.060976999999999996,
+   "wall_ms": 7621,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline 9a80 4cd9 --into add retry support c40c a1a0 371d",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13690,
+    "cache_read_input_tokens": 84871,
+    "output_tokens": 634
+   },
+   "cost_usd_reported_by_cli": 0.06960310000000001,
+   "wall_ms": 19375,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 14360,
+    "cache_read_input_tokens": 110171,
+    "output_tokens": 949
+   },
+   "cost_usd_reported_by_cli": 0.07796710000000001,
+   "wall_ms": 16902,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd^:data/questions.json",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13352,
+    "cache_read_input_tokens": 59313,
+    "output_tokens": 467
+   },
+   "cost_usd_reported_by_cli": 0.0640213,
+   "wall_ms": 12845,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add app checkpoint --all -b app-checkpoint",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13036,
+    "cache_read_input_tokens": 60090,
+    "output_tokens": 349
+   },
+   "cost_usd_reported_by_cli": 0.061655,
+   "wall_ms": 10519,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-10-recover-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12872,
+    "cache_read_input_tokens": 59948,
+    "output_tokens": 335
+   },
+   "cost_usd_reported_by_cli": 0.060844800000000004,
+   "wall_ms": 9389,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit bf34 notes/private.md",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13283,
+    "cache_read_input_tokens": 60465,
+    "output_tokens": 454
+   },
+   "cost_usd_reported_by_cli": 0.06373050000000001,
+   "wall_ms": 12814,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13105,
+    "cache_read_input_tokens": 59922,
+    "output_tokens": 390
+   },
+   "cost_usd_reported_by_cli": 0.062324199999999996,
+   "wall_ms": 11362,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land normalize greeting docs --into main --switch --delete",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 11,
+   "turns": 12,
+   "tokens": {
+    "input_tokens": 24,
+    "cache_creation_input_tokens": 14246,
+    "cache_read_input_tokens": 285841,
+    "output_tokens": 1058
+   },
+   "cost_usd_reported_by_cli": 0.09619609999999999,
+   "wall_ms": 21356,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch ui-note",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-1-selective-validation",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12827,
+    "cache_read_input_tokens": 59549,
+    "output_tokens": 389
+   },
+   "cost_usd_reported_by_cli": 0.06116490000000001,
+   "wall_ms": 13204,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -b input-validation -m Add lead input validation qog guq ksv",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-2-multi-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13386,
+    "cache_read_input_tokens": 60321,
+    "output_tokens": 435
+   },
+   "cost_usd_reported_by_cli": 0.0639381,
+   "wall_ms": 13375,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into refactor validation helpers rnk lrg phi --into add lead scoring vun tpt --into document response behavior mtv tjp",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-3-split-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14070,
+    "cache_read_input_tokens": 85278,
+    "output_tokens": 532
+   },
+   "cost_usd_reported_by_cli": 0.0701438,
+   "wall_ms": 19812,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 4117",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "split 4117 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-4-reorder-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12937,
+    "cache_read_input_tokens": 59795,
+    "output_tokens": 275
+   },
+   "cost_usd_reported_by_cli": 0.06048950000000001,
+   "wall_ms": 18652,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "move d593 de74 --after 91c8",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-5-squash-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12996,
+    "cache_read_input_tokens": 59900,
+    "output_tokens": 309
+   },
+   "cost_usd_reported_by_cli": 0.061076000000000005,
+   "wall_ms": 27065,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "squash --into add parser pipeline c7d2 1dc5 --into add retry support 61b2 9452 3f8b",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-6-update-dirty-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13843,
+    "cache_read_input_tokens": 84894,
+    "output_tokens": 682
+   },
+   "cost_usd_reported_by_cli": 0.07069740000000001,
+   "wall_ms": 18653,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "sync --continue",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 4,
+   "turns": 5,
+   "tokens": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 14395,
+    "cache_read_input_tokens": 111064,
+    "output_tokens": 1027
+   },
+   "cost_usd_reported_by_cli": 0.0789764,
+   "wall_ms": 21319,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log seed-rewrite",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show main:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions.json",
+     "exit": 128
+    },
+    {
+     "tool": "git",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd:data/questions.json",
+     "exit": 128
+    },
+    {
+     "tool": "git",
+     "args": "show 95dd^:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-8-cold-checkpoint",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13605,
+    "cache_read_input_tokens": 59412,
+    "output_tokens": 554
+   },
+   "cost_usd_reported_by_cli": 0.0659132,
+   "wall_ms": 10987,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "status --short --ignored",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit --all -b app-checkpoint -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show --stat HEAD",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-9-cleanup-noise",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13049,
+    "cache_read_input_tokens": 60094,
+    "output_tokens": 320
+   },
+   "cost_usd_reported_by_cli": 0.061417400000000004,
+   "wall_ms": 12863,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "discard vrk kon qli",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-10-recover-amend",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12863,
+    "cache_read_input_tokens": 59943,
+    "output_tokens": 328
+   },
+   "cost_usd_reported_by_cli": 0.06073830000000001,
+   "wall_ms": 11679,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "uncommit d000 notes/private.md",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-11-dual-source-sync",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13202,
+    "cache_read_input_tokens": 60441,
+    "output_tokens": 456
+   },
+   "cost_usd_reported_by_cli": 0.0634241,
+   "wall_ms": 14288,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "sync --fetch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log other-topic",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 14005,
+    "cache_read_input_tokens": 159389,
+    "output_tokens": 813
+   },
+   "cost_usd_reported_by_cli": 0.0801169,
+   "wall_ms": 22927,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline main..normalize main..greeting main..docs",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land docs --into main --delete",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline --format=%h %an %s",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting normalize --into main --delete",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 10,
+   "turns": 11,
+   "tokens": {
+    "input_tokens": 20,
+    "cache_creation_input_tokens": 14135,
+    "cache_read_input_tokens": 235363,
+    "output_tokens": 1072
+   },
+   "cost_usd_reported_by_cli": 0.0908363,
+   "wall_ms": 25609,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    }
+   ]
+  }
+ ]
+}

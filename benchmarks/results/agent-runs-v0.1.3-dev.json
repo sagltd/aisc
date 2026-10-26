@@ -3,14 +3,14 @@
  "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
  "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
  "versions": {
-  "aisc": "0.1.2 dev ad698da (v0.1.3 candidate; release build sha256 d86e452091ce97c5e17a2c6ed6b9121779d1262de7bf9804d2ca101968945309)",
+  "aisc": "0.1.2 dev 59018ba (v0.1.3 candidate; release build sha256 73ae4f2cfa5ccabe47510885f3f91b4a8292589647499a16c3f671f0fd0382f0)",
   "but": "0.22.3",
   "git": "2.50.1 (Apple Git-155)",
   "jj": "0.42.0 (onevcat/skills@onevcat-jj at 4955f54, fetched by the harness and checked against its recorded SHA-256)"
  },
  "repetitions": 3,
  "notes": [
-  "All three arms ran on 2026-10-27 with Claude CLI 2.1.310 and claude-sonnet-5-5 at medium effort, sandboxed (acceptEdits + allowlist), 3 repetitions, rotating arm order; GitButler and Git ran in one batch and AISC in a following batch with the dev build that adds show COMMIT:PATH, cross-branch amend, directory selectors, commit --onto BRANCH and the fetch note in its agent block.",
+  "All four arms ran on 2026-10-27 with Claude CLI 2.1.310 and claude-sonnet-5-5 at medium effort, sandboxed (acceptEdits + allowlist), 3 repetitions, rotating arm order. GitButler, Git and Jujutsu ran in earlier batches that day; the AISC arm is the dev build with show COMMIT:PATH, the cross-branch amend, directory selectors, commit --onto BRANCH, move --to NEW --onto BASE, aisc branches, and an agent block that names sync --fetch and says reads can be chained in one call.",
   "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
   "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included.",
   "tmp",
@@ -30,12 +30,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12822,
-    "cache_read_input_tokens": 59543,
-    "output_tokens": 333
+    "cache_creation_input_tokens": 12872,
+    "cache_read_input_tokens": 59649,
+    "output_tokens": 327
    },
-   "cost_usd_reported_by_cli": 0.06058430000000001,
-   "wall_ms": 15632,
+   "cost_usd_reported_by_cli": 0.0607349,
+   "wall_ms": 10380,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -243,12 +243,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13389,
-    "cache_read_input_tokens": 60326,
-    "output_tokens": 395
+    "cache_creation_input_tokens": 13433,
+    "cache_read_input_tokens": 60423,
+    "output_tokens": 394
    },
-   "cost_usd_reported_by_cli": 0.0635506,
-   "wall_ms": 15899,
+   "cost_usd_reported_by_cli": 0.0637263,
+   "wall_ms": 8959,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -495,12 +495,12 @@
    "turns": 4,
    "tokens": {
     "input_tokens": 8,
-    "cache_creation_input_tokens": 14352,
-    "cache_read_input_tokens": 85291,
-    "output_tokens": 550
+    "cache_creation_input_tokens": 14147,
+    "cache_read_input_tokens": 85468,
+    "output_tokens": 532
    },
-   "cost_usd_reported_by_cli": 0.0714531,
-   "wall_ms": 31261,
+   "cost_usd_reported_by_cli": 0.0704708,
+   "wall_ms": 11864,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -509,17 +509,12 @@
     },
     {
      "tool": "aisc",
-     "args": "show 8448",
+     "args": "show d808",
      "exit": 0
     },
     {
      "tool": "aisc",
-     "args": "split 8448 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "log",
+     "args": "split d808 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
      "exit": 0
     }
    ]
@@ -858,12 +853,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12952,
-    "cache_read_input_tokens": 59801,
-    "output_tokens": 294
+    "cache_creation_input_tokens": 13190,
+    "cache_read_input_tokens": 59907,
+    "output_tokens": 304
    },
-   "cost_usd_reported_by_cli": 0.060740100000000005,
-   "wall_ms": 12310,
+   "cost_usd_reported_by_cli": 0.0618027,
+   "wall_ms": 8106,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -873,6 +868,11 @@
     {
      "tool": "aisc",
      "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
      "exit": 0
     }
    ]
@@ -1056,12 +1056,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12979,
-    "cache_read_input_tokens": 59886,
-    "output_tokens": 309
+    "cache_creation_input_tokens": 13032,
+    "cache_read_input_tokens": 59988,
+    "output_tokens": 340
    },
-   "cost_usd_reported_by_cli": 0.06100660000000001,
-   "wall_ms": 17085,
+   "cost_usd_reported_by_cli": 0.061538800000000005,
+   "wall_ms": 13735,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -1070,7 +1070,7 @@
     },
     {
      "tool": "aisc",
-     "args": "squash --into add parser pipeline d25b 29b6 --into add retry support b602 e327 c6f3",
+     "args": "squash --into add parser pipeline 9b47 d347 --into add retry support ea2a 015d 7ff1",
      "exit": 0
     }
    ]
@@ -1289,12 +1289,12 @@
    "turns": 4,
    "tokens": {
     "input_tokens": 8,
-    "cache_creation_input_tokens": 14367,
-    "cache_read_input_tokens": 84881,
-    "output_tokens": 691
+    "cache_creation_input_tokens": 13754,
+    "cache_read_input_tokens": 85030,
+    "output_tokens": 627
    },
-   "cost_usd_reported_by_cli": 0.0728821,
-   "wall_ms": 22850,
+   "cost_usd_reported_by_cli": 0.069805,
+   "wall_ms": 16494,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -1307,8 +1307,13 @@
      "exit": 0
     },
     {
-     "tool": "aisc",
-     "args": "log",
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "log --oneline",
      "exit": 0
     }
    ]
@@ -1605,35 +1610,25 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 8,
-   "turns": 9,
+   "model_tool_calls": 2,
+   "turns": 3,
    "tokens": {
-    "input_tokens": 14,
-    "cache_creation_input_tokens": 15117,
-    "cache_read_input_tokens": 161802,
-    "output_tokens": 1494
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 14121,
+    "cache_read_input_tokens": 60214,
+    "output_tokens": 624
    },
-   "cost_usd_reported_by_cli": 0.09161620000000001,
-   "wall_ms": 24364,
+   "cost_usd_reported_by_cli": 0.0687574,
+   "wall_ms": 14124,
    "vc_commands": [
     {
      "tool": "aisc",
-     "args": "log seed-rewrite",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "branch -a",
+     "args": "log",
      "exit": 0
     },
     {
      "tool": "aisc",
-     "args": "show 668d",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "show 95dd",
+     "args": "branches",
      "exit": 0
     },
     {
@@ -1645,6 +1640,16 @@
      "tool": "aisc",
      "args": "show 668d:data/questions.json",
      "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 1
     }
    ]
   },
@@ -1817,12 +1822,12 @@
    "turns": 5,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13470,
-    "cache_read_input_tokens": 59304,
-    "output_tokens": 444
+    "cache_creation_input_tokens": 13548,
+    "cache_read_input_tokens": 59423,
+    "output_tokens": 457
    },
-   "cost_usd_reported_by_cli": 0.0642624,
-   "wall_ms": 14468,
+   "cost_usd_reported_by_cli": 0.0647163,
+   "wall_ms": 10424,
    "vc_commands": [
     {
      "tool": "git",
@@ -1830,8 +1835,13 @@
      "exit": 0
     },
     {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    },
+    {
      "tool": "aisc",
-     "args": "commit -b app-checkpoint --all -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "args": "commit -m Add app checkpoint --all -b app-checkpoint",
      "exit": 0
     },
     {
@@ -2051,16 +2061,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 2,
-   "turns": 3,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 6,
-    "cache_creation_input_tokens": 13024,
-    "cache_read_input_tokens": 60094,
-    "output_tokens": 319
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13729,
+    "cache_read_input_tokens": 85330,
+    "output_tokens": 433
    },
-   "cost_usd_reported_by_cli": 0.06130740000000001,
-   "wall_ms": 14046,
+   "cost_usd_reported_by_cli": 0.067795,
+   "wall_ms": 19695,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -2068,8 +2078,18 @@
      "exit": 0
     },
     {
+     "tool": "git",
+     "args": "diff src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff -w --stat",
+     "exit": 0
+    },
+    {
      "tool": "aisc",
-     "args": "discard vrk kon qli",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
      "exit": 0
     }
    ]
@@ -2233,12 +2253,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12938,
-    "cache_read_input_tokens": 59943,
-    "output_tokens": 294
+    "cache_creation_input_tokens": 13079,
+    "cache_read_input_tokens": 60206,
+    "output_tokens": 346
    },
-   "cost_usd_reported_by_cli": 0.060698300000000004,
-   "wall_ms": 10155,
+   "cost_usd_reported_by_cli": 0.0618086,
+   "wall_ms": 13195,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -2247,12 +2267,7 @@
     },
     {
      "tool": "aisc",
-     "args": "uncommit a055 notes/private.md",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "log",
+     "args": "uncommit e6cb notes/private.md",
      "exit": 0
     }
    ]
@@ -2446,12 +2461,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13190,
-    "cache_read_input_tokens": 60445,
-    "output_tokens": 382
+    "cache_creation_input_tokens": 13258,
+    "cache_read_input_tokens": 60549,
+    "output_tokens": 389
    },
-   "cost_usd_reported_by_cli": 0.0626365,
-   "wall_ms": 9376,
+   "cost_usd_reported_by_cli": 0.06298889999999999,
+   "wall_ms": 14769,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -2466,6 +2481,16 @@
     {
      "tool": "aisc",
      "args": "log other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
      "exit": 0
     }
    ]
@@ -2800,16 +2825,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 2,
-   "turns": 3,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 6,
-    "cache_creation_input_tokens": 13147,
-    "cache_read_input_tokens": 60013,
-    "output_tokens": 366
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13334,
+    "cache_read_input_tokens": 84564,
+    "output_tokens": 381
    },
-   "cost_usd_reported_by_cli": 0.0622613,
-   "wall_ms": 9554,
+   "cost_usd_reported_by_cli": 0.06561840000000001,
+   "wall_ms": 13961,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -2818,7 +2843,7 @@
     },
     {
      "tool": "aisc",
-     "args": "log docs",
+     "args": "branches",
      "exit": 0
     },
     {
@@ -2828,12 +2853,37 @@
     },
     {
      "tool": "aisc",
-     "args": "land greeting docs --into main --switch --delete",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log normalize",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch",
      "exit": 0
     },
     {
      "tool": "aisc",
      "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
      "exit": 0
     }
    ]
@@ -3068,20 +3118,25 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 11,
-   "turns": 12,
+   "model_tool_calls": 6,
+   "turns": 7,
    "tokens": {
-    "input_tokens": 22,
-    "cache_creation_input_tokens": 14148,
-    "cache_read_input_tokens": 260777,
-    "output_tokens": 1001
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 13889,
+    "cache_read_input_tokens": 159616,
+    "output_tokens": 889
    },
-   "cost_usd_reported_by_cli": 0.09272369999999999,
-   "wall_ms": 26352,
+   "cost_usd_reported_by_cli": 0.0804356,
+   "wall_ms": 19616,
    "vc_commands": [
     {
      "tool": "aisc",
      "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log main",
      "exit": 0
     },
     {
@@ -3091,7 +3146,7 @@
     },
     {
      "tool": "aisc",
-     "args": "switch revive-worktree-no-graph",
+     "args": "show c237",
      "exit": 0
     }
    ]
@@ -3330,12 +3385,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12816,
-    "cache_read_input_tokens": 59548,
-    "output_tokens": 376
+    "cache_creation_input_tokens": 12876,
+    "cache_read_input_tokens": 59656,
+    "output_tokens": 336
    },
-   "cost_usd_reported_by_cli": 0.0609908,
-   "wall_ms": 10675,
+   "cost_usd_reported_by_cli": 0.0608416,
+   "wall_ms": 10657,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -3528,12 +3583,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13381,
-    "cache_read_input_tokens": 60321,
-    "output_tokens": 418
+    "cache_creation_input_tokens": 13436,
+    "cache_read_input_tokens": 60421,
+    "output_tokens": 389
    },
-   "cost_usd_reported_by_cli": 0.0637481,
-   "wall_ms": 11372,
+   "cost_usd_reported_by_cli": 0.06368810000000001,
+   "wall_ms": 14196,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -3872,16 +3927,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 4,
-   "turns": 5,
+   "model_tool_calls": 2,
+   "turns": 3,
    "tokens": {
-    "input_tokens": 8,
-    "cache_creation_input_tokens": 14518,
-    "cache_read_input_tokens": 85316,
-    "output_tokens": 600
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 14087,
+    "cache_read_input_tokens": 60956,
+    "output_tokens": 561
    },
-   "cost_usd_reported_by_cli": 0.0726196,
-   "wall_ms": 11071,
+   "cost_usd_reported_by_cli": 0.0680656,
+   "wall_ms": 17892,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -3890,17 +3945,12 @@
     },
     {
      "tool": "aisc",
-     "args": "show 14a6",
+     "args": "show add lead workflow",
      "exit": 0
     },
     {
      "tool": "aisc",
-     "args": "split 14a6 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "log",
+     "args": "split add lead workflow --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
      "exit": 0
     }
    ]
@@ -4249,12 +4299,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12937,
-    "cache_read_input_tokens": 59799,
-    "output_tokens": 274
+    "cache_creation_input_tokens": 13001,
+    "cache_read_input_tokens": 59904,
+    "output_tokens": 281
    },
-   "cost_usd_reported_by_cli": 0.0604799,
-   "wall_ms": 10220,
+   "cost_usd_reported_by_cli": 0.0608164,
+   "wall_ms": 12025,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -4263,7 +4313,7 @@
     },
     {
      "tool": "aisc",
-     "args": "move 338e 7c51 --after 7866",
+     "args": "move add retry policy add notification sender --after add app configuration",
      "exit": 0
     }
    ]
@@ -4427,12 +4477,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12984,
-    "cache_read_input_tokens": 59890,
-    "output_tokens": 304
+    "cache_creation_input_tokens": 13045,
+    "cache_read_input_tokens": 59989,
+    "output_tokens": 358
    },
-   "cost_usd_reported_by_cli": 0.060976999999999996,
-   "wall_ms": 7621,
+   "cost_usd_reported_by_cli": 0.061770900000000004,
+   "wall_ms": 16059,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -4441,7 +4491,7 @@
     },
     {
      "tool": "aisc",
-     "args": "squash --into add parser pipeline 9a80 4cd9 --into add retry support c40c a1a0 371d",
+     "args": "squash --into add parser pipeline extract parser helpers wire parser helpers --into add retry support add retry option test retry option document retry option",
      "exit": 0
     }
    ]
@@ -4641,16 +4691,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 3,
-   "turns": 4,
+   "model_tool_calls": 4,
+   "turns": 5,
    "tokens": {
-    "input_tokens": 8,
-    "cache_creation_input_tokens": 13690,
-    "cache_read_input_tokens": 84871,
-    "output_tokens": 634
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 13946,
+    "cache_read_input_tokens": 110189,
+    "output_tokens": 821
    },
-   "cost_usd_reported_by_cli": 0.06960310000000001,
-   "wall_ms": 19375,
+   "cost_usd_reported_by_cli": 0.0750329,
+   "wall_ms": 15308,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -5066,16 +5116,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 4,
-   "turns": 5,
+   "model_tool_calls": 5,
+   "turns": 6,
    "tokens": {
-    "input_tokens": 10,
-    "cache_creation_input_tokens": 14360,
-    "cache_read_input_tokens": 110171,
-    "output_tokens": 949
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 14476,
+    "cache_read_input_tokens": 135688,
+    "output_tokens": 1145
    },
-   "cost_usd_reported_by_cli": 0.07796710000000001,
-   "wall_ms": 16902,
+   "cost_usd_reported_by_cli": 0.08294680000000001,
+   "wall_ms": 22937,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -5084,22 +5134,42 @@
     },
     {
      "tool": "aisc",
-     "args": "show 668d",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "show 95dd",
+     "args": "branches",
      "exit": 0
     },
     {
      "tool": "git",
-     "args": "show 95dd:data/questions-by-id.json",
+     "args": "log --oneline --graph --all",
      "exit": 0
     },
     {
      "tool": "git",
-     "args": "show 95dd^:data/questions.json",
+     "args": "diff --stat",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show HEAD:data/questions.json",
+     "exit": 128
+    },
+    {
+     "tool": "git",
+     "args": "show HEAD:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d23d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show 668d23d:data/questions.json",
      "exit": 0
     }
    ]
@@ -5263,12 +5333,12 @@
    "turns": 5,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13352,
-    "cache_read_input_tokens": 59313,
-    "output_tokens": 467
+    "cache_creation_input_tokens": 13451,
+    "cache_read_input_tokens": 59424,
+    "output_tokens": 408
    },
-   "cost_usd_reported_by_cli": 0.0640213,
-   "wall_ms": 12845,
+   "cost_usd_reported_by_cli": 0.06383839999999999,
+   "wall_ms": 13831,
    "vc_commands": [
     {
      "tool": "git",
@@ -5287,7 +5357,7 @@
     },
     {
      "tool": "aisc",
-     "args": "commit -m Add app checkpoint --all -b app-checkpoint",
+     "args": "commit -m Add app checkpoint -b app-checkpoint --all",
      "exit": 0
     }
    ]
@@ -5521,12 +5591,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13036,
-    "cache_read_input_tokens": 60090,
+    "cache_creation_input_tokens": 13171,
+    "cache_read_input_tokens": 60198,
     "output_tokens": 349
    },
-   "cost_usd_reported_by_cli": 0.061655,
-   "wall_ms": 10519,
+   "cost_usd_reported_by_cli": 0.062205800000000006,
+   "wall_ms": 22130,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -5536,6 +5606,11 @@
     {
      "tool": "aisc",
      "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
      "exit": 0
     }
    ]
@@ -5704,12 +5779,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12872,
-    "cache_read_input_tokens": 59948,
-    "output_tokens": 335
+    "cache_creation_input_tokens": 13018,
+    "cache_read_input_tokens": 60054,
+    "output_tokens": 307
    },
-   "cost_usd_reported_by_cli": 0.060844800000000004,
-   "wall_ms": 9389,
+   "cost_usd_reported_by_cli": 0.0611594,
+   "wall_ms": 10570,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -5718,7 +5793,22 @@
     },
     {
      "tool": "aisc",
-     "args": "uncommit bf34 notes/private.md",
+     "args": "uncommit 00b1e27 notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
      "exit": 0
     }
    ]
@@ -5939,12 +6029,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13283,
-    "cache_read_input_tokens": 60465,
-    "output_tokens": 454
+    "cache_creation_input_tokens": 13266,
+    "cache_read_input_tokens": 60546,
+    "output_tokens": 419
    },
-   "cost_usd_reported_by_cli": 0.06373050000000001,
-   "wall_ms": 12814,
+   "cost_usd_reported_by_cli": 0.0633206,
+   "wall_ms": 16428,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -5962,13 +6052,8 @@
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "branch -a",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "stash list",
+     "tool": "aisc",
+     "args": "branches",
      "exit": 0
     }
    ]
@@ -6350,16 +6435,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 2,
-   "turns": 3,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 6,
-    "cache_creation_input_tokens": 13105,
-    "cache_read_input_tokens": 59922,
-    "output_tokens": 390
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13322,
+    "cache_read_input_tokens": 84567,
+    "output_tokens": 432
    },
-   "cost_usd_reported_by_cli": 0.062324199999999996,
-   "wall_ms": 11362,
+   "cost_usd_reported_by_cli": 0.0660807,
+   "wall_ms": 19448,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -6367,13 +6452,28 @@
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "branch -a",
+     "tool": "aisc",
+     "args": "branches",
      "exit": 0
     },
     {
      "tool": "aisc",
-     "args": "land normalize greeting docs --into main --switch --delete",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log normalize",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch",
      "exit": 0
     },
     {
@@ -6382,13 +6482,8 @@
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "branch",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "stash list",
+     "tool": "aisc",
+     "args": "branches",
      "exit": 0
     }
    ]
@@ -6688,16 +6783,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 11,
-   "turns": 12,
+   "model_tool_calls": 9,
+   "turns": 10,
    "tokens": {
-    "input_tokens": 24,
-    "cache_creation_input_tokens": 14246,
-    "cache_read_input_tokens": 285841,
-    "output_tokens": 1058
+    "input_tokens": 20,
+    "cache_creation_input_tokens": 14944,
+    "cache_read_input_tokens": 238534,
+    "output_tokens": 1451
    },
-   "cost_usd_reported_by_cli": 0.09619609999999999,
-   "wall_ms": 21356,
+   "cost_usd_reported_by_cli": 0.09817939999999999,
+   "wall_ms": 32026,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -6706,7 +6801,37 @@
     },
     {
      "tool": "aisc",
+     "args": "log main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
      "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "switch ui-note",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch --show-current",
      "exit": 0
     },
     {
@@ -6965,12 +7090,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12827,
-    "cache_read_input_tokens": 59549,
-    "output_tokens": 389
+    "cache_creation_input_tokens": 12875,
+    "cache_read_input_tokens": 59651,
+    "output_tokens": 322
    },
-   "cost_usd_reported_by_cli": 0.06116490000000001,
-   "wall_ms": 13204,
+   "cost_usd_reported_by_cli": 0.0606971,
+   "wall_ms": 12921,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -7153,12 +7278,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13386,
-    "cache_read_input_tokens": 60321,
-    "output_tokens": 435
+    "cache_creation_input_tokens": 13437,
+    "cache_read_input_tokens": 60421,
+    "output_tokens": 437
    },
-   "cost_usd_reported_by_cli": 0.0639381,
-   "wall_ms": 13375,
+   "cost_usd_reported_by_cli": 0.06417210000000001,
+   "wall_ms": 15428,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -7436,12 +7561,12 @@
    "turns": 4,
    "tokens": {
     "input_tokens": 8,
-    "cache_creation_input_tokens": 14070,
-    "cache_read_input_tokens": 85278,
-    "output_tokens": 532
+    "cache_creation_input_tokens": 14179,
+    "cache_read_input_tokens": 85441,
+    "output_tokens": 615
    },
-   "cost_usd_reported_by_cli": 0.0701438,
-   "wall_ms": 19812,
+   "cost_usd_reported_by_cli": 0.0714261,
+   "wall_ms": 16558,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -7450,12 +7575,12 @@
     },
     {
      "tool": "aisc",
-     "args": "show 4117",
+     "args": "show 7580",
      "exit": 0
     },
     {
      "tool": "aisc",
-     "args": "split 4117 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
+     "args": "split 7580 --into refactor validation helpers lrg mtn --into tune lead scoring vun tpt --into document lead workflow README.md docs/lead-workflow.md",
      "exit": 0
     }
    ]
@@ -7764,12 +7889,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12937,
-    "cache_read_input_tokens": 59795,
-    "output_tokens": 275
+    "cache_creation_input_tokens": 13193,
+    "cache_read_input_tokens": 59912,
+    "output_tokens": 285
    },
-   "cost_usd_reported_by_cli": 0.06048950000000001,
-   "wall_ms": 18652,
+   "cost_usd_reported_by_cli": 0.061625200000000005,
+   "wall_ms": 17518,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -7778,7 +7903,12 @@
     },
     {
      "tool": "aisc",
-     "args": "move d593 de74 --after 91c8",
+     "args": "move add retry policy add notification sender --after add app configuration",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
      "exit": 0
     }
    ]
@@ -7947,12 +8077,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12996,
-    "cache_read_input_tokens": 59900,
-    "output_tokens": 309
+    "cache_creation_input_tokens": 13031,
+    "cache_read_input_tokens": 59988,
+    "output_tokens": 307
    },
-   "cost_usd_reported_by_cli": 0.061076000000000005,
-   "wall_ms": 27065,
+   "cost_usd_reported_by_cli": 0.061204800000000004,
+   "wall_ms": 38173,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -7961,7 +8091,7 @@
     },
     {
      "tool": "aisc",
-     "args": "squash --into add parser pipeline c7d2 1dc5 --into add retry support 61b2 9452 3f8b",
+     "args": "squash --into add parser pipeline 53a1 98e8 --into add retry support 8abd dea4 987b",
      "exit": 0
     }
    ]
@@ -8186,16 +8316,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 3,
-   "turns": 4,
+   "model_tool_calls": 4,
+   "turns": 5,
    "tokens": {
-    "input_tokens": 8,
-    "cache_creation_input_tokens": 13843,
-    "cache_read_input_tokens": 84894,
-    "output_tokens": 682
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 13936,
+    "cache_read_input_tokens": 110166,
+    "output_tokens": 859
    },
-   "cost_usd_reported_by_cli": 0.07069740000000001,
-   "wall_ms": 18653,
+   "cost_usd_reported_by_cli": 0.07537060000000001,
+   "wall_ms": 18610,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -8205,11 +8335,6 @@
     {
      "tool": "aisc",
      "args": "sync --continue",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "log",
      "exit": 0
     }
    ]
@@ -8551,65 +8676,40 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 4,
-   "turns": 5,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 10,
-    "cache_creation_input_tokens": 14395,
-    "cache_read_input_tokens": 111064,
-    "output_tokens": 1027
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14163,
+    "cache_read_input_tokens": 85494,
+    "output_tokens": 831
    },
-   "cost_usd_reported_by_cli": 0.0789764,
-   "wall_ms": 21319,
+   "cost_usd_reported_by_cli": 0.0735274,
+   "wall_ms": 17044,
    "vc_commands": [
     {
      "tool": "aisc",
-     "args": "log seed-rewrite",
+     "args": "log",
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "branch -a",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "show main:data/questions.json",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "show seed-rewrite:data/questions.json",
-     "exit": 128
-    },
-    {
-     "tool": "git",
-     "args": "show seed-rewrite:data/questions-by-id.json",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "diff --stat",
-     "exit": 0
-    },
-    {
-     "tool": "git",
+     "tool": "aisc",
      "args": "show 668d",
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "show 95dd:data/questions.json",
-     "exit": 128
-    },
-    {
-     "tool": "git",
-     "args": "show 95dd^:data/questions.json",
+     "tool": "aisc",
+     "args": "show 95dd",
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "diff",
+     "tool": "aisc",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d:data/questions.json",
      "exit": 0
     }
    ]
@@ -8785,15 +8885,15 @@
    "compliance_passed": true,
    "policy_violations": [],
    "model_tool_calls": 3,
-   "turns": 4,
+   "turns": 5,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13605,
-    "cache_read_input_tokens": 59412,
-    "output_tokens": 554
+    "cache_creation_input_tokens": 13455,
+    "cache_read_input_tokens": 59422,
+    "output_tokens": 450
    },
-   "cost_usd_reported_by_cli": 0.0659132,
-   "wall_ms": 10987,
+   "cost_usd_reported_by_cli": 0.0642742,
+   "wall_ms": 19924,
    "vc_commands": [
     {
      "tool": "git",
@@ -8807,17 +8907,12 @@
     },
     {
      "tool": "aisc",
-     "args": "commit --all -b app-checkpoint -m Add app checkpoint\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>",
+     "args": "log",
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "status --short",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "show --stat HEAD",
+     "tool": "aisc",
+     "args": "commit -b app-checkpoint -m Add app checkpoint --all",
      "exit": 0
     }
    ]
@@ -9011,12 +9106,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 13049,
-    "cache_read_input_tokens": 60094,
-    "output_tokens": 320
+    "cache_creation_input_tokens": 13094,
+    "cache_read_input_tokens": 60198,
+    "output_tokens": 331
    },
-   "cost_usd_reported_by_cli": 0.061417400000000004,
-   "wall_ms": 12863,
+   "cost_usd_reported_by_cli": 0.06171780000000001,
+   "wall_ms": 11406,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -9025,7 +9120,7 @@
     },
     {
      "tool": "aisc",
-     "args": "discard vrk kon qli",
+     "args": "discard src/catalog.ts src/format.ts test/catalog.test.ts",
      "exit": 0
     }
    ]
@@ -9199,12 +9294,12 @@
    "turns": 3,
    "tokens": {
     "input_tokens": 6,
-    "cache_creation_input_tokens": 12863,
-    "cache_read_input_tokens": 59943,
-    "output_tokens": 328
+    "cache_creation_input_tokens": 13005,
+    "cache_read_input_tokens": 60048,
+    "output_tokens": 314
    },
-   "cost_usd_reported_by_cli": 0.06073830000000001,
-   "wall_ms": 11679,
+   "cost_usd_reported_by_cli": 0.0611768,
+   "wall_ms": 14474,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -9213,7 +9308,22 @@
     },
     {
      "tool": "aisc",
-     "args": "uncommit d000 notes/private.md",
+     "args": "uncommit 369f notes/private.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
      "exit": 0
     }
    ]
@@ -9388,17 +9498,27 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 2,
-   "turns": 3,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 6,
-    "cache_creation_input_tokens": 13202,
-    "cache_read_input_tokens": 60441,
-    "output_tokens": 456
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13546,
+    "cache_read_input_tokens": 85325,
+    "output_tokens": 531
    },
-   "cost_usd_reported_by_cli": 0.0634241,
-   "wall_ms": 14288,
+   "cost_usd_reported_by_cli": 0.06804249999999999,
+   "wall_ms": 14792,
    "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    },
     {
      "tool": "aisc",
      "args": "sync --fetch",
@@ -9411,7 +9531,27 @@
     },
     {
      "tool": "aisc",
+     "args": "log origin/main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
      "args": "log other-topic",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "status --short",
      "exit": 0
     }
    ]
@@ -9711,16 +9851,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 6,
-   "turns": 7,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 14,
-    "cache_creation_input_tokens": 14005,
-    "cache_read_input_tokens": 159389,
-    "output_tokens": 813
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13334,
+    "cache_read_input_tokens": 84564,
+    "output_tokens": 465
    },
-   "cost_usd_reported_by_cli": 0.0801169,
-   "wall_ms": 22927,
+   "cost_usd_reported_by_cli": 0.0664584,
+   "wall_ms": 18431,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -9728,8 +9868,8 @@
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "branch -a",
+     "tool": "aisc",
+     "args": "branches",
      "exit": 0
     },
     {
@@ -9743,8 +9883,8 @@
      "exit": 0
     },
     {
-     "tool": "git",
-     "args": "stash list",
+     "tool": "aisc",
+     "args": "log normalize",
      "exit": 0
     },
     {
@@ -9754,52 +9894,7 @@
     },
     {
      "tool": "aisc",
-     "args": "log",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "branch",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "stash list",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "log --oneline main..normalize main..greeting main..docs",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "status --short",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "land docs --into main --delete",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "branch",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "log --oneline --format=%h %an %s",
-     "exit": 0
-    },
-    {
-     "tool": "aisc",
-     "args": "land greeting normalize --into main --delete",
-     "exit": 0
-    },
-    {
-     "tool": "git",
-     "args": "branch",
+     "args": "log main",
      "exit": 0
     },
     {
@@ -9810,6 +9905,11 @@
     {
      "tool": "git",
      "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch",
      "exit": 0
     }
    ]
@@ -10064,16 +10164,16 @@
    "failed_checks": [],
    "compliance_passed": true,
    "policy_violations": [],
-   "model_tool_calls": 10,
-   "turns": 11,
+   "model_tool_calls": 3,
+   "turns": 4,
    "tokens": {
-    "input_tokens": 20,
-    "cache_creation_input_tokens": 14135,
-    "cache_read_input_tokens": 235363,
-    "output_tokens": 1072
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13376,
+    "cache_read_input_tokens": 84647,
+    "output_tokens": 562
    },
-   "cost_usd_reported_by_cli": 0.0908363,
-   "wall_ms": 25609,
+   "cost_usd_reported_by_cli": 0.0676047,
+   "wall_ms": 23578,
    "vc_commands": [
     {
      "tool": "aisc",
@@ -10087,7 +10187,17 @@
     },
     {
      "tool": "aisc",
-     "args": "switch revive-worktree-no-graph",
+     "args": "show 88d2",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph:test_commands.py",
      "exit": 0
     }
    ]
