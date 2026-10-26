@@ -13,7 +13,7 @@ Use `aisc` for all version-control writes. Run `aisc log` first for ids and stat
 - reorder: `aisc move COMMIT... --before|--after COMMIT`; to another branch: `aisc move COMMIT... --to BRANCH [--onto BASE]` (`--onto` starts BRANCH at BASE)
 - reword: `aisc reword COMMIT -m MSG`; remove commits: `aisc drop COMMIT...`
 - rebase, keep dirty work: `aisc sync [ONTO] [--fetch] [--prefer-branch|--prefer-onto PATH]` (`--fetch` replaces `git fetch`/`pull`)
-- copy: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]` (COMMIT may be a branch; BRANCH may be `origin/NAME`)
+- copy: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE] [--switch]` (COMMIT may be a branch; BRANCH may be `origin/NAME`; `--switch` moves to the new branch, e.g. to run its tests)
 - integrate: `aisc land BRANCH... --into main --switch [--delete]` (`--delete` removes the landed branches)
 - discard: `aisc discard SEL...`; switch (also to run tests on another branch; edits come along): `aisc switch [-c] BRANCH`
 - undo (again = redo): `aisc undo`

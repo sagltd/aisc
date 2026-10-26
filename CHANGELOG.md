@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `aisc pick ... -b NEW --onto BASE --switch` (or `--to BRANCH --switch`) also switches to that
+  branch, carrying uncommitted changes, so copying a commit and running its tests is one call
+  fewer; `aisc undo` switches back.
 - The agent block and skill say that reads can be chained in one shell call; capped hunk
   listings end in `… +N (--full)` so the one-call way to see everything is in the output.
 - `aisc branches [COMMIT]` lists local branches, or the ones whose history contains COMMIT (an

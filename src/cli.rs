@@ -357,6 +357,9 @@ pub(crate) struct Pick {
     /// Resolve COMMIT names against this branch
     #[arg(long, value_name = "BRANCH")]
     pub from: Option<String>,
+    /// With -b NEW or --to BRANCH: switch to that branch afterwards, carrying uncommitted changes
+    #[arg(long)]
+    pub switch: bool,
     #[command(flatten)]
     pub opts: MutationOpts,
 }

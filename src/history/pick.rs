@@ -5,7 +5,7 @@ use super::render;
 use super::reorder::{
     LIMIT, Onto, Src, Step, conflict_error, dirty_paths, first_line, recommit, replay, short_ids,
 };
-use super::rewrite::{IndexChange, Plan, RefMove, Session, WorktreeWrite, stale};
+use super::rewrite::{HeadMove, IndexChange, Plan, RefMove, Session, WorktreeWrite, stale};
 use super::view::{self, View};
 use super::{Code, Outcome, fail, fail_hint};
 use crate::cli;
@@ -405,6 +405,27 @@ pub(crate) fn run(args: &cli::Pick) -> Result<Outcome> {
         old: (!new_branch).then(|| tip.clone()),
         new: Some(new_tip.clone()),
     });
+    // `--switch`: HEAD moves to the destination in the same operation, carrying uncommitted
+    // changes the way `aisc switch` does; `aisc undo` moves it back.
+    let switching = args.switch && !matches!(dest, Dest::Head);
+    if args.switch && !switching {
+        return Err(fail_hint(
+            Code::Usage,
+            "--switch needs -b NEW or --to BRANCH",
+            "a pick onto the current branch is already checked out",
+        ));
+    }
+    if switching {
+        if session.head.oid != head_view.tip {
+            return Err(stale("HEAD changed while aisc was reading"));
+        }
+        let head_tree = git.commit_tree_of(&head_view.tip)?;
+        carry(&git, &head_view, &head_tree, &onto.tree, &mut plan)?;
+        plan.head = Some(HeadMove {
+            from: session.head.symbolic.clone(),
+            to: target_ref.clone(),
+        });
+    }
     let ids = short_ids(
         &git,
         &created
@@ -443,9 +464,13 @@ pub(crate) fn run(args: &cli::Pick) -> Result<Outcome> {
     if !skipped.is_empty() {
         line.push_str(&format!(" (already applied: {})", skipped.join(", ")));
     }
+    if switching {
+        line.push_str(&format!("; switched to {target_name}"));
+    }
     line.push_str(&format!("; op {}", applied.op));
     let shown = match &dest {
         Dest::Head => super::summary::after(&git, None, true)?,
+        _ if switching => super::summary::after(&git, None, true)?,
         Dest::Branch(name) | Dest::New(name) => super::summary::after(&git, Some(name), false)?,
     };
     let result_text = if args.opts.quiet {
@@ -463,6 +488,7 @@ pub(crate) fn run(args: &cli::Pick) -> Result<Outcome> {
             json!({"id": id, "oid": oid, "subject": first_line(subject)})).collect::<Vec<_>>(),
         "skipped": skipped,
         "moved_refs": [{"ref": target_ref, "old": plan.refs[0].old, "new": new_tip}],
+        "head_changed_to": switching.then(|| target_name.clone()),
         "log": render::log_json(&shown, false),
     });
     Ok(Outcome::with_text(value, result_text))
