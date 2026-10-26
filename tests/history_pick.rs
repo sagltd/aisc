@@ -519,3 +519,60 @@ fn history_rewrites_still_refuse_a_remote_tracking_branch() {
     }
     assert_eq!(fixture.git(&["rev-parse", "origin/feature"]), oid);
 }
+
+#[test]
+fn pick_switch_moves_to_the_new_branch_carrying_the_scratch_note() {
+    let fixture = pilot13();
+    let main = fixture.git(&["rev-parse", "main"]);
+    let ui = fixture.git(&["rev-parse", "ui-note"]);
+    let run = fixture.aisc(&[
+        "pick",
+        "--from",
+        "revive-worktree-command",
+        "Revive worktree command",
+        "-b",
+        "revive-worktree-no-graph",
+        "--onto",
+        "main",
+        "--switch",
+    ]);
+    run.ok();
+    let branch = "revive-worktree-no-graph";
+    assert_eq!(fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]), branch);
+    assert_eq!(fixture.git(&["rev-parse", &format!("{branch}~1")]), main);
+    assert_eq!(
+        fixture.subjects(&format!("main..{branch}")),
+        ["Revive worktree command"]
+    );
+    // The work tree is the new branch's, the scratch note came along, nothing is staged.
+    assert_eq!(fixture.read("commands.py"), SELECTED_COMMANDS);
+    assert!(!fixture.exists("ui-note.txt"));
+    assert_eq!(fixture.read("scratch-note.txt"), DRAFT);
+    assert_eq!(
+        fixture.git(&["status", "--porcelain"]),
+        "?? scratch-note.txt"
+    );
+    assert_eq!(fixture.git(&["rev-parse", "ui-note"]), ui);
+    assert!(run.stdout.contains("switched"), "{}", run.stdout);
+    // Undo: back on ui-note with its file, the new branch gone, the note still there.
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(
+        fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "ui-note"
+    );
+    assert!(!fixture.git_ok(&["rev-parse", "--verify", &format!("refs/heads/{branch}")]));
+    assert!(fixture.exists("ui-note.txt"));
+    assert_eq!(fixture.read("scratch-note.txt"), DRAFT);
+    // --switch needs a destination branch.
+    let before = fixture.snapshot();
+    let bad = fixture.aisc(&[
+        "pick",
+        "--from",
+        "revive-worktree-command",
+        "Revive worktree command",
+        "--switch",
+    ]);
+    assert_eq!(bad.code, 1, "{} {}", bad.stdout, bad.stderr);
+    assert!(bad.stderr.contains("--switch"), "{}", bad.stderr);
+    assert_eq!(fixture.snapshot(), before);
+}

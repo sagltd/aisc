@@ -17,7 +17,7 @@ Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take
 - remove commits: `aisc drop COMMIT...`
 - take out of a commit, keep on disk: `aisc uncommit COMMIT SEL...`
 - discard uncommitted changes: `aisc discard SEL...`
-- copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE]`
+- copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE] [--switch]`
 - update onto moved base/upstream, keeping uncommitted work: `aisc sync [ONTO] [--fetch]` (not `git fetch`/`pull`); on CONFLICTS edit the marked files, then `aisc sync --continue`
 - integrate branches: `aisc land BRANCH... --into main [--switch] [--delete]`
 - work on another branch: `aisc switch BRANCH` (edits come along); never `git worktree`/`checkout`
