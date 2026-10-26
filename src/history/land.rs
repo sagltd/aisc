@@ -198,7 +198,17 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
         args.branches.join(", ")
     );
     let applied = session.apply(&plan)?;
-    let after = super::summary::after(&git, None, true)?;
+    // The target's log, with the landed commits listed even though land reused them: an agent
+    // asked to keep messages and authors can check the result without a second call.
+    let mut after = if here || plan.head.is_some() {
+        super::summary::after(&git, None, true)?
+    } else {
+        super::summary::after(&git, Some(&target), false)?
+    };
+    let range = format!("{old_target}..{tip}");
+    for oid in String::from_utf8_lossy(&git.run(&["rev-list", &range])?).lines() {
+        after.created.insert(oid.trim().to_owned());
+    }
     let deleted = if args.delete {
         format!("; deleted {}", args.branches.join(", "))
     } else {

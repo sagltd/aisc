@@ -33,6 +33,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `aisc land` lists the landed commits in its result (it reused them before, so nothing was
+  listed) and shows the target branch when that branch is not checked out; agents re-ran
+  `aisc log` after every land to check messages.
 - `aisc move COMMIT... --to BRANCH` refuses, with nothing changed, when BRANCH already contains
   a selected commit's change; before, it added an empty duplicate commit there.
 - The vcbench held-out reference solutions for AISC use `reword`, `drop` and `move --to`.

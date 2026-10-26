@@ -305,3 +305,34 @@ fn land_delete_refuses_a_branch_being_rebased_in_another_worktree() {
     assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
     assert!(fixture.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/docs"]));
 }
+
+#[test]
+fn land_lists_the_landed_commits_in_its_result() {
+    let fixture = pilot12();
+    // The checked-out branch is main here: the result names every landed commit, so the agent
+    // can check messages without a second call.
+    let run = fixture.aisc(&["land", "greeting", "docs", "--into", "main", "--switch"]);
+    run.ok();
+    for subject in [
+        "Normalize names",
+        "Greet normalized names",
+        "Document greeting usage",
+    ] {
+        assert!(run.stdout.contains(subject), "{subject}: {}", run.stdout);
+    }
+    fixture.aisc(&["undo"]).ok();
+    // Landing into a branch that is not checked out shows that branch, not this one.
+    fixture.git(&["switch", "-q", "greeting"]);
+    let run = fixture.aisc(&["land", "docs", "--into", "main"]);
+    run.ok();
+    assert!(run.stdout.contains("main: last"), "{}", run.stdout);
+    assert!(
+        run.stdout.contains("Document greeting usage"),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(
+        fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "greeting"
+    );
+}
