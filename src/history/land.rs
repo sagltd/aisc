@@ -212,7 +212,7 @@ pub(crate) fn run(args: &cli::Land) -> Result<Outcome> {
     let deleted = if args.delete {
         format!("; deleted {}", args.branches.join(", "))
     } else {
-        String::new()
+        "; branches kept (--delete removes them)".to_owned()
     };
     let result = format!(
         "landed {} into {target} ({total} commits, {} → {}){deleted}; op {}",

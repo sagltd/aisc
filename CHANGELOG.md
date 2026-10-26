@@ -33,7 +33,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `aisc land` lists the landed commits in its result (it reused them before, so nothing was
+- `aisc land` says `--delete removes them` when it keeps the landed branches (agents reached for
+  `git branch -d` otherwise), lists the landed commits in its result (it reused them before, so nothing was
   listed) and shows the target branch when that branch is not checked out; agents re-ran
   `aisc log` after every land to check messages.
 - `aisc move COMMIT... --to BRANCH` refuses, with nothing changed, when BRANCH already contains

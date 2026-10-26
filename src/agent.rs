@@ -13,13 +13,13 @@ Use AISC (`aisc`) for all version-control inspection and writes. Most tasks take
 - split: `aisc split COMMIT --into MSG SEL... [--into MSG SEL...]`
 - squash: `aisc squash --into MSG COMMIT COMMIT... [--into MSG COMMIT...]`
 - reorder: `aisc move COMMIT... --before|--after COMMIT`; to another branch: `aisc move COMMIT... --to BRANCH [--onto BASE]` (new branch at BASE)
-- change a message: `aisc reword COMMIT -m MSG`
+- reword: `aisc reword COMMIT -m MSG`
 - remove commits: `aisc drop COMMIT...`
-- take out of a commit, keep on disk: `aisc uncommit COMMIT SEL...`
-- discard uncommitted changes: `aisc discard SEL...`
+- uncommit, keep on disk: `aisc uncommit COMMIT SEL...`
+- discard changes: `aisc discard SEL...`
 - copy commits: `aisc pick [--from BRANCH] COMMIT... [-b NEW --onto BASE] [--switch]`
 - update onto moved base/upstream, keeping uncommitted work: `aisc sync [ONTO] [--fetch]` (not `git fetch`/`pull`); on CONFLICTS edit the marked files, then `aisc sync --continue`
-- integrate branches: `aisc land BRANCH... --into main [--switch] [--delete]`
+- integrate branches: `aisc land BRANCH... --into main [--switch] [--delete]` (`--delete` removes them)
 - work on another branch: `aisc switch BRANCH` (edits come along); never `git worktree`/`checkout`
 - undo the last operation: `aisc undo`
 - chain reads in one shell call (`aisc log && aisc show A:PATH`); a write may follow them

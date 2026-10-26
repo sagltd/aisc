@@ -320,6 +320,12 @@ fn land_lists_the_landed_commits_in_its_result() {
     ] {
         assert!(run.stdout.contains(subject), "{subject}: {}", run.stdout);
     }
+    // Without --delete the result says how to remove the landed branches.
+    assert!(
+        run.stdout.contains("--delete removes them"),
+        "{}",
+        run.stdout
+    );
     fixture.aisc(&["undo"]).ok();
     // Landing into a branch that is not checked out shows that branch, not this one.
     fixture.git(&["switch", "-q", "greeting"]);
