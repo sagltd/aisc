@@ -297,9 +297,12 @@ pub(crate) struct Squash {
 pub(crate) struct Move {
     #[arg(value_name = "COMMIT", required = true)]
     pub commits: Vec<String>,
-    /// Move the commits to the top of this existing branch (removing them here)
+    /// Move the commits to the top of this branch (removing them here); with --onto, a new branch
     #[arg(long, value_name = "BRANCH")]
     pub to: Option<String>,
+    /// With --to NEW: create NEW at BASE (a branch or commit) and move the commits there
+    #[arg(long, value_name = "BASE", requires = "to")]
+    pub onto: Option<String>,
     #[arg(long, value_name = "COMMIT")]
     pub before: Option<String>,
     #[arg(long, value_name = "COMMIT")]

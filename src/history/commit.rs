@@ -456,7 +456,7 @@ pub(crate) fn run(args: &cli::Commit) -> Result<Outcome> {
 
 /// An existing branch that `refs/heads/NAME` cannot live beside: `a` for `a/b`, or `a/b` for
 /// `a` (Git keeps refs as paths, so a name cannot also be a directory of names).
-fn conflicting_branch(git: &Git, name: &str) -> Result<Option<String>> {
+pub(crate) fn conflicting_branch(git: &Git, name: &str) -> Result<Option<String>> {
     let parts: Vec<&str> = name.split('/').collect();
     for end in 1..parts.len() {
         let parent = format!("refs/heads/{}", parts[..end].join("/"));
