@@ -240,9 +240,9 @@ Six more tasks, [written after all the fixes above and committed before any agen
 | **AISC dev (v0.1.3 candidate)** | **18/18** | **13** (12–15) | **0.47M** (0.44–0.51M) | **$0.37** | **85 s** |
 | GitButler 0.22.3 | 18/18 | 20 (18–24) | 0.64M (0.59–0.72M) | $0.42 | 98 s |
 | Git 2.50 | 18/18 | 20 (18–21) | 0.58M (0.54–0.61M) | $0.38 | 111 s |
-| AISC dev, re-run after `move --to NEW --onto BASE` (tasks known by then) | 18/18 | 11 (11–12) | 0.41M | $0.36 | 76 s |
+| AISC dev, re-run after `move --to NEW --onto BASE` and `aisc branches` (tasks known by then) | 18/18 | 10 (9–11) | 0.38M (0.36–0.41M) | $0.35 | 99 s |
 
-AISC wins this unseen set: 35% fewer tool calls than either tool, 27% fewer tokens than GitButler and 19% fewer than Git. Per task it is ahead or level on five of the six (one `aisc log` plus one verb, or a single call for the reorder-and-reword pair); it trails Git on naming the branches that contain a commit (3.7 calls to 3), where it has no verb of its own and agents fell back to read-only `git branch --contains`. Moving two commits to a new branch took `pick` plus `drop` (2.3 calls); `aisc move --to NEW --onto BASE` does it in one call since, and the re-run with it (last row) took 11 tool calls and 0.41M tokens per suite, with that task at one call.
+AISC wins this unseen set: 35% fewer tool calls than either tool, 27% fewer tokens than GitButler and 19% fewer than Git. Per task it is ahead or level on five of the six (one `aisc log` plus one verb, or a single call for the reorder-and-reword pair); it trailed Git on naming the branches that contain a commit (3.7 calls to 3), where it had no verb of its own and agents fell back to read-only `git branch --contains`, and moving two commits to a new branch took `pick` plus `drop` (2.3 calls). Both have a verb since (`aisc branches COMMIT`, `aisc move --to NEW --onto BASE`); the re-run with them (last row) took 10 tool calls and 0.38M tokens per suite, with those tasks at 1.7 and 1 calls.
 
 Per-run data: [`agent-runs-heldout3-v0.1.3-dev.json`](benchmarks/results/agent-runs-heldout3-v0.1.3-dev.json) and [`agent-runs-heldout3-v0.1.3-dev-after.json`](benchmarks/results/agent-runs-heldout3-v0.1.3-dev-after.json).
 
