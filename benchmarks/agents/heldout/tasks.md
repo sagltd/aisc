@@ -64,6 +64,8 @@ Known before running: AISC 0.1.2 has no verb that amends into a commit on a bran
 
 Six more tasks, written on 2026-10-27 after the fixes measured on sets 1 and 2 (directory selectors, `commit --onto BRANCH`, the cross-branch `amend`, `show COMMIT:PATH`) and **frozen (committed and pushed) before any agent ran them**. Fixtures, verifiers and reference solutions for Git, GitButler and AISC are in `benchmarks/vcbench/aisc-arm.patch` (`scripts/lib/scenario-heldout13.mjs` to `scenario-heldout18.mjs`); all 18 references pass their verifiers, and doing nothing fails every task.
 
+Results: [`../../results/agent-runs-heldout3-v0.1.3-dev.json`](../../results/agent-runs-heldout3-v0.1.3-dev.json), summarized in the README (AISC 13 tool calls and 0.47M tokens per suite; GitButler 20 and 0.64M; Git 20 and 0.58M; everyone 18/18). `aisc move --to NEW --onto BASE` was added right after these runs.
+
 Known before running: AISC has no verb that lists the branches containing a commit (heldout-17; read-only `git branch --contains` is allowed in every arm), and no one-call way to move commits to a *new* branch (heldout-15: its reference is `pick -b NEW --onto main` then `drop`, two calls).
 
 ## heldout-13-validate-form

@@ -14,11 +14,12 @@ script below.
 | [`../results/agent-runs-v0.1.3-dev.json`](../results/agent-runs-v0.1.3-dev.json) | 117 runs: AISC dev build ad698da (v0.1.3 candidate), GitButler 0.22.3 and Git 2.50, 3 repetitions each, Claude CLI 2.1.310 (the README's headline table) |
 | [`../results/agent-runs-v0.1.0.json`](../results/agent-runs-v0.1.0.json) | 117 runs: AISC v0.1.0, GitButler 0.22.3 and Git 2.50, 3 repetitions each |
 | [`../results/agent-runs-v0.1.1.json`](../results/agent-runs-v0.1.1.json) | 39 runs: AISC v0.1.1, same settings |
-| [`heldout/tasks.md`](heldout/tasks.md) | Six held-out task prompts, committed before any agent ran them |
+| [`heldout/tasks.md`](heldout/tasks.md) | The held-out task prompts (three sets of six), each committed before any agent ran them |
 | [`../results/agent-runs-heldout-v0.1.1.json`](../results/agent-runs-heldout-v0.1.1.json) | 54 runs on the held-out tasks: AISC v0.1.1, GitButler 0.22.3, Git 2.50 |
 | [`../results/agent-runs-heldout2-v0.1.2.json`](../results/agent-runs-heldout2-v0.1.2.json) | 54 runs on held-out set 2 (heldout-7 to heldout-12): AISC v0.1.2 (dev build before the cross-branch amend), GitButler 0.22.3, Git 2.50 |
 | [`../results/agent-runs-heldout-v0.1.2-after.json`](../results/agent-runs-heldout-v0.1.2-after.json) | 18 runs: AISC v0.1.2 dev on the first held-out set after reword/drop/move --to (tasks known by then) |
 | [`../results/agent-runs-heldout2-v0.1.2-after.json`](../results/agent-runs-heldout2-v0.1.2-after.json) | 18 runs: AISC v0.1.2 dev on held-out set 2 after the cross-branch amend (tasks known by then) |
+| [`../results/agent-runs-heldout3-v0.1.3-dev.json`](../results/agent-runs-heldout3-v0.1.3-dev.json) | 54 runs on held-out set 3 (heldout-13 to heldout-18): AISC dev build, GitButler 0.22.3, Git 2.50, Claude CLI 2.1.310 |
 | [`export.py`](export.py) | Turns the harness's run directories into one of these metrics-only result files |
 
 ```sh
