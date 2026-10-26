@@ -17,3 +17,6 @@
 # Local benchmark scratch data; checked-in benchmark reports remain visible
 /benchmarks/.scratch/
 /benchmarks/.cache/
+
+# macOS Finder metadata
+.DS_Store

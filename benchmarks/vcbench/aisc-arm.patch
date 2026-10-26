@@ -442,7 +442,7 @@ index cc2bcb1..9e3c13b 100644
  };
 diff --git a/scripts/lib/scenario-heldout1.mjs b/scripts/lib/scenario-heldout1.mjs
 new file mode 100644
-index 0000000..9f413c5
+index 0000000..93c2dc8
 --- /dev/null
 +++ b/scripts/lib/scenario-heldout1.mjs
 @@ -0,0 +1,46 @@
@@ -476,7 +476,7 @@ index 0000000..9f413c5
 +  });
 +}
 +function solve(ctx) {
-+  const { g, b } = commands(ctx);
++  const { g, b, a } = commands(ctx);
 +  if (ctx.arm === 'git') {
 +    const env = { ...process.env, GIT_AUTHOR_NAME: 'Bench Author', GIT_AUTHOR_EMAIL: 'bench@example.com', GIT_COMMITTER_NAME: 'Bench Author', GIT_COMMITTER_EMAIL: 'bench@example.com', GIT_AUTHOR_DATE: '2026-09-01T12:00:00Z', GIT_COMMITTER_DATE: '2026-09-01T12:00:00Z' };
 +    const { execute } = commands({ ...ctx, env });
@@ -488,13 +488,13 @@ index 0000000..9f413c5
 +    const commit = state.stacks.flatMap(s => s.branches).find(x => x.name === 'fix-auth').commits.find(c => (c.message ?? '').startsWith('Fix tokne refresh'));
 +    b('reword', commit.cliId, '-m', 'Fix token refresh');
 +  } else {
-+    throw new Error('No reference: AISC 0.1.1 has no command that changes a commit message');
++    a('reword', 'Fix tokne refresh', '-m', 'Fix token refresh');
 +  }
 +}
 +export default { id: ID, researchRank: 101, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-heldout2.mjs b/scripts/lib/scenario-heldout2.mjs
 new file mode 100644
-index 0000000..efc0a1a
+index 0000000..5208d75
 --- /dev/null
 +++ b/scripts/lib/scenario-heldout2.mjs
 @@ -0,0 +1,46 @@
@@ -536,7 +536,7 @@ index 0000000..efc0a1a
 +function solve(ctx) {
 +  const { g, b, a } = commands(ctx);
 +  if (ctx.arm === 'git') g('rebase', '--onto', 'feature-export~2', 'feature-export~1', 'feature-export');
-+  else if (ctx.arm === 'aisc+skill') { a('uncommit', 'Add debug logging', 'src/debug.ts', 'src/app.ts'); a('discard', 'src/debug.ts', 'src/app.ts'); }
++  else if (ctx.arm === 'aisc+skill') a('drop', 'Add debug logging');
 +  else {
 +    const state = JSON.parse(b('status', '-fv', '--json'));
 +    const commit = state.stacks.flatMap(s => s.branches).find(x => x.name === 'feature-export').commits.find(c => (c.message ?? '').startsWith('Add debug logging'));
@@ -597,10 +597,10 @@ index 0000000..0fcc9e1
 +export default { id: ID, researchRank: 103, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-heldout4.mjs b/scripts/lib/scenario-heldout4.mjs
 new file mode 100644
-index 0000000..1c20dff
+index 0000000..a038ce1
 --- /dev/null
 +++ b/scripts/lib/scenario-heldout4.mjs
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,53 @@
 +// Held-out 4: move a commit made on the wrong branch onto the branch it belongs to.
 +import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged } from './heldout-common.mjs';
 +export const ID = 'heldout-4-move-commit';
@@ -646,8 +646,7 @@ index 0000000..1c20dff
 +    g('switch', '-q', 'feature-billing'); g('cherry-pick', moved);
 +    g('switch', '-q', 'feature-search'); g('rebase', '--onto', 'feature-search~2', 'feature-search~1', 'feature-search');
 +  } else if (ctx.arm === 'aisc+skill') {
-+    a('pick', 'Add billing export', '--to', 'feature-billing');
-+    a('uncommit', 'Add billing export', 'src/billing/export.ts'); a('discard', 'src/billing/export.ts');
++    a('move', 'Add billing export', '--to', 'feature-billing');
 +  } else {
 +    const state = JSON.parse(b('status', '-fv', '--json'));
 +    const commit = state.stacks.flatMap(s => s.branches).find(x => x.name === 'feature-search').commits.find(c => (c.message ?? '').startsWith('Add billing export'));

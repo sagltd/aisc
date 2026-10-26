@@ -15,17 +15,33 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 
 /// Replays `sources[position]` for each position in `order`, starting on `parent`. Returns the
-/// new tip and tree, and every (old, new) commit pair that changed.
+/// new tip and tree, and every (old, new) commit pair that changed. With `onto_branch`, a commit
+/// whose replay changes nothing there is refused: that branch already contains its change, and
+/// moving it would only add an empty duplicate.
 fn replay_order(
     git: &Git,
     sources: &[Src],
     order: &[usize],
     mut parent: Onto,
+    onto_branch: Option<&str>,
 ) -> Result<(Onto, Vec<(String, String)>)> {
     let mut rewritten = Vec::new();
     for position in order {
         let src = &sources[*position];
-        let (oid, tree) = match replay(git, src, &parent)? {
+        let step = replay(git, src, &parent)?;
+        if let (Some(branch), Step::Merged(tree)) = (onto_branch, &step)
+            && *tree == parent.tree
+        {
+            return Err(fail_hint(
+                Code::State,
+                format!(
+                    "'{branch}' already contains \"{}\"; nothing was changed",
+                    escape_line(&src.subject)
+                ),
+                "to remove it from this branch use aisc drop COMMIT...",
+            ));
+        }
+        let (oid, tree) = match step {
             Step::Conflict(paths) => return Err(conflict_error(src, &paths)),
             Step::Reuse => (src.oid.clone(), src.tree.clone()),
             Step::Merged(tree) => (recommit(git, src, &tree, parent.oid.as_ref())?, tree),
@@ -103,7 +119,7 @@ pub(crate) fn reword(args: &cli::Reword) -> Result<Outcome> {
         tree: src.tree.clone(),
     };
     let rest: Vec<usize> = (target + 1..range.len()).collect();
-    let (tip, more) = replay_order(&git, &sources, &rest, start)?;
+    let (tip, more) = replay_order(&git, &sources, &rest, start, None)?;
     rewritten.extend(more);
     let new_tip = tip.oid.expect("a commit was written");
     let old_subject = escape_line(&range[target].subject);
@@ -145,7 +161,7 @@ pub(crate) fn drop(args: &cli::Drop) -> Result<Outcome> {
     let order: Vec<usize> = (first..range.len())
         .filter(|p| !dropped.contains(p))
         .collect();
-    let (tip, rewritten) = replay_order(&git, &sources, &order, below(&sources, first))?;
+    let (tip, rewritten) = replay_order(&git, &sources, &order, below(&sources, first), None)?;
     let new_tip = tip.oid.clone().ok_or_else(|| {
         fail(
             Code::Unsupported,
@@ -230,13 +246,14 @@ pub(crate) fn move_to(args: &cli::Move, target: &str) -> Result<Outcome> {
         tree: target_tree,
     };
     let picked: Vec<usize> = moved.iter().copied().collect();
-    let (target_new, target_rewritten) = replay_order(&git, &sources, &picked, onto_target)?;
+    let (target_new, target_rewritten) =
+        replay_order(&git, &sources, &picked, onto_target, Some(target))?;
     let target_new = target_new.oid.expect("a commit was written");
     // Then this branch without them.
     let keep: Vec<usize> = (first..range.len())
         .filter(|p| !moved.contains(p))
         .collect();
-    let (tip, rewritten) = replay_order(&git, &sources, &keep, below(&sources, first))?;
+    let (tip, rewritten) = replay_order(&git, &sources, &keep, below(&sources, first), None)?;
     let new_tip = tip.oid.clone().ok_or_else(|| {
         fail(
             Code::Unsupported,

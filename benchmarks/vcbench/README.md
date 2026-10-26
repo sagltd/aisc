@@ -2,7 +2,7 @@
 
 Compares AISC with plain Git, GitButler (`but`) and Jujutsu (`jj`) on identical tasks, using GitButler's MIT-licensed [version-control-bench](https://github.com/gitbutlerapp/version-control-bench) harness (`vcbench`). This directory holds only our patch to it; the harness itself is not vendored.
 
-Status: the harness side (arm, policy, disk metric, reference solutions) is complete and all 13 aisc reference solutions pass against the history verbs on `dev` (`npm run aisc:check`). `aisc gc`, `finish` and `start --sparse` were still in flight when this was written. No agent results are published yet.
+Status: the harness side (arm, policy, disk metric, reference solutions) is complete and all 13 aisc reference solutions pass against the history verbs on `dev` (`npm run aisc:check`). `aisc gc`, `finish` and `start --sparse` were still in flight when this was written. The six held-out tasks (`scripts/lib/scenario-heldout*.mjs`) have reference solutions for the git, but+skill and aisc+skill arms; the AISC ones use `reword`, `drop` and `move --to` (v0.1.2) and all 18 pass their verifiers.
 
 ## Reproduce
 

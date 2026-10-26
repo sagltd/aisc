@@ -6,6 +6,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `aisc move COMMIT... --to BRANCH` refuses, with nothing changed, when BRANCH already contains
+  a selected commit's change; before, it added an empty duplicate commit there.
+- The vcbench held-out reference solutions for AISC use `reword`, `drop` and `move --to`.
+
 ## [0.1.2] - 2026-10-23
 
 ### Added
