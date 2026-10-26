@@ -21,6 +21,7 @@ script below.
 | [`../results/agent-runs-heldout2-v0.1.2-after.json`](../results/agent-runs-heldout2-v0.1.2-after.json) | 18 runs: AISC v0.1.2 dev on held-out set 2 after the cross-branch amend (tasks known by then) |
 | [`../results/agent-runs-heldout3-v0.1.3-dev.json`](../results/agent-runs-heldout3-v0.1.3-dev.json) | 54 runs on held-out set 3 (heldout-13 to heldout-18): AISC dev build, GitButler 0.22.3, Git 2.50, Claude CLI 2.1.310 |
 | [`../results/agent-runs-heldout3-v0.1.3-dev-after.json`](../results/agent-runs-heldout3-v0.1.3-dev-after.json) | 18 runs: AISC dev build 8565390 on held-out set 3 after `move --to NEW --onto BASE` and `aisc branches` (tasks known by then) |
+| [`../results/agent-runs-batching-followup.json`](../results/agent-runs-batching-followup.json) | 9 runs: AISC dev build 59018ba on the review, integrate and selective-copy tasks after the agent block said reads can be chained (indicative) |
 | [`export.py`](export.py) | Turns the harness's run directories into one of these metrics-only result files |
 
 ```sh

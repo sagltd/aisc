@@ -1,0 +1,478 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
+ "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.2 dev 59018ba (release build sha256 73ae4f2cfa5ccabe47510885f3f91b4a8292589647499a16c3f671f0fd0382f0)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "Follow-up after the agent block said reads can be chained in one shell call (#68): the three tasks where AISC trailed Git in agent-runs-v0.1.3-dev.json, AISC arm only, 3 runs each; indicative, not a re-measure of the suite.",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
+ ],
+ "runs": [
+  {
+   "rep": 1,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13325,
+    "cache_read_input_tokens": 84546,
+    "output_tokens": 478
+   },
+   "cost_usd_reported_by_cli": 0.0665506,
+   "wall_ms": 23123,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log normalize",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 6,
+   "turns": 7,
+   "tokens": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 13813,
+    "cache_read_input_tokens": 159406,
+    "output_tokens": 833
+   },
+   "cost_usd_reported_by_cli": 0.0795506,
+   "wall_ms": 24863,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": false,
+   "correctness_passed": false,
+   "failed_checks": [
+    "response_correct"
+   ],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13937,
+    "cache_read_input_tokens": 85119,
+    "output_tokens": 1160
+   },
+   "cost_usd_reported_by_cli": 0.0758759,
+   "wall_ms": 28161,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show main:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show seed-rewrite:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 13317,
+    "cache_read_input_tokens": 84549,
+    "output_tokens": 424
+   },
+   "cost_usd_reported_by_cli": 0.06597890000000001,
+   "wall_ms": 12282,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log greeting",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log docs",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log normalize",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 8,
+   "turns": 9,
+   "tokens": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 14160,
+    "cache_read_input_tokens": 184792,
+    "output_tokens": 1061
+   },
+   "cost_usd_reported_by_cli": 0.08576120000000001,
+   "wall_ms": 35273,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command 816c -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14899,
+    "cache_read_input_tokens": 85969,
+    "output_tokens": 1328
+   },
+   "cost_usd_reported_by_cli": 0.08148889999999999,
+   "wall_ms": 24827,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show main:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "diff",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-12-integrate-topics",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13087,
+    "cache_read_input_tokens": 60000,
+    "output_tokens": 385
+   },
+   "cost_usd_reported_by_cli": 0.062209999999999994,
+   "wall_ms": 17704,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "branches",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "land normalize greeting docs --into main --switch",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "stash list",
+     "exit": 0
+    },
+    {
+     "tool": "git",
+     "args": "branch -a",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-13-selective-copy",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 5,
+   "turns": 6,
+   "tokens": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 13573,
+    "cache_read_input_tokens": 134288,
+    "output_tokens": 637
+   },
+   "cost_usd_reported_by_cli": 0.0741148,
+   "wall_ms": 26835,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log revive-worktree-command",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "pick --from revive-worktree-command Revive worktree command -b revive-worktree-no-graph --onto main",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph:test_commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph:commands.py",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show revive-worktree-no-graph:graph.py",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "pilot-7-scoped-review",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 14218,
+    "cache_read_input_tokens": 60297,
+    "output_tokens": 830
+   },
+   "cost_usd_reported_by_cli": 0.07121369999999999,
+   "wall_ms": 11254,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 668d:data/questions.json",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "show 95dd:data/questions-by-id.json",
+     "exit": 0
+    }
+   ]
+  }
+ ]
+}
