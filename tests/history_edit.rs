@@ -292,3 +292,61 @@ fn move_to_refuses_a_target_that_already_contains_the_change() {
         ["Add b elsewhere", "Add invoice"]
     );
 }
+
+#[test]
+fn move_to_a_new_branch_with_onto_creates_it_in_one_call() {
+    let fixture = three();
+    let tip_before = fixture.git(&["rev-parse", "feature"]);
+    let run = fixture.aisc(&[
+        "move",
+        "A",
+        "Fix tokne refresh",
+        "--to",
+        "export",
+        "--onto",
+        "main",
+    ]);
+    run.ok();
+    assert!(run.stdout.contains("export"), "{}", run.stdout);
+    assert_eq!(fixture.subjects("main..export"), ["Fix tokne refresh", "A"]);
+    assert_eq!(
+        fixture.git(&["rev-parse", "export~2"]),
+        fixture.git(&["rev-parse", "main"])
+    );
+    assert_eq!(fixture.subjects("main..feature"), ["C"]);
+    assert!(!fixture.exists("a.txt") && !fixture.exists("b.txt"));
+    assert!(fixture.exists("c.txt"));
+    assert_eq!(fixture.read("README.md"), "readme\nedit\n");
+    assert_eq!(
+        fixture.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "feature"
+    );
+    // Undo deletes the new branch and brings the commits and their files back.
+    fixture.aisc(&["undo"]).ok();
+    assert_eq!(fixture.git(&["rev-parse", "feature"]), tip_before);
+    assert!(!fixture.git_ok(&["rev-parse", "--verify", "refs/heads/export"]));
+    assert!(fixture.exists("a.txt") && fixture.exists("b.txt"));
+}
+
+#[test]
+fn move_to_onto_refusals_change_nothing() {
+    let fixture = three();
+    fixture.git(&["branch", "billing", "main"]);
+    let before = fixture.snapshot();
+    for (args, expected) in [
+        (
+            &["move", "A", "--to", "billing", "--onto", "main"][..],
+            "already exists",
+        ),
+        (
+            &["move", "A", "--to", "export", "--onto", "nope"][..],
+            "unknown revision",
+        ),
+        (&["move", "A", "--to", "export"][..], "--onto"),
+    ] {
+        let run = fixture.aisc(args);
+        assert_eq!(run.code, 1, "{args:?}: {} {}", run.stdout, run.stderr);
+        assert!(run.stderr.contains(expected), "{args:?}: {}", run.stderr);
+        assert_eq!(fixture.snapshot(), before, "{args:?}");
+    }
+}

@@ -213,13 +213,42 @@ pub(crate) fn move_to(args: &cli::Move, target: &str) -> Result<Outcome> {
         ));
     }
     let target_ref = format!("refs/heads/{target}");
-    let target_tip = git.ref_oid(&target_ref)?.ok_or_else(|| {
-        fail_hint(
-            Code::Selector,
-            format!("unknown branch '{target}'"),
-            "use an existing local branch; to start a new one use aisc pick -b NEW",
-        )
-    })?;
+    let existing = git.ref_oid(&target_ref)?;
+    let target_tip = match (&existing, args.onto.as_deref()) {
+        (Some(tip), None) => tip.clone(),
+        (Some(_), Some(_)) => {
+            return Err(fail_hint(
+                Code::Usage,
+                format!("branch '{target}' already exists"),
+                format!("to move onto it, drop --onto: aisc move COMMIT... --to {target}"),
+            ));
+        }
+        (None, Some(base)) => {
+            if let Some(clash) = super::commit::conflicting_branch(&git, target)? {
+                return Err(fail_hint(
+                    Code::State,
+                    format!("branch '{target}' conflicts with existing branch {clash}"),
+                    "a branch cannot be both a name and a directory of names; pick another name",
+                ));
+            }
+            git.resolve_commit(base)?.ok_or_else(|| {
+                fail_hint(
+                    Code::Selector,
+                    format!("unknown revision '{base}'"),
+                    "--onto names the branch or commit the new branch starts from",
+                )
+            })?
+        }
+        (None, None) => {
+            return Err(fail_hint(
+                Code::Selector,
+                format!("unknown branch '{target}'"),
+                format!(
+                    "use an existing local branch, or start one there: aisc move COMMIT... --to {target} --onto BASE"
+                ),
+            ));
+        }
+    };
     if session.head.symbolic.as_deref() == Some(target_ref.as_str()) {
         return Err(fail_hint(
             Code::State,
@@ -267,7 +296,7 @@ pub(crate) fn move_to(args: &cli::Move, target: &str) -> Result<Outcome> {
     let old_tree = range[range.len() - 1].tree.clone();
     let extra = vec![RefMove {
         name: target_ref,
-        old: Some(target_tip),
+        old: existing.clone(),
         new: Some(target_new.clone()),
     }];
     let mut all = rewritten.clone();

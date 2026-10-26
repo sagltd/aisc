@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `aisc move COMMIT... --to NEW --onto BASE` moves commits to a new branch started at BASE in
+  one call; `aisc undo` deletes the branch and brings the commits back. (Held-out set 3: agents
+  tried `move --to NEW` first and needed `pick` plus `drop`.)
 - A directory is a selector: `aisc commit -m MSG docs/` takes every changed file under it,
   tracked or untracked (agents wrote this and got "unknown selector").
 - `aisc commit --onto BRANCH -m MSG SEL...` commits onto an existing local branch without

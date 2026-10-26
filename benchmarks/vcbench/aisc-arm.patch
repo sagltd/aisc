@@ -804,10 +804,10 @@ index 0000000..604a109
 +export default { id: ID, researchRank: 114, prepare, verify, solve };
 diff --git a/scripts/lib/scenario-heldout15.mjs b/scripts/lib/scenario-heldout15.mjs
 new file mode 100644
-index 0000000..393ba8a
+index 0000000..3406967
 --- /dev/null
 +++ b/scripts/lib/scenario-heldout15.mjs
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,63 @@
 +// Held-out 15: move two commits to a new branch based on main, keeping their order.
 +import { commands, write, initialize, save, adopt, refs, exactTree, disk, same, result, active, residue, BASE, subjects, authorsKept, othersUnchanged, pending, gitLike } from './heldout-common.mjs';
 +export const ID = 'heldout-15-move-to-new-branch';
@@ -858,8 +858,7 @@ index 0000000..393ba8a
 +    g('switch', '-q', 'feature-search'); g('reset', '-q', '--hard', ctx.metadata.keep);
 +    write(ctx.repoDir, README);
 +  } else if (ctx.arm === 'aisc+skill') {
-+    a('pick', '-b', 'feature-export', '--onto', 'main', 'Add export', 'Add export tests');
-+    a('drop', 'Add export', 'Add export tests');
++    a('move', 'Add export', 'Add export tests', '--to', 'feature-export', '--onto', 'main');
 +  } else {
 +    b('branch', 'new', 'feature-export');
 +    // One commit per move, oldest first, so the new branch keeps the order.
