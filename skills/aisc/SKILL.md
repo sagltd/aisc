@@ -5,7 +5,7 @@ description: One-call Git history edits: commit hunks, amend older commits, spli
 Use `aisc` for all version-control writes. Run `aisc log` first for ids and state. One command per task:
 
 - read: `aisc show REV` or `A..B` (on this branch); a whole file: `aisc show REV:PATH`; another branch: `aisc log BRANCH` (local or `origin/NAME`)
-- commit: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` switches to it; `-b NEW --onto BASE` stays here, runs no hooks)
+- commit: `aisc commit -m MSG SEL...` (`--all`; `-b NEW` switches to it; `--onto BRANCH` or `-b NEW --onto BASE` commits there and stays here, no hooks)
 - amend older: `aisc amend --into COMMIT SEL...` (repeatable; a COMMIT on another local branch is amended there, no switch)
 - split: `aisc split COMMIT --into MSG SEL...` (repeatable)
 - uncommit, keep on disk: `aisc uncommit COMMIT SEL...`
@@ -18,7 +18,7 @@ Use `aisc` for all version-control writes. Run `aisc log` first for ids and stat
 - discard: `aisc discard SEL...`; switch (also to run tests on another branch; edits come along): `aisc switch [-c] BRANCH`
 - undo (again = redo): `aisc undo`
 
-COMMIT: hex id or exact subject. SEL: `PATH`, `"PATH~text"` (hunk containing text), `PATH:A-B` (new-side lines) or a hunk id from `aisc log`.
+COMMIT: hex id or exact subject. SEL: `PATH`, `DIR/` (every changed file under it), `"PATH~text"` (hunk containing text), `PATH:A-B` (new-side lines) or a hunk id from `aisc log`.
 
 Rules:
 - Writes print the result (`-q`: one line); don't re-check. Unselected changes stay uncommitted.
