@@ -6,6 +6,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `aisc show COMMIT:PATH` prints a whole file as it is at that commit (several `COMMIT:PATH`
+  arguments get a header each; binary files are summarized). Review tasks needed `git show`
+  for this before.
+
 ### Changed
 
 - `aisc move COMMIT... --to BRANCH` refuses, with nothing changed, when BRANCH already contains

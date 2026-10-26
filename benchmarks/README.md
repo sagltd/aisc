@@ -218,7 +218,7 @@ Sources, pinned:
 | Context cost (tokens) | git | aisc | but | jj |
 |---|---|---|---|---|
 | AGENTS block | 63 | 83 | 475 | 167 |
-| Skill core (`SKILL.md`) | – | **558** (was 681) | 5415 | 2591 |
+| Skill core (`SKILL.md`) | – | **664** (558 before the v0.1.2 verbs and `show REV:PATH`) | 5415 | 2591 |
 | Block + core | 63 | **641** | 5890 | 2758 |
 | References, on demand | – | 681 (`references/lifecycle.md`) | 14487 (`reference.md` 7383, `examples.md` 3662, `concepts.md` 3442) | – |
 | Total, core + references (+ block)¹ | 63 | **1239** (1322) | 19902 (20377) | 2591 (2758) |
