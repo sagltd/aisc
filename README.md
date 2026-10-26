@@ -199,6 +199,23 @@ GitButler wins this set. Per task:
 
 v0.1.2 adds the missing commands (`aisc reword`, `aisc drop`, `aisc move --to`). These six tasks are now known, so the next comparison needs new held-out tasks. Per-run data is in [`agent-runs-heldout-v0.1.1.json`](benchmarks/results/agent-runs-heldout-v0.1.1.json).
 
+#### Held-out set 2 (v0.1.2)
+
+Six new tasks, [written after v0.1.2 and committed before any agent ran them](benchmarks/agents/heldout/tasks.md): amend a forgotten file into the newest commit and reword it, uncommit the newest commit keeping its changes, a stacked branch with one commit, amend into a commit on a branch that is not checked out, list the files a commit changed, and one commit here plus one on a new branch off `main` from a dirty work tree. Same agent, settings and grading; 3 runs per tool.
+
+| 6 tasks × 3 runs, per suite | Passed | Tool calls | Tokens | Cost | Time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AISC v0.1.2 | 17/18 | 18 (17–18) | 0.60M (0.58–0.61M) | $0.40 | 123 s |
+| **GitButler 0.22.3** | **18/18** | 18 (17–19) | 0.59M (0.57–0.61M) | $0.40 | 117 s |
+| Git 2.50 | 15/18 | 11 (10–12) | 0.39M (0.37–0.42M) | $0.34 | 85 s |
+
+A tie overall, made of one bad task and five good ones. Per task (mean tool calls and tokens per run):
+- **Amend into a commit on another branch: AISC 12 calls and 337k tokens, GitButler 3 and 98k, Git 4.7 and 135k.** AISC v0.1.2 refused `amend --into` for a commit that was not on the checked-out branch, and its agents spent ten or more calls trying `switch`, `commit --onto` and `squash`; one run failed. This is fixed after these runs: `aisc amend --into COMMIT SEL...` now finds the branch and amends there in one call.
+- **The other five tasks: AISC 1–1.3 calls and 48–57k tokens each; GitButler 1.3–4 calls and 56–124k; Git 1–2 calls and 46–70k.** Git's agents batch several commands into one tool call, which keeps their token count low, but all three Git runs of the two-branches task left the docs file on disk and failed.
+- Tokens per run are what the Claude CLI reported, cache reads included. A one-call task costs about 48k tokens for every tool: that is the prompt, the agent's instructions and the task, so the differences are all in the extra calls.
+
+Per-run data: [`agent-runs-heldout2-v0.1.2.json`](benchmarks/results/agent-runs-heldout2-v0.1.2.json). The export script that produced it from the harness's run directories is [`benchmarks/agents/export.py`](benchmarks/agents/export.py).
+
 ### Command benchmark
 
 [`benchmarks/commands`](benchmarks/commands) runs ten tasks modelled on [vcbench](https://vcbench.dev): select hunks, amend an older commit, split, reorder, squash, uncommit, undo a rewrite, sync with a conflict, branch off in parallel, and inspect state. Each tool runs the shortest correct sequence an expert would type, every end state is graded the same way, and the tools run in alternating order on the same fixtures. The run below measured the v0.1.0 release binary with 10 repetitions plus a warm-up, on a busy 11-core laptop (one-minute load average 19 to 26); results are in [`benchmarks/results/commands-v3.json`](benchmarks/results/commands-v3.json).
