@@ -14,6 +14,7 @@
 #   OUT=./agent-runs                      # where per-run result.json files go
 #   REPS=3  MODEL=claude-sonnet-5-5  EFFORT=medium
 #   TASKS="heldout-7-amend-and-reword ..."  # optional: explicit task ids instead of every pilot-* task
+#   ARMS="aisc+skill"                      # optional: only these arms (default: all three, rotated per rep)
 #
 # The harness runs every arm in the same sandbox (Claude accept-edits plus an allowlist; no
 # permission bypass) and writes one result.json per run. Summarize with summarize.py.
@@ -30,6 +31,7 @@ while [ "$rep" -le "$REPS" ]; do
     2) arms="but+skill git aisc+skill" ;;
     0) arms="git aisc+skill but+skill" ;;
   esac
+  arms=${ARMS:-$arms}
   for task in $tasks; do
     for arm in $arms; do
       run="$OUT/rep$rep/$task--$arm"

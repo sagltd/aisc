@@ -1,0 +1,554 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
+ "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.2 (dev 7011e25 release build, sha256 e1082a53f56337d8b30b7599e767884867d92536e41c59e9abfe609bbec05a24)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "AISC-only re-run of the first held-out set after v0.1.2 added reword, drop and move --to; the tasks were known by then.",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
+ ],
+ "runs": [
+  {
+   "rep": 1,
+   "task": "heldout-1-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12636,
+    "cache_read_input_tokens": 35558,
+    "output_tokens": 214
+   },
+   "cost_usd_reported_by_cli": 0.0562478,
+   "wall_ms": 9296,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "reword Fix tokne refresh -m Fix token refresh",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-2-drop",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12573,
+    "cache_read_input_tokens": 35538,
+    "output_tokens": 196
+   },
+   "cost_usd_reported_by_cli": 0.055813800000000004,
+   "wall_ms": 12070,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "drop Add debug logging",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-3-two-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13091,
+    "cache_read_input_tokens": 59829,
+    "output_tokens": 479
+   },
+   "cost_usd_reported_by_cli": 0.0631489,
+   "wall_ms": 17194,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Update API docs\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> docs",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Update API docs\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> docs/api.md docs/usage.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> tests/api.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-4-move-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12641,
+    "cache_read_input_tokens": 35559,
+    "output_tokens": 187
+   },
+   "cost_usd_reported_by_cli": 0.055997899999999996,
+   "wall_ms": 22222,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add billing export --to feature-billing",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-5-find-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12567,
+    "cache_read_input_tokens": 35532,
+    "output_tokens": 178
+   },
+   "cost_usd_reported_by_cli": 0.055609200000000004,
+   "wall_ms": 7481,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log main --reverse -SMAX_RETRIES = 7 --format=%h %s",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-6-commit-elsewhere",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12754,
+    "cache_read_input_tokens": 59759,
+    "output_tokens": 292
+   },
+   "cost_usd_reported_by_cli": 0.0599239,
+   "wall_ms": 7824,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port src/config.ts -b hotfix --onto hotfix",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port src/config.ts -b hotfix --existing --onto hotfix",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-1-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12632,
+    "cache_read_input_tokens": 35558,
+    "output_tokens": 204
+   },
+   "cost_usd_reported_by_cli": 0.056131799999999996,
+   "wall_ms": 8075,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "reword Fix tokne refresh -m Fix token refresh",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-2-drop",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12577,
+    "cache_read_input_tokens": 35539,
+    "output_tokens": 174
+   },
+   "cost_usd_reported_by_cli": 0.055609900000000004,
+   "wall_ms": 6596,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "drop Add debug logging",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-3-two-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13093,
+    "cache_read_input_tokens": 59831,
+    "output_tokens": 463
+   },
+   "cost_usd_reported_by_cli": 0.0629971,
+   "wall_ms": 13846,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Update API docs\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> docs/",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Update API docs\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> docs/api.md docs/usage.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> tests/api.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-4-move-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12639,
+    "cache_read_input_tokens": 35559,
+    "output_tokens": 208
+   },
+   "cost_usd_reported_by_cli": 0.0561999,
+   "wall_ms": 7301,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add billing export --to feature-billing",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-5-find-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12568,
+    "cache_read_input_tokens": 35533,
+    "output_tokens": 152
+   },
+   "cost_usd_reported_by_cli": 0.0553533,
+   "wall_ms": 7778,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log --format=%h %s -SMAX_RETRIES = 7 main --reverse",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-6-commit-elsewhere",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12754,
+    "cache_read_input_tokens": 59759,
+    "output_tokens": 302
+   },
+   "cost_usd_reported_by_cli": 0.060023900000000005,
+   "wall_ms": 12992,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port src/config.ts -b hotfix --onto hotfix",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port src/config.ts -b hotfix --existing --onto hotfix",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-1-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12636,
+    "cache_read_input_tokens": 35558,
+    "output_tokens": 234
+   },
+   "cost_usd_reported_by_cli": 0.0564478,
+   "wall_ms": 6557,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "reword Fix tokne refresh -m Fix token refresh",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-2-drop",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12571,
+    "cache_read_input_tokens": 35539,
+    "output_tokens": 181
+   },
+   "cost_usd_reported_by_cli": 0.0556559,
+   "wall_ms": 9835,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "drop Add debug logging",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-3-two-commits",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 13016,
+    "cache_read_input_tokens": 59918,
+    "output_tokens": 441
+   },
+   "cost_usd_reported_by_cli": 0.0624778,
+   "wall_ms": 10661,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Update API docs\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> docs/api.md docs/usage.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> tests",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> tests/api.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-4-move-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12642,
+    "cache_read_input_tokens": 35559,
+    "output_tokens": 193
+   },
+   "cost_usd_reported_by_cli": 0.0560619,
+   "wall_ms": 6854,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "move Add billing export --to feature-billing",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-5-find-commit",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12568,
+    "cache_read_input_tokens": 35532,
+    "output_tokens": 170
+   },
+   "cost_usd_reported_by_cli": 0.0555332,
+   "wall_ms": 6087,
+   "vc_commands": [
+    {
+     "tool": "git",
+     "args": "log main --reverse -SMAX_RETRIES = 7 --format=%h %s",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-6-commit-elsewhere",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 3,
+   "turns": 4,
+   "tokens": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12970,
+    "cache_read_input_tokens": 84156,
+    "output_tokens": 358
+   },
+   "cost_usd_reported_by_cli": 0.0638916,
+   "wall_ms": 8596,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port -b hotfix --onto hotfix src/config.ts",
+     "exit": 1
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port --existing --onto hotfix src/config.ts",
+     "exit": 2
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix default port -b hotfix --existing --onto hotfix src/config.ts",
+     "exit": 0
+    }
+   ]
+  }
+ ]
+}

@@ -128,6 +128,7 @@ class Scenario:
     facts: tuple = ()
     notes: dict = field(default_factory=dict)
     tool_dirty: dict = field(default_factory=dict)  # tool-specific working-copy model
+    branches: dict = field(default_factory=dict)  # other local branches off main: {name: [(subject, overlay)]}
 
 
 # ---------------------------------------------------------------- GitButler ID lookup
@@ -209,6 +210,12 @@ def scenarios():
                      ("add cli", {"cli.py": "import parser\n"})]
     squashed = [("add parser module", {"parser.py": PARSER}), ("add cli", {"cli.py": "import parser\n"})]
     squash_editor = "perl -pi -e 's/^pick(.* fix parser typo)$/fixup$1\\nexec git commit {}--amend -m \"add parser module\"/'"
+    reword_editor = "perl -pi -e 's/^(pick .* fix parser typo)$/$1\\nexec git commit {}--amend -m \"fix parser split\"/'"
+    config = ("add config", {"config.py": "LIMIT = 3\n"})
+    sender = ("add sender", {"sender.py": "def send():\n    pass\n"})
+    debug = ("add debug log", {"debug.py": "DEBUG = True\n"})
+    export = ("add billing export", {"billing_export.py": "EXPORT = True\n"})
+    invoice = ("add invoice", {"invoice.py": "TOTAL = 0\n"})
     git_squash = Run(["git", "rebase", q, "-i", "--autostash", "main"], env={"GIT_SEQUENCE_EDITOR": (
         squash_editor.format(""), squash_editor.format("-q "))})
     aisc_squash = Run(["aisc", "squash", q, "--into", "add parser module", "add parser", "fix parser typo"])
@@ -360,6 +367,44 @@ def scenarios():
              "but": [Run(["but", "status", nh]), Run(["git", "diff", "--numstat"])],
              "jj": [Run(["jj", "log", "-r", "main..@"]), Run(["jj", "diff", "--stat"])]},
             read_only=True, facts=("feature", "add parser", "add cli", "parser.py", "README.md", "notes.txt")),
+        Scenario(
+            "reword_commit", "reword a commit (held-out 1)",
+            "The commit 'fix parser typo' should be called 'fix parser split'. Change that message only; keep the README edit uncommitted.",
+            squash_series, {"README.md": README_EDIT},
+            [squash_series[0], ("fix parser split", squash_series[1][1]), squash_series[2]], {"README.md": README_EDIT},
+            {"git": [Run(["git", "rebase", q, "-i", "--autostash", "main"], env={"GIT_SEQUENCE_EDITOR": (
+                         reword_editor.format(""), reword_editor.format("-q "))})],
+             "aisc": [Run(["aisc", "reword", q, "fix parser typo", "-m", "fix parser split"])],
+             "but": [Run(["but", "status", nh]),
+                     Run(lambda c: ["but", "reword", but_commit(c, "fix parser typo"), "-m", "fix parser split"])],
+             "jj": [Run(["jj", "describe", jq, "-r", 'subject("fix parser typo")', "-m", "fix parser split"])]},
+            notes={"git": "an `exec git commit --amend -m` line after the pick in the rebase todo, so no editor"}),
+        Scenario(
+            "drop_commit", "drop a commit (held-out 2)",
+            "Remove the commit 'add debug log' and its change entirely; keep 'add config' and 'add sender', the README edit and the untracked notes.",
+            [config, debug, sender], {"README.md": README_EDIT, "notes.txt": "scratch\n"},
+            [config, sender], {"README.md": README_EDIT, "notes.txt": "scratch\n"},
+            {"git": [Run(["git", "rebase", q, "-i", "--autostash", "main"], env=sequence_editor("sed -i.bak '/add debug log/d'"))],
+             "aisc": [Run(["aisc", "drop", q, "add debug log"])],
+             "but": [Run(["but", "status", nh]), Run(lambda c: ["but", "discard", but_commit(c, "add debug log")])],
+             "jj": [Run(["jj", "abandon", jq, "-r", 'subject("add debug log")'])]}),
+        Scenario(
+            "move_to_branch", "move a commit to another branch (held-out 4)",
+            "The commit 'add billing export' belongs on branch billing: put it there on top of 'add invoice' and take it off feature; stay on feature and keep the README edit.",
+            [config, export, sender], {"README.md": README_EDIT},
+            [config, sender], {"README.md": README_EDIT},
+            {"git": [Run(["git", "switch", q, "billing"]), Run(["git", "cherry-pick", ":/add billing export"]),
+                     Run(["git", "switch", q, "feature"]),
+                     Run(["git", "rebase", q, "-i", "--autostash", "main"], env=sequence_editor("sed -i.bak '/add billing export/d'"))],
+             "aisc": [Run(["aisc", "move", q, "add billing export", "--to", "billing"])],
+             "but": [Run(["but", "status", nh]),
+                     Run(lambda c: ["but", "move", but_commit(c, "add billing export"), "--branch", "billing"])],
+             "jj": [Run(["jj", "rebase", jq, "-r", 'subject("add billing export")', "-d", "billing"]),
+                    Run(["jj", "bookmark", "move", jq, "billing", "--to", 'subject("add billing export")'])]},
+            branches={"billing": [invoice]}, side={"billing": [invoice, export]},
+            tool_dirty={"but": {"README.md": README_EDIT, "invoice.py": "TOTAL = 0\n", "billing_export.py": "EXPORT = True\n"}},
+            notes={"git": "cherry-pick onto billing by `:/subject`, then drop the commit from feature with a rebase todo edit",
+                   "but": "graded against a different expected working copy: both branches stay applied in the GitButler workspace, so billing's files stay on disk"}),
     ]
 
 
@@ -387,6 +432,10 @@ def build_template(scenario, root, env):
     git(repository, "remote", "add", "origin", "../origin.git", env=env)
     git(repository, "push", "-q", "origin", "main", env=env)
     git(repository, "fetch", "-q", "origin", env=env)
+    for name, series in scenario.branches.items():
+        git(repository, "switch", "-q", "-c", name, "main", env=env)
+        commit_series(repository, series, env)
+        git(repository, "switch", "-q", "main", env=env)
     if scenario.upstream:
         upstream = root / "upstream"
         git(root, "clone", "-q", str(origin), str(upstream), env=env)
@@ -411,7 +460,7 @@ def settle(tool):
         time.sleep(1.0)
 
 
-def adopt(tool, repository, root, env, binaries):
+def adopt(tool, repository, root, env, binaries, branches=()):
     """Untimed per-tool adoption, as the vcbench harness does before an agent starts."""
     def run(*arguments):
         subprocess.run([binaries[arguments[0]], *arguments[1:]], cwd=repository, env=env, check=True,
@@ -422,6 +471,8 @@ def adopt(tool, repository, root, env, binaries):
         run("but", "setup")
         run("but", "skill", "install", "--path", str(root / "appdata/home/.claude/skills/gitbutler"))
         run("but", "apply", "feature")
+        for name in branches:
+            run("but", "apply", name)
         settle(tool)
     elif tool == "jj":
         run("jj", "git", "init", "--colocate")

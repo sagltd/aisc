@@ -1,12 +1,13 @@
 # Benchmarks
 
-## Command benchmark (commands-v2)
+## Command benchmark (commands-v2 schema)
 
-`commands/` contains a scripted benchmark with no model in the loop. For ten
+`commands/` contains a scripted benchmark with no model in the loop. For thirteen
 version-control tasks it measures how many tool calls an expert agent needs,
 how many bytes the tools print, a token estimate for that text, and wall time.
 It compares Git, AISC, GitButler (`but`) and Jujutsu (`jj`). Results are in
-[`results/commands-v3.json`](results/commands-v3.json) (v0.1.0 release binary; v2 in [`results/commands-v2.json`](results/commands-v2.json)). The single-task v1
+[`results/commands-v4.json`](results/commands-v4.json) (dev build 7011e25, thirteen tasks; the ten-task runs
+are [`results/commands-v3.json`](results/commands-v3.json), v0.1.0 release binary, and [`results/commands-v2.json`](results/commands-v2.json)). The single-task v1
 comparison (`commands.py`, `results/commands-v1.json`) is kept unchanged.
 
 ### Tasks and grading
@@ -44,6 +45,9 @@ same expected end state. The results JSON lists the exception under
 | sync_conflict | update dirty branch (pilot-6/11) | Fetch the moved `origin/main`, rebase onto it, resolve a one-line conflict, keep a dirty README. |
 | parallel_branch | parallel branch / stack | Commit one dirty file on a new branch `docs` based on `main`, leaving `feature` and its WIP alone. |
 | inspect_state | status/log/diff | Report the branch, its commits and the changed paths with counts. Nothing changes. |
+| reword_commit | reword (held-out 1) | Change the message of the middle of three commits; keep a dirty README. |
+| drop_commit | drop (held-out 2) | Remove the middle commit and its change; keep a dirty README and an untracked file. |
+| move_to_branch | move to another branch (held-out 4) | Move the middle commit on top of the existing `billing` branch and take it off `feature`; stay on `feature`, keep a dirty README. |
 
 ### Inspection rule
 
@@ -70,6 +74,12 @@ extra checks.
   it must read the file, because it has no non-interactive hunk selection.
   `jj undo` needs nothing.
 
+For the three held-out tasks: Git edits the rebase todo (`exec git commit --amend -m` after
+the pick to reword, a deleted line to drop) and cherry-picks by `:/subject` before dropping to
+move; AISC runs `reword`, `drop` or `move --to` by subject; GitButler reads `but status` for
+the commit id, then `reword`, `discard` or `move --branch`; Jujutsu runs `describe`, `abandon`,
+or `rebase -d` plus a bookmark move.
+
 ### Where AISC's call savings come from
 
 AISC's `path~text` hunk selector is a real feature. In select_hunks it picks
@@ -82,9 +92,9 @@ tools are:
 - Jujutsu reads the file, writes the partial version, runs `jj commit` with a
   fileset, restores the file and moves the bookmark.
 
-Across the ten tasks, AISC saves 14 tool calls against Git, 8 against
-GitButler and 7 against Jujutsu. The selector accounts for 2 of the 14
-against Git, 1 of the 8 against GitButler, and 4 of the 7 against Jujutsu
+Across the thirteen tasks, AISC saves 19 tool calls against Git, 13 against
+GitButler and 10 against Jujutsu. The selector accounts for 2 of the 19
+against Git, 1 of the 13 against GitButler, and 4 of the 10 against Jujutsu
 (3 commands + 2 edits versus 1). Against Jujutsu, then, the hunk selector is
 where most of the savings come from. Against Git and GitButler, most savings
 come from addressing commits by subject in one verb:
@@ -92,11 +102,6 @@ come from addressing commits by subject in one verb:
 - Git needs multi-step `rebase -i` sequences for split and uncommit, and a
   reflog lookup for undo.
 - GitButler needs an ID lookup before each history edit, and has no split verb.
-
-In this run AISC needed more calls than GitButler and Jujutsu in
-parallel_branch: 3 against 1 and 2. The AISC arm now uses
-`aisc commit -b docs --onto main` (1 call, graded against Git's end state);
-the tables below predate that change.
 
 ### Output modes
 
@@ -138,57 +143,66 @@ The inspection commands are the same in both modes.
 
 ### Results
 
-The run used macOS arm64 with 11 CPUs, Apple Git 2.50.1, AISC 0.1.0 with
-unchanged dev sources, `but` 0.22.3 and `jj` 0.42.0. Each tool passed all 10
-tasks in all 7 runs of both modes. The machine was shared, with a load average
-of 18 to 35, so absolute times are noisy.
+The v4 run used macOS arm64 with 11 CPUs, Apple Git 2.50.1, a release build of
+AISC `dev` at 7011e25 (v0.1.2 plus `show COMMIT:PATH` and the cross-branch
+amend), `but` 0.22.3 and `jj` 0.42.0: 6 measured repetitions after 1 warm-up,
+both modes. Each tool passed all 13 tasks in every run. The machine was shared;
+its one-minute load average fell from 35 to 9 during the run, so absolute
+times are indicative. Tokens are `tiktoken` `o200k_base` counts of the
+transcript text, not billed usage.
 
 Each per-task cell gives calls (`e` = edits) / output bytes / estimated tokens
 / median ms. † marks the tool-specific working-copy expectation.
 
 #### Default mode (no quiet flags)
 
-| Tool | Tool calls (cmds + edits) | Output KB | Est. tokens (read + typed) | Median total ms |
-|---|---|---|---|---|
-| git | 28 (27 + 1) | 3.66 | 1646 (1231 + 415) | 1577 |
-| aisc | 14 (13 + 1) | 2.39 | 962 (782 + 180) | 9799 |
-| but | 22 (21 + 1) | 5.80 | 1965 (1779 + 186) | 1472 |
-| jj | 21 (18 + 3) | 3.64 | 1582 (1178 + 403) | 1526 |
+| Tool | Tool calls (cmds + edits) | Output KB | Est. tokens (read + typed) | Median total ms | All verified |
+|---|---|---|---|---|---|
+| git | 34 (33 + 1) | 4.41 | 2035 (1482 + 553) | 1053 | yes |
+| aisc | 15 (14 + 1) | 2.27 | 976 (766 + 210) | 838 | yes |
+| but | 28 (27 + 1) | 7.07 | 2450 (2226 + 224) | 1580 | yes |
+| jj | 25 (22 + 3) | 4.39 | 1900 (1430 + 469) | 1467 | yes |
 
 | Task | git | aisc | but | jj |
 |---|---|---|---|---|
-| select_hunks | 3 / 904 B / 340 t / 143 ms | 1 / 216 B / 85 t / 810 ms | 2 / 1801 B / 484 t / 195 ms | 3+2e / 494 B / 308 t / 200 ms |
-| amend_older | 2 / 212 B / 109 t / 188 ms | 1 / 156 B / 68 t / 1000 ms | 2 / 379 B / 149 t / 95 ms | 1 / 156 B / 66 t / 122 ms |
-| split_commit | 5 / 451 B / 213 t / 150 ms | 1 / 153 B / 81 t / 775 ms | 4 / 937 B / 383 t / 243 ms | 2 / 428 B / 180 t / 133 ms |
-| reorder_commits | 1 / 98 B / 83 t / 112 ms | 1 / 202 B / 80 t / 673 ms | 2 / 319 B / 123 t / 78 ms | 2 / 251 B / 116 t / 102 ms |
-| squash_commits | 1 / 293 B / 159 t / 114 ms | 1 / 174 B / 80 t / 675 ms | 2 / 317 B / 130 t / 119 ms | 1 / 164 B / 82 t / 66 ms |
-| uncommit_file | 4 / 396 B / 189 t / 170 ms | 1 / 172 B / 69 t / 982 ms | 2 / 380 B / 152 t / 89 ms | 1 / 128 B / 63 t / 57 ms |
-| undo_rewrite | 2 / 272 B / 125 t / 36 ms | 1 / 177 B / 64 t / 536 ms | 1 / 53 B / 28 t / 46 ms | 1 / 320 B / 132 t / 38 ms |
-| sync_conflict | 3+1e / 842 B / 272 t / 257 ms | 2+1e / 521 B / 177 t / 1675 ms | 3+1e / 1294 B / 327 t / 286 ms | 3+1e / 1077 B / 333 t / 437 ms |
-| parallel_branch | 3 / 170 B / 86 t / 122 ms | 3 / 428 B / 171 t / 1841 ms | 1 / 71 B / 33 t / 98 ms † | 2 / 357 B / 142 t / 159 ms |
-| inspect_state | 3 / 113 B / 70 t / 119 ms | 1 / 246 B / 86 t / 138 ms | 2 / 385 B / 156 t / 50 ms | 2 / 357 B / 160 t / 96 ms |
+| select_hunks | 3 / 904 B / 340 t / 67 ms | 1 / 170 B / 73 t / 78 ms | 2 / 1801 B / 484 t / 93 ms | 3+2e / 494 B / 310 t / 158 ms |
+| amend_older | 2 / 212 B / 109 t / 91 ms | 1 / 141 B / 68 t / 87 ms | 2 / 379 B / 149 t / 83 ms | 1 / 156 B / 66 t / 93 ms |
+| split_commit | 5 / 451 B / 213 t / 110 ms | 1 / 172 B / 89 t / 42 ms | 4 / 937 B / 383 t / 201 ms | 2 / 428 B / 182 t / 137 ms |
+| reorder_commits | 1 / 98 B / 83 t / 44 ms | 1 / 216 B / 86 t / 37 ms | 2 / 319 B / 123 t / 76 ms | 2 / 251 B / 116 t / 89 ms |
+| squash_commits | 1 / 293 B / 159 t / 68 ms | 1 / 179 B / 82 t / 34 ms | 2 / 317 B / 130 t / 78 ms | 1 / 164 B / 84 t / 60 ms |
+| uncommit_file | 4 / 396 B / 189 t / 85 ms | 1 / 153 B / 64 t / 81 ms | 2 / 380 B / 152 t / 96 ms | 1 / 128 B / 62 t / 73 ms |
+| undo_rewrite | 2 / 272 B / 125 t / 26 ms | 1 / 42 B / 20 t / 24 ms | 1 / 53 B / 28 t / 43 ms | 1 / 320 B / 132 t / 32 ms |
+| sync_conflict | 3+1e / 842 B / 272 t / 146 ms | 2+1e / 481 B / 170 t / 207 ms | 3+1e / 1294 B / 327 t / 335 ms | 3+1e / 1077 B / 338 t / 256 ms |
+| parallel_branch | 3 / 170 B / 86 t / 54 ms | 1 / 37 B / 33 t / 42 ms | 1 / 71 B / 33 t / 72 ms † | 2 / 357 B / 147 t / 124 ms |
+| inspect_state | 3 / 113 B / 70 t / 37 ms | 1 / 246 B / 86 t / 13 ms | 2 / 385 B / 156 t / 45 ms | 2 / 357 B / 158 t / 75 ms |
+| reword_commit | 1 / 306 B / 159 t / 97 ms | 1 / 164 B / 72 t / 33 ms | 2 / 406 B / 153 t / 82 ms | 1 / 156 B / 72 t / 75 ms |
+| drop_commit | 1 / 114 B / 67 t / 57 ms | 1 / 130 B / 52 t / 67 ms | 2 / 418 B / 155 t / 91 ms | 1 / 297 B / 104 t / 90 ms |
+| move_to_branch | 4 / 340 B / 163 t / 117 ms | 1 / 189 B / 80 t / 89 ms | 2 / 481 B / 177 t / 78 ms † | 2 / 310 B / 128 t / 134 ms |
 
 #### Quietest mode (documented quiet flags)
 
-| Tool | Tool calls (cmds + edits) | Output KB | Est. tokens (read + typed) | Median total ms |
-|---|---|---|---|---|
-| git | 28 (27 + 1) | 2.21 | 1175 (724 + 451) | 1486 |
-| aisc | 14 (13 + 1) | 1.44 | 688 (490 + 198) | 10091 |
-| but | 22 (21 + 1) | 5.43 | 1878 (1668 + 210) | 1449 |
-| jj | 21 (18 + 3) | 0.65 | 648 (216 + 433) | 1546 |
+| Tool | Tool calls (cmds + edits) | Output KB | Est. tokens (read + typed) | Median total ms | All verified |
+|---|---|---|---|---|---|
+| git | 34 (33 + 1) | 2.49 | 1421 (820 + 601) | 1021 | yes |
+| aisc | 15 (14 + 1) | 1.14 | 624 (388 + 236) | 838 | yes |
+| but | 28 (27 + 1) | 6.38 | 2272 (2012 + 260) | 1475 | yes |
+| jj | 25 (22 + 3) | 0.65 | 722 (215 + 507) | 1396 | yes |
 
 | Task | git | aisc | but | jj |
 |---|---|---|---|---|
-| select_hunks | 3 / 837 B / 321 t / 118 ms | 1 / 62 B / 44 t / 869 ms | 2 / 1801 B / 484 t / 135 ms | 3+2e / 305 B / 250 t / 199 ms |
-| amend_older | 2 / 46 B / 56 t / 160 ms | 1 / 41 B / 36 t / 1050 ms | 2 / 268 B / 119 t / 94 ms | 1 / 0 B / 17 t / 116 ms |
-| split_commit | 5 / 166 B / 126 t / 188 ms | 1 / 27 B / 44 t / 877 ms | 4 / 898 B / 376 t / 251 ms | 2 / 0 B / 45 t / 120 ms |
-| reorder_commits | 1 / 0 B / 47 t / 125 ms | 1 / 78 B / 43 t / 745 ms | 2 / 280 B / 116 t / 101 ms | 2 / 0 B / 40 t / 86 ms |
-| squash_commits | 1 / 0 B / 59 t / 125 ms | 1 / 75 B / 52 t / 625 ms | 2 / 278 B / 123 t / 103 ms | 1 / 0 B / 31 t / 57 ms |
-| uncommit_file | 4 / 163 B / 111 t / 168 ms | 1 / 48 B / 33 t / 1138 ms | 2 / 341 B / 145 t / 83 ms | 1 / 0 B / 21 t / 71 ms |
-| undo_rewrite | 2 / 272 B / 127 t / 38 ms | 1 / 177 B / 66 t / 443 ms | 1 / 53 B / 29 t / 57 ms | 1 / 0 B / 6 t / 37 ms |
-| sync_conflict | 3+1e / 666 B / 224 t / 247 ms | 2+1e / 389 B / 143 t / 1702 ms | 3+1e / 1294 B / 327 t / 299 ms | 3+1e / 0 B / 45 t / 399 ms |
-| parallel_branch | 3 / 0 B / 34 t / 131 ms | 3 / 336 B / 143 t / 2006 ms | 1 / 71 B / 33 t / 96 ms † | 2 / 0 B / 35 t / 144 ms |
-| inspect_state | 3 / 113 B / 70 t / 116 ms | 1 / 246 B / 86 t / 116 ms | 2 / 274 B / 126 t / 44 ms | 2 / 357 B / 158 t / 115 ms |
+| select_hunks | 3 / 837 B / 321 t / 64 ms | 1 / 62 B / 44 t / 71 ms | 2 / 1801 B / 484 t / 108 ms | 3+2e / 305 B / 250 t / 151 ms |
+| amend_older | 2 / 46 B / 56 t / 92 ms | 1 / 41 B / 36 t / 96 ms | 2 / 268 B / 119 t / 90 ms | 1 / 0 B / 17 t / 100 ms |
+| split_commit | 5 / 166 B / 126 t / 139 ms | 1 / 27 B / 43 t / 38 ms | 4 / 898 B / 376 t / 260 ms | 2 / 0 B / 45 t / 119 ms |
+| reorder_commits | 1 / 0 B / 47 t / 41 ms | 1 / 78 B / 43 t / 25 ms | 2 / 280 B / 116 t / 73 ms | 2 / 0 B / 40 t / 104 ms |
+| squash_commits | 1 / 0 B / 59 t / 63 ms | 1 / 75 B / 51 t / 23 ms | 2 / 278 B / 123 t / 86 ms | 1 / 0 B / 31 t / 52 ms |
+| uncommit_file | 4 / 163 B / 111 t / 97 ms | 1 / 48 B / 32 t / 77 ms | 2 / 341 B / 145 t / 80 ms | 1 / 0 B / 21 t / 59 ms |
+| undo_rewrite | 2 / 272 B / 127 t / 31 ms | 1 / 18 B / 14 t / 23 ms | 1 / 53 B / 28 t / 44 ms | 1 / 0 B / 6 t / 31 ms |
+| sync_conflict | 3+1e / 666 B / 224 t / 151 ms | 2+1e / 389 B / 144 t / 199 ms | 3+1e / 1294 B / 327 t / 256 ms | 3+1e / 0 B / 45 t / 247 ms |
+| parallel_branch | 3 / 0 B / 34 t / 53 ms | 1 / 37 B / 35 t / 44 ms | 1 / 71 B / 33 t / 78 ms † | 2 / 0 B / 35 t / 112 ms |
+| inspect_state | 3 / 113 B / 70 t / 45 ms | 1 / 246 B / 86 t / 13 ms | 2 / 274 B / 126 t / 39 ms | 2 / 357 B / 158 t / 70 ms |
+| reword_commit | 1 / 46 B / 72 t / 100 ms | 1 / 58 B / 38 t / 27 ms | 2 / 295 B / 123 t / 89 ms | 1 / 0 B / 22 t / 74 ms |
+| drop_commit | 1 / 46 B / 49 t / 60 ms | 1 / 33 B / 23 t / 53 ms | 2 / 307 B / 125 t / 89 ms | 1 / 0 B / 15 t / 86 ms |
+| move_to_branch | 4 / 190 B / 125 t / 108 ms | 1 / 57 B / 36 t / 73 ms | 2 / 370 B / 147 t / 108 ms † | 2 / 0 B / 37 t / 111 ms |
 
 ### Context cost (agent guidance)
 

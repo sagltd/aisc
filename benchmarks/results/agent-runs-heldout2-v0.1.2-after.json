@@ -1,0 +1,570 @@
+{
+ "schema": "aisc-agent-runs/1",
+ "harness": "GitButler version-control-bench 4886fd5 + benchmarks/vcbench/aisc-arm.patch (held-out tasks in scripts/lib/scenario-heldout*.mjs)",
+ "agent": "claude CLI 2.1.310, claude-sonnet-5-5, effort medium, sandboxed (acceptEdits + allowlist), identical for every arm; arm order rotated per repetition",
+ "versions": {
+  "aisc": "0.1.2 (dev 7011e25 release build, sha256 e1082a53f56337d8b30b7599e767884867d92536e41c59e9abfe609bbec05a24)",
+  "but": "0.22.3",
+  "git": "2.50.1 (Apple Git-155)"
+ },
+ "repetitions": 3,
+ "notes": [
+  "AISC-only re-run of held-out set 2 after the cross-branch amend landed (#57); the tasks were known by then.",
+  "One run (rep 1, heldout-9) first ended in a Claude CLI authentication error (HTTP 401, no command ran) and was repeated once.",
+  "Token counts and cost are what the Claude CLI reported, cache reads included; no transcripts or prompts beyond the task files are included.",
+  "vc_commands lists the version-control commands the agent ran (tool, arguments, exit code; temporary paths replaced by <tmp>); harness setup probes are excluded. No model text is included."
+ ],
+ "runs": [
+  {
+   "rep": 1,
+   "task": "heldout-10-amend-elsewhere",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12855,
+    "cache_read_input_tokens": 59848,
+    "output_tokens": 259
+   },
+   "cost_usd_reported_by_cli": 0.060006800000000006,
+   "wall_ms": 9828,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into Add config loader src/config.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-11-commit-files",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12633,
+    "cache_read_input_tokens": 35516,
+    "output_tokens": 91
+   },
+   "cost_usd_reported_by_cli": 0.0550016,
+   "wall_ms": 6231,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "show Refactor upload client",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-12-two-branches",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12934,
+    "cache_read_input_tokens": 59874,
+    "output_tokens": 331
+   },
+   "cost_usd_reported_by_cli": 0.0610454,
+   "wall_ms": 7803,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix parser crash src/parser.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Document UI -b docs-ui --onto main docs/ui.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-7-amend-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12723,
+    "cache_read_input_tokens": 35572,
+    "output_tokens": 198
+   },
+   "cost_usd_reported_by_cli": 0.0564372,
+   "wall_ms": 7684,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "amend --into Add parser tests/parser.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add parser -m Add parser with tests",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-8-uncommit-newest",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12673,
+    "cache_read_input_tokens": 35590,
+    "output_tokens": 183
+   },
+   "cost_usd_reported_by_cli": 0.056089,
+   "wall_ms": 7964,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "uncommit Add cache layer src/cache.ts src/app.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 1,
+   "task": "heldout-9-stack-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12659,
+    "cache_read_input_tokens": 35585,
+    "output_tokens": 304
+   },
+   "cost_usd_reported_by_cli": 0.057242499999999995,
+   "wall_ms": 7251,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests -b feature-api-tests tests/api.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-10-amend-elsewhere",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12851,
+    "cache_read_input_tokens": 59844,
+    "output_tokens": 261
+   },
+   "cost_usd_reported_by_cli": 0.060010400000000005,
+   "wall_ms": 11208,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into Add config loader src/config.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-11-commit-files",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12628,
+    "cache_read_input_tokens": 35515,
+    "output_tokens": 87
+   },
+   "cost_usd_reported_by_cli": 0.054941500000000004,
+   "wall_ms": 14222,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "show Refactor upload client",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-12-two-branches",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12927,
+    "cache_read_input_tokens": 59877,
+    "output_tokens": 347
+   },
+   "cost_usd_reported_by_cli": 0.0611777,
+   "wall_ms": 8683,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix parser crash src/parser.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Document UI -b docs-ui --onto main docs/ui.md",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-7-amend-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12889,
+    "cache_read_input_tokens": 59748,
+    "output_tokens": 224
+   },
+   "cost_usd_reported_by_cli": 0.0597828,
+   "wall_ms": 7801,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into Add parser tests/parser.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add parser -m Add parser with tests",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-8-uncommit-newest",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12674,
+    "cache_read_input_tokens": 35590,
+    "output_tokens": 223
+   },
+   "cost_usd_reported_by_cli": 0.056493,
+   "wall_ms": 13431,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "uncommit Add cache layer src/cache.ts src/app.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 2,
+   "task": "heldout-9-stack-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12660,
+    "cache_read_input_tokens": 35584,
+    "output_tokens": 255
+   },
+   "cost_usd_reported_by_cli": 0.0567564,
+   "wall_ms": 9746,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests -b feature-api-tests tests/api.test.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-10-amend-elsewhere",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12854,
+    "cache_read_input_tokens": 59848,
+    "output_tokens": 241
+   },
+   "cost_usd_reported_by_cli": 0.05982280000000001,
+   "wall_ms": 14456,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into Add config loader src/config.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-11-commit-files",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12629,
+    "cache_read_input_tokens": 35516,
+    "output_tokens": 87
+   },
+   "cost_usd_reported_by_cli": 0.054945600000000004,
+   "wall_ms": 5977,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "show Refactor upload client",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-12-two-branches",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12719,
+    "cache_read_input_tokens": 35593,
+    "output_tokens": 327
+   },
+   "cost_usd_reported_by_cli": 0.0577133,
+   "wall_ms": 8130,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Fix parser crash src/parser.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "commit -m Document UI -b docs-ui --onto main docs/ui.md",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-7-amend-and-reword",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 2,
+   "turns": 3,
+   "tokens": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 12888,
+    "cache_read_input_tokens": 59746,
+    "output_tokens": 234
+   },
+   "cost_usd_reported_by_cli": 0.059878600000000004,
+   "wall_ms": 7538,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "log",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "amend --into Add parser tests/parser.test.ts",
+     "exit": 0
+    },
+    {
+     "tool": "aisc",
+     "args": "reword Add parser -m Add parser with tests",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-8-uncommit-newest",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12671,
+    "cache_read_input_tokens": 35589,
+    "output_tokens": 172
+   },
+   "cost_usd_reported_by_cli": 0.0559709,
+   "wall_ms": 8596,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "uncommit Add cache layer src/cache.ts src/app.ts",
+     "exit": 0
+    }
+   ]
+  },
+  {
+   "rep": 3,
+   "task": "heldout-9-stack-branch",
+   "arm": "aisc+skill",
+   "passed": true,
+   "correctness_passed": true,
+   "failed_checks": [],
+   "compliance_passed": true,
+   "policy_violations": [],
+   "model_tool_calls": 1,
+   "turns": 2,
+   "tokens": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 12660,
+    "cache_read_input_tokens": 35585,
+    "output_tokens": 170
+   },
+   "cost_usd_reported_by_cli": 0.0559065,
+   "wall_ms": 10111,
+   "vc_commands": [
+    {
+     "tool": "aisc",
+     "args": "commit -m Add API tests -b feature-api-tests tests/api.test.ts",
+     "exit": 0
+    }
+   ]
+  }
+ ]
+}

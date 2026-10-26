@@ -109,7 +109,7 @@ def one_run(scenario, tool, template, scratch, binaries, count, index, mode="def
     def scrub(text):
         return text.replace(str(root.resolve()), "<run>").replace(str(root), "<run>")
     try:
-        adopt(tool, repository, root, env, binaries)
+        adopt(tool, repository, root, env, binaries, scenario.branches)
         write_files(repository, scenario.dirty)
         if scenario.before:
             execute(scenario.before[tool], repository, env, binaries, scrub, mode=mode)
@@ -229,13 +229,23 @@ def trace2_busy(path):
     return len(spans), nested, busy * 1000
 
 
+def remove_tree(root):
+    """`but` forks a background process that may still write into a run directory for a moment
+    after the command returned; wait for it instead of failing the whole benchmark."""
+    for _ in range(10):
+        shutil.rmtree(root, ignore_errors=True)
+        if not root.exists():
+            return
+        time.sleep(1.0)
+    shutil.rmtree(root)
+
+
 def prepared(scenario, tool, template, root, binaries):
-    if root.exists():
-        shutil.rmtree(root)
+    remove_tree(root)
     shutil.copytree(template, root, symlinks=True)
     env = environment(root)
     (root / "home").mkdir(exist_ok=True)
-    adopt(tool, root / "repo", root, env, binaries)
+    adopt(tool, root / "repo", root, env, binaries, scenario.branches)
     write_files(root / "repo", scenario.dirty)
     if scenario.before:
         execute(scenario.before[tool], root / "repo", env, binaries, str)
@@ -405,9 +415,14 @@ def main():
         measured = [run for run in runs if not run["warmup"]]
         summary = {mode: summarize([run for run in measured if run["mode"] == mode], tools,
                                    [scenario.name for scenario in chosen]) for mode in modes}
-        profiled = None if arguments.no_profile else profile(
-            {tool: path for tool, path in binaries.items() if tool in tools or tool == "cat"},
-            scratch, templates, chosen, arguments.repetitions)
+        profiled = None
+        if not arguments.no_profile:
+            try:
+                profiled = profile({tool: path for tool, path in binaries.items() if tool in tools or tool == "cat"},
+                                   scratch, templates, chosen, arguments.repetitions)
+            except Exception as failure:  # the measurements above are the result; profiling is extra
+                print("profile failed:", failure, file=sys.stderr)
+                profiled = {"error": str(failure)[:300]}
         load_after = os.getloadavg()
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

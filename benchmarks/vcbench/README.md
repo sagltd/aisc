@@ -72,19 +72,38 @@ Every reference passes its verifier. Calls and bytes are the `aisc` invocations 
 
 | Task | Calls | Output bytes |
 |---|---|---|
-| 1 selective commit | 1 | 274 |
-| 2 multi-amend | 1 | 464 |
-| 3 split | 1 | 597 |
-| 4 reorder | 1 | 609 |
-| 5 squash | 1 | 440 |
-| 6 dirty sync | 2 | 648 |
-| 7 scoped review | 1 | 524 |
-| 8 cold checkpoint | 1 | 203 |
-| 9 cleanup noise | 1 | 144 |
-| 10 recover amend | 1 | 177 |
-| 11 dual-source sync | 2 | 702 |
-| 12 integrate topics | 1 | 360 |
-| 13 selective copy | 1 | 216 |
+| 1 selective commit | 1 | 235 |
+| 2 multi-amend | 1 | 314 |
+| 3 split | 1 | 336 |
+| 4 reorder | 1 | 423 |
+| 5 squash | 1 | 261 |
+| 6 dirty sync | 2 | 625 |
+| 7 scoped review | 1 | 523 |
+| 8 cold checkpoint | 1 | 201 |
+| 9 cleanup noise | 1 | 80 |
+| 10 recover amend | 1 | 159 |
+| 11 dual-source sync | 1 | 309 |
+| 12 integrate topics | 1 | 178 |
+| 13 selective copy | 1 | 203 |
+
+Held-out tasks (`scripts/lib/scenario-heldout*.mjs`), same measure:
+
+| Task | Calls | Output bytes |
+|---|---|---|
+| heldout-1 reword | 1 | 176 |
+| heldout-2 drop | 1 | 142 |
+| heldout-3 two commits | 2 | 365 |
+| heldout-4 move commit | 1 | 246 |
+| heldout-5 find commit | 0 (read with git) | – |
+| heldout-6 commit elsewhere | 1 | 38 |
+| heldout-7 amend and reword | 2 | 310 |
+| heldout-8 uncommit newest | 1 | 199 |
+| heldout-9 stack branch | 1 | 188 |
+| heldout-10 amend elsewhere | 1 | 203 |
+| heldout-11 commit files | 0 (read with git) | – |
+| heldout-12 two branches | 2 | 213 |
+
+Measured on 2026-10-27 with the dev build after `aisc amend` learned to amend into a commit on another branch (every reference passes its verifier; `reword`, `drop`, `move --to` and the one-call `amend` replaced the earlier multi-call references, and pilot 11 no longer needs a `pick` after `sync`).
 
 ## What the patch adds
 

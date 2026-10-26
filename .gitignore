@@ -6,6 +6,7 @@
 /.worktrees/
 /.lead/
 /.co-op/
+/.claude/worktrees/
 
 # Local credentials and machine-specific settings
 .env
