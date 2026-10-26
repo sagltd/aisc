@@ -230,13 +230,20 @@ fn drop_and_move_to_on_another_branch_still_take_the_index_lock() {
 #[test]
 fn move_to_a_branch_inside_the_rewritten_range_is_a_typed_refusal() {
     let fixture = three();
-    // `stack` sits at B: moving A would rewrite B (moving `stack` with it) and also put A on
-    // top of `stack`. One ref, two updates: refused before anything is written.
+    // `stack` sits at B, so it already holds A: refused as a duplicate before anything is written.
     fixture.git(&["branch", "stack", "feature~1"]);
     let before = fixture.snapshot();
     let run = fixture.aisc(&["move", "A", "--to", "stack"]);
     assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
-    assert!(run.stderr.contains("twice"), "{}", run.stderr);
+    assert!(run.stderr.contains("already contains"), "{}", run.stderr);
+    assert!(!run.stderr.contains("fatal:"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    // `stack` at the tip holds every commit, so the same refusal; it is also the ref that a
+    // move of A would update twice (rewritten C, plus A on top), and neither path writes.
+    fixture.git(&["branch", "-f", "stack", "feature"]);
+    let before = fixture.snapshot();
+    let run = fixture.aisc(&["move", "A", "--to", "stack"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
     assert!(!run.stderr.contains("fatal:"), "{}", run.stderr);
     assert_eq!(fixture.snapshot(), before);
 }
@@ -258,4 +265,30 @@ fn drop_never_loses_an_uncommitted_edit_to_a_dropped_file() {
             ["C", "Fix tokne refresh", "A"]
         );
     }
+}
+
+#[test]
+fn move_to_refuses_a_target_that_already_contains_the_change() {
+    let fixture = Fixture::with_files(&[("README.md", "readme\n")]);
+    fixture.git(&["switch", "-q", "-c", "billing"]);
+    fixture.write("invoice.txt", "invoice\n");
+    fixture.commit_all("Add invoice");
+    fixture.write("b.txt", "B\n");
+    fixture.commit_all("Add b elsewhere");
+    fixture.git(&["switch", "-q", "-c", "feature", "main"]);
+    for (file, subject) in [("a.txt", "A"), ("b.txt", "B"), ("c.txt", "C")] {
+        fixture.write(file, &format!("{subject}\n"));
+        fixture.commit_all(subject);
+    }
+    let before = fixture.snapshot();
+    // Replaying B onto billing changes nothing there: an empty duplicate, not a move.
+    let run = fixture.aisc(&["move", "B", "--to", "billing"]);
+    assert_eq!(run.code, 1, "{} {}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("already contains"), "{}", run.stderr);
+    assert!(run.stderr.contains("aisc drop"), "{}", run.stderr);
+    assert_eq!(fixture.snapshot(), before);
+    assert_eq!(
+        fixture.subjects("main..billing"),
+        ["Add b elsewhere", "Add invoice"]
+    );
 }
