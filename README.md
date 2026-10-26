@@ -21,10 +21,10 @@ One command per history edit, output sized for a context window, every change un
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/bench/agents-dark.svg">
-  <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 0.98M tokens, 39 commands and $0.61 per suite; Git 1.43M, 63 and $0.73; GitButler 1.62M, 61 and $0.99. All three passed 38 of 39 runs." width="760">
+  <img src="assets/bench/agents-light.svg" alt="Real agents on 13 vcbench tasks, 3 runs per tool: AISC used 1.31M tokens, 43 commands and $0.88 per suite and passed 39 of 39 runs; Git 1.88M, 69 and $1.04, 38 of 39; GitButler 1.89M, 60 and $1.28, 37 of 39." width="760">
 </picture>
 
-These are the 13 tasks AISC was tuned on. On six **held-out tasks** it had never seen, GitButler did better: 15 commands and 0.42M tokens against AISC's 24 and 0.62M, mostly because AISC 0.1.1 has no command to reword, drop or move a commit to another branch ([held-out results](#held-out-tasks)). Every prompt, setup, script and per-run command is in [`benchmarks/agents`](benchmarks/agents).
+These are the 13 tasks AISC was tuned on. On **held-out tasks** it had never seen, the picture is mixed: GitButler won the first six (AISC 0.1.1 had no reword, drop or move-to-branch command), and the second six were a tie at the suite level, with AISC ahead on five tasks and far behind on one (amending into a commit on another branch, fixed since) ([held-out results](#held-out-tasks)). Every prompt, setup, script and per-run command is in [`benchmarks/agents`](benchmarks/agents).
 
 ## Install
 
@@ -48,17 +48,17 @@ The agent runs `aisc log` to see ids and state, makes one call per edit, and can
 
 ## Command benchmark at a glance
 
-Ten scripted version-control tasks, all four tools in the same run, every end state verified ([method](#command-benchmark)):
+Thirteen scripted version-control tasks, all four tools in the same run, every end state verified ([method](#command-benchmark)):
 
 | | **AISC** | GitButler | Git | Jujutsu |
 | --- | ---: | ---: | ---: | ---: |
-| Commands an agent runs | **12** | 22 | 28 | 21 |
-| Output the agent reads | **1.8 KB** | 5.9 KB | 3.8 KB | 3.7 KB |
-| Transcript tokens (estimate) | **606** | 1,639 | 1,261 | 1,307 |
-| Wall time, all ten tasks | **1,182 ms** | 2,106 ms | 1,370 ms | 1,798 ms |
+| Commands an agent runs | **15** | 28 | 34 | 25 |
+| Output the agent reads | **2.3 KB** | 7.1 KB | 4.4 KB | 4.4 KB |
+| Transcript tokens (estimate) | **976** | 2,450 | 2,035 | 1,900 |
+| Wall time, all thirteen tasks | **838 ms** | 1,580 ms | 1,053 ms | 1,467 ms |
 | Agent guidance loaded per session | **664 tokens** | 5,890 tokens | — | 2,758 tokens |
 
-Default output, no quiet flags. Tokens here are an offline estimate (bytes ÷ 4) of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
+Default output, no quiet flags. Tokens here are an offline `tiktoken` estimate of what the agent reads and types, not billed usage. Numbers are from one machine; run [`benchmarks/commands`](benchmarks/commands) to reproduce them on yours.
 
 ## Why AISC
 
@@ -166,20 +166,31 @@ Every write prints its result, so there is no need to re-check. `-q` prints a si
 
 Claude Sonnet 5.5 did the 13 tasks of GitButler's [vcbench](https://vcbench.dev) harness three times with each tool, in rotating order. Every arm got the same prompt, the same sandbox (accept-edits with an allowlist, no bypass) and its tool's own agent setup block (`aisc agent setup --print`, `but agent setup --print`, plain-Git instructions). The harness's own verifier grades each run, and a run also fails if the agent used a command the arm's policy blocks.
 
+| 13 tasks × 3 runs, Claude CLI 2.1.310 | Passed | Tool calls per suite | Tokens per suite | Cost per suite | Time per suite |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **AISC dev (v0.1.3 candidate)** | **39/39** | **43** (41–44) | **1.31M** (1.29–1.34M) | **$0.88** ($0.88–0.89) | **206 s** (166–230) |
+| GitButler 0.22.3 | 37/39 | 60 (57–62) | 1.89M (1.83–1.99M) | $1.28 ($1.26–1.31) | 241 s (210–287) |
+| Git 2.50 | 38/39 | 69 (68–71) | 1.88M (1.81–1.95M) | $1.04 ($1.01–1.06) | 288 s (251–343) |
+
+Means over the three runs, with the range in brackets, all on 2026-10-27 with the same Claude CLI. AISC passed every run and used 28% fewer tool calls, 31% fewer tokens, 31% less money and 14% less time than GitButler; against Git it used 38% fewer calls and 30% fewer tokens for 15% less money. GitButler's two misses and Git's one were a blocked raw Git write (`git rm --cached`, `git fetch`) and a wrong end state (multi-amend). Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per tool call, so fewer calls is what saves tokens. A Claude CLI update between the earlier runs and these raised the fixed cost of every run by about 14k tokens, which is why the older table below is not comparable on tokens.
+
+Per task, AISC is ahead or level on nine of the thirteen. It trails Git on the scoped review (5.3 calls to 4), the cold checkpoint (3 to 2, where no skill is installed), integrating topics (3.3 to 2: Git's agents just merge) and most of all on the selective copy, where the agent must run tests on the new branch (10.7 calls to Git's 3). That last one is the next thing to fix.
+
+<details>
+<summary>Earlier runs (Claude CLI 2.1.306, AISC v0.1.0 and v0.1.1)</summary>
+
 | 13 tasks × 3 runs | Passed | Commands per suite | Tokens per suite | Cost per suite | Time per suite |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **AISC v0.1.1** | **38/39** | **39** (39–40) | **0.98M** (0.95–1.00M) | **$0.61** ($0.60–0.61) | **218 s** (187–239) |
+| AISC v0.1.1 | 38/39 | 39 (39–40) | 0.98M (0.95–1.00M) | $0.61 ($0.60–0.61) | 218 s (187–239) |
 | AISC v0.1.0 | 35/39 | 41 (38–45) | 1.02M (0.97–1.09M) | $0.61 ($0.60–0.62) | 242 s (207–277) |
 | GitButler 0.22.3 | 38/39 | 61 (56–65) | 1.62M (1.52–1.77M) | $0.99 ($0.94–1.07) | 310 s (238–413) |
 | Git 2.50 | 38/39 | 63 (61–65) | 1.43M (1.42–1.44M) | $0.73 ($0.72–0.73) | 335 s (312–369) |
 
-Means over the three runs, with the range in brackets. AISC v0.1.1 passed as many runs as GitButler and Git (38/39; its one miss was a wrong answer on the review task, not a tool error) and used 36% fewer commands, 39% fewer tokens, 38% less money and 30% less time than GitButler. Each of its suite runs used fewer tokens and cost less than any GitButler or Git suite run. Tokens and cost are what the Claude CLI reported, cache reads included; nearly all of them are the agent re-reading its own context once per command, so fewer commands is what saves tokens.
+The four failed v0.1.0 runs had a correct end state but used a raw Git write the AISC arm blocks (`git branch -D` after landing, `git worktree add` to run tests); v0.1.1 added `aisc land --delete` and the `aisc switch` advice. AISC's agent block and several commands were improved after watching its runs on these same 13 tasks, while GitButler and Git use their shipped setup; the held-out tasks below test that.
 
-Where AISC lost:
-- **Four failed v0.1.0 runs.** In each one, the end state was correct, but the agent reached for a raw Git write that the AISC arm blocks: `git branch -D` to delete branches after landing them (twice), and `git worktree add` to run tests on a branch it had not checked out (twice). v0.1.1 adds `aisc land --delete` and tells agents to use `aisc switch` for this; its three runs had no such failure.
-- **Tuning.** AISC's agent block and several commands (`log BRANCH`, `pick --from origin/X`, upstream-aware `sync`, `land --delete`) were improved after watching AISC's runs on these same 13 tasks, while GitButler and Git use their shipped setup. Part of the gap may come from that; the held-out tasks below test it.
+</details>
 
-Everything needed to check or repeat these runs (task prompts, each tool's instructions, the run script and a script that recomputes this table) is in [`benchmarks/agents`](benchmarks/agents). Per-run metrics, including every version-control command each agent ran, are in [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) (all three tools) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json) (AISC v0.1.1, same settings).
+Everything needed to check or repeat these runs (task prompts, each tool's instructions, the run script, the export script and a script that recomputes this table) is in [`benchmarks/agents`](benchmarks/agents). Per-run metrics, including every version-control command each agent ran, are in [`agent-runs-v0.1.3-dev.json`](benchmarks/results/agent-runs-v0.1.3-dev.json) (all three tools, this table), [`agent-runs-v0.1.0.json`](benchmarks/results/agent-runs-v0.1.0.json) and [`agent-runs-v0.1.1.json`](benchmarks/results/agent-runs-v0.1.1.json).
 
 ### Held-out tasks
 
@@ -190,6 +201,7 @@ Six more tasks, written after the runs above and [committed before any agent ran
 | AISC v0.1.1 | 18/18 | 24 (21–26) | 0.62M (0.55–0.67M) | $0.31 | 96 s |
 | **GitButler 0.22.3** | **18/18** | **15** (13–16) | **0.42M** (0.38–0.44M) | **$0.27** | **66 s** |
 | Git 2.50 | 15/18 | 21 (14–31) | 0.51M (0.37–0.72M) | $0.28 | 85 s |
+| AISC v0.1.2 dev, re-run after the fixes (tasks known by then) | 18/18 | 8 (8–9) | 0.35M (0.34–0.36M) | $0.35 | 60 s |
 
 GitButler wins this set. Per task:
 - **Reword (11 vs 2 commands).** AISC has no command that edits a commit message. Its agent got there by uncommitting, recommitting and moving the change.
@@ -197,7 +209,7 @@ GitButler wins this set. Per task:
 - **The other four tasks** were close. AISC was ahead on two commits by topic (2 vs 3) and slightly behind on finding the commit (1.7 vs 1). Dropping a commit and committing elsewhere were level.
 - **Git** failed all three runs of committing onto another branch, because the edit stayed on disk.
 
-v0.1.2 adds the missing commands (`aisc reword`, `aisc drop`, `aisc move --to`). These six tasks are now known, so the next comparison needs new held-out tasks. Per-run data is in [`agent-runs-heldout-v0.1.1.json`](benchmarks/results/agent-runs-heldout-v0.1.1.json).
+v0.1.2 adds the missing commands (`aisc reword`, `aisc drop`, `aisc move --to`). Re-run with them (last row; AISC only, and the tasks were no longer held out), the suite took 8 tool calls instead of 24 and 0.35M tokens instead of 0.62M, below GitButler's 15 and 0.42M, with every task at one call except two commits by topic (2) and committing elsewhere (2.3: agents first wrote a directory selector or `-b hotfix --onto hotfix`, both of which the next version accepts). Per-run data: [`agent-runs-heldout-v0.1.1.json`](benchmarks/results/agent-runs-heldout-v0.1.1.json), [`agent-runs-heldout-v0.1.2-after.json`](benchmarks/results/agent-runs-heldout-v0.1.2-after.json).
 
 #### Held-out set 2 (v0.1.2)
 
@@ -214,31 +226,36 @@ A tie overall, made of one bad task and five good ones. Per task (mean tool call
 - **The other five tasks: AISC 1–1.3 calls and 48–57k tokens each; GitButler 1.3–4 calls and 56–124k; Git 1–2 calls and 46–70k.** Git's agents batch several commands into one tool call, which keeps their token count low, but all three Git runs of the two-branches task left the docs file on disk and failed.
 - Tokens per run are what the Claude CLI reported, cache reads included. A one-call task costs about 48k tokens for every tool: that is the prompt, the agent's instructions and the task, so the differences are all in the extra calls.
 
-Per-run data: [`agent-runs-heldout2-v0.1.2.json`](benchmarks/results/agent-runs-heldout2-v0.1.2.json). The export script that produced it from the harness's run directories is [`benchmarks/agents/export.py`](benchmarks/agents/export.py).
+Re-run with the fix (AISC only; the tasks were known by then), the suite took **8 tool calls, 0.35M tokens and $0.35**, 18/18 passed, and the amend task went from 12 calls to 2 (`aisc log`, then `aisc amend`). One of those 18 runs first ended in a Claude CLI authentication error before any command ran and was repeated.
+
+Per-run data: [`agent-runs-heldout2-v0.1.2.json`](benchmarks/results/agent-runs-heldout2-v0.1.2.json) and [`agent-runs-heldout2-v0.1.2-after.json`](benchmarks/results/agent-runs-heldout2-v0.1.2-after.json). The export script that produced them from the harness's run directories is [`benchmarks/agents/export.py`](benchmarks/agents/export.py).
 
 ### Command benchmark
 
-[`benchmarks/commands`](benchmarks/commands) runs ten tasks modelled on [vcbench](https://vcbench.dev): select hunks, amend an older commit, split, reorder, squash, uncommit, undo a rewrite, sync with a conflict, branch off in parallel, and inspect state. Each tool runs the shortest correct sequence an expert would type, every end state is graded the same way, and the tools run in alternating order on the same fixtures. The run below measured the v0.1.0 release binary with 10 repetitions plus a warm-up, on a busy 11-core laptop (one-minute load average 19 to 26); results are in [`benchmarks/results/commands-v3.json`](benchmarks/results/commands-v3.json).
+[`benchmarks/commands`](benchmarks/commands) runs thirteen tasks modelled on [vcbench](https://vcbench.dev) and the held-out sets: select hunks, amend an older commit, split, reorder, squash, uncommit, undo a rewrite, sync with a conflict, branch off in parallel, inspect state, reword a commit, drop a commit, and move a commit to another branch. Each tool runs the shortest correct sequence an expert would type, every end state is graded the same way, and the tools run in alternating order on the same fixtures. The run below measured a release build of `dev` at 7011e25 (v0.1.2 plus `show COMMIT:PATH` and the cross-branch amend) with 6 repetitions plus a warm-up, on an 11-core laptop whose one-minute load average fell from 35 to 9 during the run; results are in [`benchmarks/results/commands-v4.json`](benchmarks/results/commands-v4.json) (the earlier ten-task runs are `commands-v2.json` and `commands-v3.json`).
 
 Each cell is commands · output bytes · median wall time (default output, Apple Git 2.50.1, GitButler 0.22.3, Jujutsu 0.42.0, macOS arm64):
 
 | Task | **AISC** | GitButler | Git | Jujutsu |
 | --- | ---: | ---: | ---: | ---: |
-| Commit selected hunks | **1 · 170 B · 116 ms** | 2 · 1,801 B · 196 ms | 3 · 904 B · 119 ms | 5 · 494 B · 192 ms |
-| Amend fixes into older commits | **1 · 141 B · 127 ms** | 2 · 379 B · 170 ms | 2 · 212 B · 149 ms | 1 · 156 B · 171 ms |
-| Split a commit | **1 · 172 B · 81 ms** | 4 · 937 B · 403 ms | 5 · 451 B · 191 ms | 2 · 428 B · 188 ms |
-| Reorder commits | **1 · 216 B · 79 ms** | 2 · 319 B · 194 ms | 1 · 98 B · 97 ms | 2 · 251 B · 170 ms |
-| Squash commits | **1 · 179 B · 62 ms** | 2 · 317 B · 174 ms | 1 · 293 B · 103 ms | 1 · 164 B · 76 ms |
-| Uncommit a file | **1 · 153 B · 123 ms** | 2 · 380 B · 142 ms | 4 · 396 B · 147 ms | 1 · 128 B · 71 ms |
-| Undo the last operation | **1 · 42 B · 27 ms** | 1 · 53 B · 51 ms | 2 · 272 B · 33 ms | 1 · 320 B · 61 ms |
-| Sync a dirty branch, resolve a conflict | **3 · 481 B · 301 ms** | 4 · 1,294 B · 424 ms | 4 · 842 B · 259 ms | 4 · 1,077 B · 373 ms |
-| Branch off in parallel | **1 · 37 B · 63 ms** | 1 · 71 B · 142 ms | 3 · 170 B · 72 ms | 2 · 357 B · 221 ms |
-| Inspect status, log and diff | **1 · 246 B · 21 ms** | 2 · 385 B · 63 ms | 3 · 113 B · 60 ms | 2 · 357 B · 133 ms |
-| **Total** | **12 · 1.8 KB · 1,182 ms** | 22 · 5.9 KB · 2,106 ms | 28 · 3.8 KB · 1,370 ms | 21 · 3.7 KB · 1,798 ms |
+| Commit selected hunks | **1 · 170 B · 78 ms** | 2 · 1,801 B · 93 ms | 3 · 904 B · 67 ms | 5 · 494 B · 158 ms |
+| Amend fixes into older commits | **1 · 141 B · 87 ms** | 2 · 379 B · 83 ms | 2 · 212 B · 91 ms | 1 · 156 B · 93 ms |
+| Split a commit | **1 · 172 B · 42 ms** | 4 · 937 B · 201 ms | 5 · 451 B · 110 ms | 2 · 428 B · 137 ms |
+| Reorder commits | **1 · 216 B · 37 ms** | 2 · 319 B · 76 ms | 1 · 98 B · 44 ms | 2 · 251 B · 89 ms |
+| Squash commits | **1 · 179 B · 34 ms** | 2 · 317 B · 78 ms | 1 · 293 B · 68 ms | 1 · 164 B · 60 ms |
+| Uncommit a file | **1 · 153 B · 81 ms** | 2 · 380 B · 96 ms | 4 · 396 B · 85 ms | 1 · 128 B · 73 ms |
+| Undo the last operation | **1 · 42 B · 24 ms** | 1 · 53 B · 43 ms | 2 · 272 B · 26 ms | 1 · 320 B · 32 ms |
+| Sync a dirty branch, resolve a conflict | **3 · 481 B · 207 ms** | 4 · 1,294 B · 335 ms | 4 · 842 B · 146 ms | 4 · 1,077 B · 256 ms |
+| Branch off in parallel | **1 · 37 B · 42 ms** | 1 · 71 B · 72 ms | 3 · 170 B · 54 ms | 2 · 357 B · 124 ms |
+| Inspect status, log and diff | **1 · 246 B · 13 ms** | 2 · 385 B · 45 ms | 3 · 113 B · 37 ms | 2 · 357 B · 75 ms |
+| Reword a commit | **1 · 164 B · 33 ms** | 2 · 406 B · 82 ms | 1 · 306 B · 97 ms | 1 · 156 B · 75 ms |
+| Drop a commit | **1 · 130 B · 67 ms** | 2 · 418 B · 91 ms | 1 · 114 B · 57 ms | 1 · 297 B · 90 ms |
+| Move a commit to another branch | **1 · 189 B · 89 ms** | 2 · 481 B · 78 ms | 4 · 340 B · 117 ms | 2 · 310 B · 134 ms |
+| **Total** | **15 · 2.3 KB · 838 ms** | 28 · 7.1 KB · 1,580 ms | 34 · 4.4 KB · 1,053 ms | 25 · 4.4 KB · 1,467 ms |
 
-Against GitButler, AISC uses fewer commands, less output and less time on every task; undo and the parallel branch tie at one command. Against the others, it is not best on every cell:
-- **Jujutsu** is faster on uncommit and prints slightly less on uncommit and squash. With `--quiet` it prints nothing on success, so in quiet mode it reads fewer bytes than AISC's one-line `-q` results.
-- **Git** is faster at syncing with a conflict, and prints less when reordering or inspecting, because a bare `git log --oneline` says less than AISC's hunk listing.
+Against GitButler, AISC uses fewer commands and less output on every task (undo and the parallel branch tie at one command) and less time on all but two, where GitButler is a few milliseconds faster (amend, move to another branch). Against the others, it is not best on every cell:
+- **Jujutsu** is faster on uncommit and prints slightly less on uncommit, squash and reword. With `--quiet` it prints nothing on success, so in quiet mode it reads fewer bytes than AISC's one-line `-q` results.
+- **Git** is faster at syncing with a conflict and at dropping a commit, and prints less when reordering, dropping or inspecting, because a bare `git log --oneline` says less than AISC's hunk listing.
 - **Scope.** These are scripted sequences, not live agents. They count the commands and text an agent would handle, but not model reasoning. Real-agent runs on vcbench are the next step.
 
 ### Agent guidance
@@ -252,7 +269,7 @@ The skill an agent loads every session costs context too ([`benchmarks/README.md
 
 ### vcbench reference solutions
 
-With no model in the loop, the reference solutions for the 13 vcbench tasks need **1.38 AISC calls and 499 bytes** of output per task, against 5.31 calls and 12.5 KB for GitButler and 6.15 calls and 639 bytes for Git. All of them pass the harness's own verification. AISC's arm for the GitButler harness lives in [`benchmarks/vcbench`](benchmarks/vcbench).
+With no model in the loop, the reference solutions for the 13 vcbench tasks need **1.08 AISC calls and 296 bytes** of output per task (14 calls, 3.8 KB in all, re-measured with the current dev build), against 5.31 calls and 12.5 KB for GitButler and 6.15 calls and 639 bytes for Git. All of them pass the harness's own verification; the twelve held-out tasks have references too (13 calls in all). AISC's arm for the GitButler harness lives in [`benchmarks/vcbench`](benchmarks/vcbench).
 
 ## Disk
 

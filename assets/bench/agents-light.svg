@@ -1,37 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="404" viewBox="0 0 760 404" role="img" aria-label="Real agents on 13 vcbench tasks: AISC 0.98M tokens, 39 commands, $0.61; Git 1.43M, 63, $0.73; GitButler 1.62M, 61, $0.99">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="404" viewBox="0 0 760 404" role="img" aria-label="Real agents on 13 vcbench tasks: AISC 1.31M tokens, 43 commands, $0.88; Git 1.88M, 69, $1.04; GitButler 1.89M, 60, $1.28">
 <style>text{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;fill:#1C2430} .s{fill:#5B6675;font-size:12px} .h{font-size:15px;font-weight:600} .l{font-size:13px} .v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums} .a{font-weight:700}</style>
 <text x="24" y="34" class="h">What an agent spends on 13 real version-control tasks</text>
 <text x="24" y="54" class="s">Claude Sonnet 5.5, GitButler’s vcbench harness, 3 runs per tool, same sandbox. Shorter is better.</text>
 <text x="24" y="82" class="l" style="font-weight:600">Tokens per suite</text>
 <text x="120" y="105" text-anchor="end" class="l a">AISC</text>
-<rect x="132" y="92" width="314.6" height="18" rx="3" fill="#FF5A1F"/>
-<text x="454.6" y="105" class="v">0.98M</text>
+<rect x="132" y="92" width="360.4" height="18" rx="3" fill="#FF5A1F"/>
+<text x="500.4" y="105" class="v">1.31M</text>
 <text x="120" y="129" text-anchor="end" class="l">Git</text>
-<rect x="132" y="116" width="459.0" height="18" rx="3" fill="#C9D0D9"/>
-<text x="599.0" y="129" class="v">1.43M</text>
+<rect x="132" y="116" width="517.2" height="18" rx="3" fill="#C9D0D9"/>
+<text x="657.2" y="129" class="v">1.88M</text>
 <text x="120" y="153" text-anchor="end" class="l">GitButler</text>
 <rect x="132" y="140" width="520.0" height="18" rx="3" fill="#C9D0D9"/>
-<text x="660.0" y="153" class="v">1.62M</text>
+<text x="660.0" y="153" class="v">1.89M</text>
 <text x="24" y="180" class="l" style="font-weight:600">Commands per suite</text>
 <text x="120" y="203" text-anchor="end" class="l a">AISC</text>
-<rect x="132" y="190" width="325.9" height="18" rx="3" fill="#FF5A1F"/>
-<text x="465.9" y="203" class="v">39</text>
+<rect x="132" y="190" width="324.1" height="18" rx="3" fill="#FF5A1F"/>
+<text x="464.1" y="203" class="v">43</text>
 <text x="120" y="227" text-anchor="end" class="l">GitButler</text>
-<rect x="132" y="214" width="505.9" height="18" rx="3" fill="#C9D0D9"/>
-<text x="645.9" y="227" class="v">61</text>
+<rect x="132" y="214" width="452.2" height="18" rx="3" fill="#C9D0D9"/>
+<text x="592.2" y="227" class="v">60</text>
 <text x="120" y="251" text-anchor="end" class="l">Git</text>
 <rect x="132" y="238" width="520.0" height="18" rx="3" fill="#C9D0D9"/>
-<text x="660.0" y="251" class="v">63</text>
+<text x="660.0" y="251" class="v">69</text>
 <text x="24" y="278" class="l" style="font-weight:600">Cost per suite</text>
 <text x="120" y="301" text-anchor="end" class="l a">AISC</text>
-<rect x="132" y="288" width="320.4" height="18" rx="3" fill="#FF5A1F"/>
-<text x="460.4" y="301" class="v">$0.61</text>
+<rect x="132" y="288" width="357.5" height="18" rx="3" fill="#FF5A1F"/>
+<text x="497.5" y="301" class="v">$0.88</text>
 <text x="120" y="325" text-anchor="end" class="l">Git</text>
-<rect x="132" y="312" width="383.4" height="18" rx="3" fill="#C9D0D9"/>
-<text x="523.4" y="325" class="v">$0.73</text>
+<rect x="132" y="312" width="422.5" height="18" rx="3" fill="#C9D0D9"/>
+<text x="562.5" y="325" class="v">$1.04</text>
 <text x="120" y="349" text-anchor="end" class="l">GitButler</text>
 <rect x="132" y="336" width="520.0" height="18" rx="3" fill="#C9D0D9"/>
-<text x="660.0" y="349" class="v">$0.99</text>
+<text x="660.0" y="349" class="v">$1.28</text>
 <line x1="24" y1="370" x2="736" y2="370" stroke="#E3E7EC"/>
-<text x="24" y="388" class="s">AISC v0.1.1 passed 38/39 runs, as did GitButler 0.22.3 and Git 2.50. Data: benchmarks/results/agent-runs-*.json</text>
+<text x="24" y="388" class="s">AISC (dev build, v0.1.3 candidate) passed 39/39 runs; GitButler 0.22.3 37/39, Git 2.50 38/39. Data: benchmarks/results/agent-runs-v0.1.3-dev.json</text>
 </svg>

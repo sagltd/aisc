@@ -1149,7 +1149,7 @@ index 456993f..d3e3c96 100644
    // Derive the immediate parent from the public topic graph; never use hidden expected data.
    const parent = g(options, ['rev-parse', `${topic}^`]);
 diff --git a/scripts/lib/scenario-sync.mjs b/scripts/lib/scenario-sync.mjs
-index 07a66e0..987a4db 100644
+index 07a66e0..7efd640 100644
 --- a/scripts/lib/scenario-sync.mjs
 +++ b/scripts/lib/scenario-sync.mjs
 @@ -20,5 +20,5 @@ prepare(o){const c=init(o);const B=commit(c,{'README.md':'Service example.\n','c
@@ -1157,7 +1157,7 @@ index 07a66e0..987a4db 100644
  verify(o){const c=context(o),m=o.metadata,tip=ref(c,'feature-service'),u=ref(c,'other-topic');if(!tip)return result({feature_ref:false});const h=history(c,tip,m.M1,m.atoms,{mergeBase:m.B,empty:true});const uParents=u&&parents(c,u);const s=context({...o,repoDir:m.server});const checks={feature_tree:!!tip&&eq(Object.entries(tree(c,tip)).sort(),Object.entries(m.expected).sort()),main_ancestry:!!tip&&ancestor(c,m.M1,tip),contributions:h.ok,shared_precedes_imports:!!h.matches.C&&['L','R'].every(k=>h.matches[k]&&ancestor(c,h.matches.C,h.matches[k])),other_topic:!!u&&(eq(uParents,[m.B])||eq(uParents,[m.M1]))&&eq(contribution(c,u),m.Uatom)&&!!tip&&!ancestor(c,u,tip),availability:available(c,o.arm,['other-topic']),main_preserved:[m.B,m.M1].includes(ref(c,'main')),remote_refs:eq(refs(s),m.serverRefs)&&!fs.existsSync(m.receiveLog),remote_config:fs.readFileSync(path.join(m.server,'config'),'utf8')===m.serverConfig&&fs.readFileSync(path.join(m.server,'HEAD'),'utf8')===m.serverHead,origin_config:protectConfig(c)===m.config,dirty_readme:pending(c,o.arm,'README.md',draft),unfinished_only:unfinishedOnly(c,o.arm,'README.md'),no_residue:cleanResidue(c,o.arm)};
    checks.active_context=o.arm==='but+skill'?available(c,o.arm,['feature-service']):o.arm==='jj+skill'?!!tip&&ancestor(c,tip,c.jj('log','-r','@','--no-graph','-T','commit_id').trim()):c.git('symbolic-ref','--short','HEAD')==='feature-service';return result(checks,{redundant_empty_commits:h.empty,content_bearing_merges:h.payloadMerges});},
 -solve(o){const c=context(o),m=o.metadata;if(o.arm==='but+skill'){c.but('pull');c.but('pick',c.git('rev-parse','origin/feature-service'),'--branch','feature-service');}else if(o.arm==='jj+skill'){c.jj('git','fetch','--remote','origin');c.jj('duplicate',m.C,m.L,'-d','main@origin');const local=c.jj('log','-r',`description(substring:"Add local retry setting") ~ ${m.L}`,'--no-graph','-T','commit_id').trim();c.jj('duplicate','feature-service@origin','-d',local);const copy=c.jj('log','-r',`children(${local}) & description(substring:"Add agent environment")`,'--no-graph','-T','commit_id').trim();c.jj('rebase','-r','@','-d',copy);c.jj('bookmark','set','feature-service','-r',copy,'--allow-backwards');c.jj('git','export');}else{c.git('fetch','origin');c.git('rebase','--autostash','origin/main');c.git('cherry-pick','origin/feature-service');}return 'Reconciled current main and the remote environment change, retaining the local retry and unfinished README.';}
-+solve(o){const c=context(o),m=o.metadata;if(o.arm==='aisc+skill'){c.aisc('sync','origin/main','--fetch');c.aisc('pick','origin/feature-service');}else if(o.arm==='but+skill'){c.but('pull');c.but('pick',c.git('rev-parse','origin/feature-service'),'--branch','feature-service');}else if(o.arm==='jj+skill'){c.jj('git','fetch','--remote','origin');c.jj('duplicate',m.C,m.L,'-d','main@origin');const local=c.jj('log','-r',`description(substring:"Add local retry setting") ~ ${m.L}`,'--no-graph','-T','commit_id').trim();c.jj('duplicate','feature-service@origin','-d',local);const copy=c.jj('log','-r',`children(${local}) & description(substring:"Add agent environment")`,'--no-graph','-T','commit_id').trim();c.jj('rebase','-r','@','-d',copy);c.jj('bookmark','set','feature-service','-r',copy,'--allow-backwards');c.jj('git','export');}else{c.git('fetch','origin');c.git('rebase','--autostash','origin/main');c.git('cherry-pick','origin/feature-service');}return 'Reconciled current main and the remote environment change, retaining the local retry and unfinished README.';}
++solve(o){const c=context(o),m=o.metadata;if(o.arm==='aisc+skill'){c.aisc('sync','origin/main','--fetch');}else if(o.arm==='but+skill'){c.but('pull');c.but('pick',c.git('rev-parse','origin/feature-service'),'--branch','feature-service');}else if(o.arm==='jj+skill'){c.jj('git','fetch','--remote','origin');c.jj('duplicate',m.C,m.L,'-d','main@origin');const local=c.jj('log','-r',`description(substring:"Add local retry setting") ~ ${m.L}`,'--no-graph','-T','commit_id').trim();c.jj('duplicate','feature-service@origin','-d',local);const copy=c.jj('log','-r',`children(${local}) & description(substring:"Add agent environment")`,'--no-graph','-T','commit_id').trim();c.jj('rebase','-r','@','-d',copy);c.jj('bookmark','set','feature-service','-r',copy,'--allow-backwards');c.jj('git','export');}else{c.git('fetch','origin');c.git('rebase','--autostash','origin/main');c.git('cherry-pick','origin/feature-service');}return 'Reconciled current main and the remote environment change, retaining the local retry and unfinished README.';}
  };
 diff --git a/scripts/lib/scenario-topics.mjs b/scripts/lib/scenario-topics.mjs
 index cc9f6e1..043fe1e 100644
@@ -2225,7 +2225,7 @@ index 0000000..dfe748d
 +"$AISC_BIN" uncommit review-fix notes/private.md
 diff --git a/tasks/pilot-11-dual-source-sync/solution/solve-aisc.sh b/tasks/pilot-11-dual-source-sync/solution/solve-aisc.sh
 new file mode 100755
-index 0000000..de1aadb
+index 0000000..4878217
 --- /dev/null
 +++ b/tasks/pilot-11-dual-source-sync/solution/solve-aisc.sh
 @@ -0,0 +1,8 @@
@@ -2235,8 +2235,8 @@ index 0000000..de1aadb
 +BENCH_ROOT="${BENCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 +AISC_BIN="${AISC_BIN:-aisc}"
 +
++# sync rebases onto the moved main and takes the commits origin/feature-service has that this branch never had.
 +"$AISC_BIN" sync origin/main --fetch
-+"$AISC_BIN" pick origin/feature-service
 diff --git a/tasks/pilot-12-integrate-topics/solution/solve-aisc.sh b/tasks/pilot-12-integrate-topics/solution/solve-aisc.sh
 new file mode 100755
 index 0000000..2c79333
